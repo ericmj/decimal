@@ -1,0 +1,2 @@
+defmodule Decimal do
+end
