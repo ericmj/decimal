@@ -43,4 +43,34 @@ defmodule DecimalTest do
     assert Decimal.to_decimal("+0e-0") == d(coef: 0, exp: 0)
     assert Decimal.to_decimal("-0e+0") == d(coef: 0, exp: 0)
   end
+
+  test "conversion error" do
+    assert_raise ArgumentError, fn ->
+      assert Decimal.to_decimal("")
+    end
+
+    assert_raise ArgumentError, fn ->
+      assert Decimal.to_decimal("test")
+    end
+
+    assert_raise ArgumentError, fn ->
+      assert Decimal.to_decimal(".0")
+    end
+
+    assert_raise ArgumentError, fn ->
+      assert Decimal.to_decimal("e0")
+    end
+
+    assert_raise ArgumentError, fn ->
+      assert Decimal.to_decimal("42.+42")
+    end
+
+    assert_raise ArgumentError, fn ->
+      assert Decimal.to_decimal(:atom)
+    end
+
+    assert_raise ArgumentError, fn ->
+      assert Decimal.to_decimal("42e0.0")
+    end
+  end
 end

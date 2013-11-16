@@ -5,6 +5,7 @@ defmodule Decimal do
   def to_decimal(int) when is_integer(int), do: d(coef: int)
   def to_decimal(float) when is_float(float), do: to_decimal(float_to_binary(float))
   def to_decimal(binary) when is_binary(binary), do: parse(binary)
+  def to_decimal(_), do: raise ArgumentError
 
   defp parse("NaN") do
     d(coef: :NaN)
