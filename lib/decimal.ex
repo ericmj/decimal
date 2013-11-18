@@ -18,6 +18,11 @@ defmodule Decimal do
     dec(coef: coef, exp: exp)
   end
 
+  def sub(num1, num2) do
+    dec(coef: coef2) = d2 = to_decimal(num2)
+    add(num1, dec(d2, coef: -coef2))
+  end
+
   def to_decimal(dec() = d), do: d
   def to_decimal(int) when is_integer(int), do: dec(coef: int)
   def to_decimal(float) when is_float(float), do: to_decimal(float_to_binary(float))
