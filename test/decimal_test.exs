@@ -96,6 +96,12 @@ defmodule DecimalTest do
     assert Decimal.sub("2e-2", "-2e-2") == dec(coef: 4, exp: -2)
   end
 
+  test "compare" do
+    assert Decimal.compare("420", "42e1") == 0
+    assert Decimal.compare("1", "0") == -1
+    assert Decimal.compare("0", "1") == 1
+  end
+
   test "to_string normal" do
     assert Decimal.to_string("0") == "0"
     assert Decimal.to_string("42") == "42"
