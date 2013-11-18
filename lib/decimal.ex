@@ -1,15 +1,15 @@
 defmodule Decimal do
   import Kernel, except: [abs: 1]
 
-  defrecordp :d, __MODULE__, [coef: 0, exp: 0]
+  use Decimal.Record
 
   def abs(num) do
-    d(coef: coef) = d = to_decimal(num)
-    d(d, coef: Kernel.abs(coef))
+    dec(coef: coef) = d = to_decimal(num)
+    dec(d, coef: Kernel.abs(coef))
   end
 
-  def to_decimal(d() = d), do: d
-  def to_decimal(int) when is_integer(int), do: d(coef: int)
+  def to_decimal(dec() = d), do: d
+  def to_decimal(int) when is_integer(int), do: dec(coef: int)
   def to_decimal(float) when is_float(float), do: to_decimal(float_to_binary(float))
   def to_decimal(binary) when is_binary(binary), do: parse(binary)
   def to_decimal(_), do: raise ArgumentError
@@ -17,7 +17,7 @@ defmodule Decimal do
   ## PARSING ##
 
   defp parse("NaN") do
-    d(coef: :NaN)
+    dec(coef: :NaN)
   end
 
   defp parse("+" <> bin) do
@@ -25,8 +25,8 @@ defmodule Decimal do
   end
 
   defp parse("-" <> bin) do
-    d(coef: coef) = d = parse_unsign(bin)
-    d(d, coef: -coef)
+    dec(coef: coef) = d = parse_unsign(bin)
+    dec(d, coef: -coef)
   end
 
   defp parse(bin) do
@@ -34,7 +34,7 @@ defmodule Decimal do
   end
 
   defp parse_unsign("inf") do
-    d(coef: :inf)
+    dec(coef: :inf)
   end
 
   defp parse_unsign(bin) do
@@ -45,7 +45,7 @@ defmodule Decimal do
     if int == [] or rest != "", do: raise ArgumentError
     if exp == [], do: exp = '0'
 
-    d(coef: list_to_integer(int ++ float), exp: list_to_integer(exp) - length(float))
+    dec(coef: list_to_integer(int ++ float), exp: list_to_integer(exp) - length(float))
   end
 
   defp parse_float("." <> rest), do: parse_digits(rest)
