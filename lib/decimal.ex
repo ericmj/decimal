@@ -49,6 +49,46 @@ defmodule Decimal do
     String.from_char_list!(list)
   end
 
+  def to_string(num, :scientific) do
+    dec(coef: coef, exp: exp) = to_decimal(num)
+    list = integer_to_list(Kernel.abs(coef))
+
+    { list, exp_offset } = trim_coef(list)
+    exp = exp + exp_offset
+    length = length(list)
+
+    if length > 1 do
+      list = List.insert_at(list, 1, ?.)
+      exp = exp + length - 1
+    end
+
+    list = list ++ 'e' ++ integer_to_list(exp)
+
+    if coef < 0 do
+      list = [?-|list]
+    end
+
+    String.from_char_list!(list)
+  end
+
+  ## STRINGIFY ##
+
+  defp trim_coef('0') do
+    { '0', 0 }
+  end
+
+  defp trim_coef(list) do
+    num = count_trailing_zeros(list, 0)
+    { Enum.drop(list, -num), num }
+  end
+
+  defp count_trailing_zeros([], count),
+    do: count
+  defp count_trailing_zeros([?0|tail], count),
+    do: count_trailing_zeros(tail, count+1)
+  defp count_trailing_zeros([_|tail], _count),
+    do: count_trailing_zeros(tail, 0)
+
   ## ARITHMETIC ##
 
   defp coef_align(coef1, exp1, coef2, exp2) when exp1 == exp2 do

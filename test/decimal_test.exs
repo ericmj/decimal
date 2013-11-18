@@ -88,7 +88,7 @@ defmodule DecimalTest do
     assert Decimal.add("-2e-2", "-2e-2") == dec(coef: -4, exp: -2)
   end
 
-  test "to_string" do
+  test "to_string normal" do
     assert Decimal.to_string("0") == "0"
     assert Decimal.to_string("42") == "42"
     assert Decimal.to_string("42.42") == "42.42"
@@ -97,5 +97,15 @@ defmodule DecimalTest do
     assert Decimal.to_string("-1") == "-1"
     assert Decimal.to_string("-1.23") == "-1.23"
     assert Decimal.to_string("-0.0123") == "-0.0123"
+  end
+
+  test "to_string scientific" do
+    assert Decimal.to_string("2", :scientific) == "2e0"
+    assert Decimal.to_string("300", :scientific) == "3e2"
+    assert Decimal.to_string("4321.768", :scientific) == "4.321768e3"
+    assert Decimal.to_string("-53000", :scientific) == "-5.3e4"
+    assert Decimal.to_string("0.0042", :scientific) == "4.2e-3"
+    assert Decimal.to_string("0.2", :scientific) == "2e-1"
+    assert Decimal.to_string("-0.0003", :scientific) == "-3e-4"
   end
 end
