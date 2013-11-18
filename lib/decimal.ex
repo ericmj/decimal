@@ -24,6 +24,31 @@ defmodule Decimal do
   def to_decimal(binary) when is_binary(binary), do: parse(binary)
   def to_decimal(_), do: raise ArgumentError
 
+  def to_string(num, type // :normal)
+
+  def to_string(num, :normal) do
+    dec(coef: coef, exp: exp) = to_decimal(num)
+    list = integer_to_list(Kernel.abs(coef))
+
+    list =
+      if exp >= 0 do
+        list ++ :lists.duplicate(exp, ?0)
+      else
+        diff = length(list) + exp
+        if diff > 0 do
+          List.insert_at(list, diff, ?.)
+        else
+          '0.' ++ :lists.duplicate(-diff, ?0) ++ list
+        end
+      end
+
+    if coef < 0 do
+      list = [?-|list]
+    end
+
+    String.from_char_list!(list)
+  end
+
   ## ARITHMETIC ##
 
   defp coef_align(coef1, exp1, coef2, exp2) when exp1 == exp2 do

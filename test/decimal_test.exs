@@ -87,4 +87,15 @@ defmodule DecimalTest do
     assert Decimal.add("0.42", "-1.5") == dec(coef: -108, exp: -2)
     assert Decimal.add("-2e-2", "-2e-2") == dec(coef: -4, exp: -2)
   end
+
+  test "to_string" do
+    assert Decimal.to_string("0") == "0"
+    assert Decimal.to_string("42") == "42"
+    assert Decimal.to_string("42.42") == "42.42"
+    assert Decimal.to_string("0.42") == "0.42"
+    assert Decimal.to_string("0.0042") == "0.0042"
+    assert Decimal.to_string("-1") == "-1"
+    assert Decimal.to_string("-1.23") == "-1.23"
+    assert Decimal.to_string("-0.0123") == "-0.0123"
+  end
 end
