@@ -73,4 +73,12 @@ defmodule DecimalTest do
       assert Decimal.to_decimal("42e0.0")
     end
   end
+
+  test "abs" do
+    assert Decimal.abs("123") == d(coef: 123, exp: 0)
+    assert Decimal.abs("-123") == d(coef: 123, exp: 0)
+    assert Decimal.abs("-12.5e2") == d(coef: 125, exp: 1)
+    assert Decimal.abs(d(coef: -42, exp: -42)) == d(coef: 42, exp: -42)
+
+  end
 end
