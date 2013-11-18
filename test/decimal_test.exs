@@ -80,5 +80,11 @@ defmodule DecimalTest do
     assert Decimal.abs(dec(coef: -42, exp: -42)) == dec(coef: 42, exp: -42)
   end
 
+  test "add" do
+    assert Decimal.add("0", "0") == dec(coef: 0, exp: 0)
+    assert Decimal.add("1", "1") == dec(coef: 2, exp: 0)
+    assert Decimal.add("1.3e3", "2.4e2") == dec(coef: 154, exp: 1)
+    assert Decimal.add("0.42", "-1.5") == dec(coef: -108, exp: -2)
+    assert Decimal.add("-2e-2", "-2e-2") == dec(coef: -4, exp: -2)
   end
 end

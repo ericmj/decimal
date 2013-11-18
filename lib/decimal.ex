@@ -8,11 +8,40 @@ defmodule Decimal do
     dec(d, coef: Kernel.abs(coef))
   end
 
+  def add(num1, num2) do
+    dec(coef: coef1, exp: exp1) = to_decimal(num1)
+    dec(coef: coef2, exp: exp2) = to_decimal(num2)
+
+    { coef1, coef2 } = coef_align(coef1, exp1, coef2, exp2)
+    coef = coef1 + coef2
+    exp = min(exp1, exp2)
+    dec(coef: coef, exp: exp)
+  end
+
   def to_decimal(dec() = d), do: d
   def to_decimal(int) when is_integer(int), do: dec(coef: int)
   def to_decimal(float) when is_float(float), do: to_decimal(float_to_binary(float))
   def to_decimal(binary) when is_binary(binary), do: parse(binary)
   def to_decimal(_), do: raise ArgumentError
+
+  ## ARITHMETIC ##
+
+  defp coef_align(coef1, exp1, coef2, exp2) when exp1 == exp2 do
+    { coef1, coef2 }
+  end
+
+  defp coef_align(coef1, exp1, coef2, exp2) when exp1 > exp2 do
+    { coef1 * int_pow10(exp1 - exp2), coef2 }
+  end
+
+  defp coef_align(coef1, exp1, coef2, exp2) when exp1 < exp2 do
+    { coef1, coef2 * int_pow10(exp2 - exp1) }
+  end
+
+  defp int_pow10(x) when x >= 0, do: int_pow10(x, 1)
+
+  defp int_pow10(0, acc), do: acc
+  defp int_pow10(x, acc), do: int_pow10(x-1, 10*acc)
 
   ## PARSING ##
 
