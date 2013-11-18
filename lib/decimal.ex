@@ -110,10 +110,6 @@ defmodule Decimal do
 
   ## PARSING ##
 
-  defp parse("NaN") do
-    dec(coef: :NaN)
-  end
-
   defp parse("+" <> bin) do
     parse_unsign(bin)
   end
@@ -125,10 +121,6 @@ defmodule Decimal do
 
   defp parse(bin) do
     parse_unsign(bin)
-  end
-
-  defp parse_unsign("inf") do
-    dec(coef: :inf)
   end
 
   defp parse_unsign(bin) do
