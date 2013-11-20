@@ -1,6 +1,7 @@
 defmodule DecimalTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   use Decimal.Record
+  alias Decimal.Context
 
   test "basic conversion" do
     assert Decimal.to_decimal(dec(coef: 0, exp: 0)) == dec(coef: 0, exp: 0)
@@ -100,6 +101,17 @@ defmodule DecimalTest do
     assert Decimal.compare("420", "42e1") == 0
     assert Decimal.compare("1", "0") == -1
     assert Decimal.compare("0", "1") == 1
+  end
+
+  test "divide" do
+    c5 = Context[precision: 5]
+    assert Decimal.divide("1", "3", c5) == dec(coef: 33333, exp: -5)
+    assert Decimal.divide("42", "2", c5) == dec(coef: 21, exp: 0)
+    assert Decimal.divide("123", "12345", c5) == dec(coef: 99635, exp: -7)
+    assert Decimal.divide("123", "123", c5) == dec(coef: 1, exp: 0)
+    assert Decimal.divide("-1", "5", c5) == dec(coef: -2, exp: -1)
+    assert Decimal.divide("-1", "-1", c5) == dec(coef: 1, exp: 0)
+    assert Decimal.divide("2", "-5", c5) == dec(coef: -4, exp: -1)
   end
 
   test "to_string normal" do

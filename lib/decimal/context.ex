@@ -1,20 +1,24 @@
 defrecord Decimal.Context, [precision: 0, rounding: :half_up] do
-  alias __MODULE__
-
-  use Decimal.Record
+  @moduledoc false
 
   record_type precision: non_neg_integer
   record_type rounding: :truncate | :ceiling | :floor | :half_up | :half_away_zero | :half_even
 
-  @moduledoc false
+  alias __MODULE__
+  alias Decimal.Util
+  use Decimal.Record
+
   defmacro unlimited, do: quote(do: Context[precision: 0, rounding: :half_up])
 
-  def round(num, Context[] = c) do
-    dec(coef: coef, exp: exp) = Decimal.to_decimal(num)
-    sign = if coef < 0, do: -1, else: 1
-    coef = abs(coef)
-
-    do_round(abs(coef), exp, sign, Decimal.int_pow10(c.precision), c.rounding)
+  def round(dec(coef: coef, exp: exp) = d, Context[] = c) do
+    if c.precision > 0 do
+      sign = if coef < 0, do: -1, else: 1
+      coef = abs(coef)
+      prec10 = Util.int_pow10(c.precision)
+      do_round(coef, exp, sign, prec10, c.rounding)
+    else
+      d
+    end
   end
 
   defp do_round(coef, exp, sign, prec10, rounding) do

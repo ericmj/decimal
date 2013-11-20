@@ -1,0 +1,1 @@
+defexception Decimal.Error, [:message]
