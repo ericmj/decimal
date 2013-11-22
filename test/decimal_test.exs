@@ -170,6 +170,18 @@ defmodule DecimalTest do
     assert Decimal.minus("-1") == dec(coef: 1, exp: 0)
   end
 
+  test "mult" do
+    assert Decimal.mult("0", "0") == dec(coef: 0, exp: 0)
+    assert Decimal.mult("42", "0") == dec(coef: 0, exp: 0)
+    assert Decimal.mult("0", "42") == dec(coef: 0, exp: 0)
+    assert Decimal.mult("5", "5") == dec(coef: 25, exp: 0)
+    assert Decimal.mult("-5", "5") == dec(coef: -25, exp: 0)
+    assert Decimal.mult("5", "-5") == dec(coef: -25, exp: 0)
+    assert Decimal.mult("-5", "-5") == dec(coef: 25, exp: 0)
+    assert Decimal.mult("42", "0.42") == dec(coef: 1764, exp: -2)
+    assert Decimal.mult("0.03", "0.3") == dec(coef: 9, exp: -3)
+  end
+
   test "to_string normal" do
     assert Decimal.to_string("0")       == "0"
     assert Decimal.to_string("42")      == "42"

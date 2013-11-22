@@ -112,6 +112,13 @@ defmodule Decimal do
     dec(d, coef: -coef)
   end
 
+  def mult(num1, num2, context // unlimited) do
+    dec(coef: coef1, exp: exp1) = d1 = to_decimal(num1)
+    dec(coef: coef2, exp: exp2) = d2 = to_decimal(num2)
+
+    dec(coef: coef1 * coef2, exp: exp1 + exp2) |> round(context)
+  end
+
   def to_decimal(num, context // unlimited)
 
   def to_decimal(dec() = d, ctxt),
