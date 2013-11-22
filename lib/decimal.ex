@@ -27,22 +27,21 @@ defmodule Decimal do
     add(num1, dec(d2, coef: -coef2)) |> round(context)
   end
 
-  def compare(num1, num2) do
-    case sub(num1, num2) do
+  def compare(num1, num2, context // unlimited) do
+    case sub(num1, num2, context) do
       dec(coef: 0) -> 0
-      dec(coef: coef) when coef > 0 -> -1
-      dec(coef: coef) when coef < 0 -> 1
+      dec(coef: coef) when coef > 0 -> 1
+      dec(coef: coef) when coef < 0 -> -1
     end
   end
 
-  def divide(num1, num2, Context[] = context) do
+  def div(num1, num2, Context[] = context) do
     dec(coef: coef1, exp: exp1) = d1 = to_decimal(num1)
     dec(coef: coef2, exp: exp2) = to_decimal(num2)
 
-    unless context.precision > 0 do
-      # TODO ?
-      raise Error, message: "unlimited precision not supported for division"
-    end
+    # TODO?
+    unless context.precision > 0,
+      do: raise(Error, message: "unlimited precision not supported for division")
 
     if coef2 == 0, do: raise(Error, message: "division by zero")
 
@@ -50,11 +49,45 @@ defmodule Decimal do
       d1
     else
       sign = div_sign(coef1, coef2)
-      prec10 = Util.int_pow10(context.precision)
+      prec10 = Util.int_pow10(1, context.precision)
 
       { coef1, coef2, adjust } = div_adjust(Kernel.abs(coef1), Kernel.abs(coef2), 0)
       { coef, adjust, _rem } = div_calc(coef1, coef2, 0, adjust, prec10)
       dec(coef: sign * coef, exp: exp1 - exp2 - adjust) |> round(context)
+    end
+  end
+
+  def div_int(num1, num2, Context[] = context // unlimited) do
+    div_rem(num1, num2, context) |> elem(0)
+  end
+
+  def rem(num1, num2, Context[] = context // unlimited) do
+    div_rem(num1, num2, context) |> elem(1)
+  end
+
+  def div_rem(num1, num2, Context[] = context // unlimited) do
+    dec(coef: coef1, exp: exp1) = d1 = to_decimal(num1)
+    dec(coef: coef2, exp: exp2) = d2 = to_decimal(num2)
+    abs_coef1 = Kernel.abs(coef1)
+    abs_coef2 = Kernel.abs(coef2)
+
+    if compare(dec(d1, coef: abs_coef1), dec(d2, coef: abs_coef2)) == -1 do
+      { dec(coef: 0, exp: 0), d1 }
+    else
+      div_sign = div_sign(coef1, coef2)
+      rem_sign = if coef1 < 0, do: -1, else: 1
+      { coef1, coef2, adjust } = div_adjust(abs_coef1, abs_coef2, 0)
+
+      unless context.precision == 0 or -adjust < context.precision,
+        do: raise(Error, message: "division requires higher precision than context allows")
+
+      adjust2 = if adjust < 0, do: 0, else: adjust
+      { coef, rem } = div_int_calc(coef1, coef2, 0, adjust)
+      { coef, exp } = truncate(coef, exp1 - exp2 - adjust2)
+
+      adjust3 = if adjust > 0, do: 0, else: adjust
+      { dec(coef: div_sign * coef, exp: exp),
+        dec(coef: rem_sign * Util.int_pow10(rem, adjust3), exp: 0) }
     end
   end
 
@@ -142,10 +175,10 @@ defmodule Decimal do
     do: { coef1, coef2 }
 
   defp add_align(coef1, exp1, coef2, exp2) when exp1 > exp2,
-    do: { coef1 * Util.int_pow10(exp1 - exp2), coef2 }
+    do: { coef1 * Util.int_pow10(1, exp1 - exp2), coef2 }
 
   defp add_align(coef1, exp1, coef2, exp2) when exp1 < exp2,
-    do: { coef1, coef2 * Util.int_pow10(exp2 - exp1) }
+    do: { coef1, coef2 * Util.int_pow10(1, exp2 - exp1) }
 
   defp div_adjust(coef1, coef2, adjust) when coef1 < coef2,
     do: div_adjust(coef1 * 10, coef2, adjust + 1)
@@ -167,15 +200,31 @@ defmodule Decimal do
     end
   end
 
-  defp div_complete?(coef1, coef, adjust, prec10) do
-    (coef1 == 0 and adjust >= 0) or coef >= prec10
-  end
+  defp div_complete?(coef1, coef, adjust, prec10),
+    do: (coef1 == 0 and adjust >= 0) or coef >= prec10
 
   defp div_sign(coef1, coef2) do
     coef1_sign = if coef1 < 0, do: -1, else: 1
     coef2_sign = if coef2 < 0, do: -1, else: 1
     coef1_sign * coef2_sign
   end
+
+  defp div_int_calc(coef1, coef2, coef, adjust) do
+    cond do
+      coef1 >= coef2 ->
+        div_int_calc(coef1 - coef2, coef2, coef + 1, adjust)
+      adjust < 0 ->
+        div_int_calc(coef1 * 10, coef2, coef * 10, adjust + 1)
+      true ->
+        { coef, coef1 }
+    end
+  end
+
+  defp truncate(coef, exp) when exp >= 0,
+    do: { coef, exp }
+
+  defp truncate(coef, exp) when exp < 0,
+    do: truncate(div(coef, 10), exp + 1)
 
   ## PARSING ##
 

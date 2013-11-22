@@ -14,7 +14,7 @@ defrecord Decimal.Context, [precision: 0, rounding: :half_up] do
     if c.precision > 0 do
       sign = if coef < 0, do: -1, else: 1
       coef = abs(coef)
-      prec10 = Util.int_pow10(c.precision)
+      prec10 = Util.int_pow10(1, c.precision)
       do_round(coef, exp, sign, prec10, c.rounding)
     else
       d
