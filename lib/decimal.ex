@@ -180,6 +180,17 @@ defmodule Decimal do
     String.from_char_list!(list)
   end
 
+  def to_string(num, :simple) do
+    dec(coef: coef, exp: exp) = to_decimal(num)
+    str = integer_to_binary(coef)
+
+    if exp != 0 do
+      str <> "e" <> integer_to_binary(exp)
+    else
+      str
+    end
+  end
+
   ## STRINGIFY ##
 
   defp trim_coef('0') do

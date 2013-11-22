@@ -202,4 +202,14 @@ defmodule DecimalTest do
     assert Decimal.to_string("0.2", :scientific)      == "2e-1"
     assert Decimal.to_string("-0.0003", :scientific)  == "-3e-4"
   end
+
+  test "to_string normal" do
+    assert Decimal.to_string("2", :simple)        == "2"
+    assert Decimal.to_string("300", :simple)      == "300"
+    assert Decimal.to_string("4321.768", :simple) == "4321768e-3"
+    assert Decimal.to_string("-53000", :simple)   == "-53000"
+    assert Decimal.to_string("0.0042", :simple)   == "42e-4"
+    assert Decimal.to_string("0.2", :simple)      == "2e-1"
+    assert Decimal.to_string("-0.0003", :simple)  == "-3e-4"
+  end
 end

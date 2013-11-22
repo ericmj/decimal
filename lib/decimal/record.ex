@@ -6,3 +6,15 @@ defmodule Decimal.Record do
     end
   end
 end
+
+defimpl Inspect, for: Decimal.Record do
+  def inspect(dec, _opts) do
+    "#Decimal<" <> Decimal.to_string(dec, :simple) <> ">"
+  end
+end
+
+defimpl String.Chars, for: Decimal.Record do
+  def to_string(dec, _opts) do
+    Decimal.to_string(dec)
+  end
+end
