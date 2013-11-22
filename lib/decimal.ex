@@ -1,5 +1,5 @@
 defmodule Decimal do
-  import Kernel, except: [abs: 1, max: 2, min: 2, round: 1]
+  import Kernel, except: [abs: 1, div: 2, max: 2, min: 2, rem: 1, round: 1]
 
   use Decimal.Record
   import Decimal.Context
@@ -94,17 +94,13 @@ defmodule Decimal do
   def max(num1, num2, context // unlimited) do
     d1 = to_decimal(num1)
     d2 = to_decimal(num2)
-    if compare(d1, d2, context) == -1,
-      do: d2,
-      else: d1
+    if compare(d1, d2, context) == -1, do: d2, else: d1
   end
 
   def min(num1, num2, context // unlimited) do
     d1 = to_decimal(num1)
     d2 = to_decimal(num2)
-    if compare(d1, d2, context) == 1,
-      do: d2,
-      else: d1
+    if compare(d1, d2, context) == 1, do: d2, else: d1
   end
 
   def minus(num) do
@@ -113,10 +109,15 @@ defmodule Decimal do
   end
 
   def mult(num1, num2, context // unlimited) do
-    dec(coef: coef1, exp: exp1) = d1 = to_decimal(num1)
-    dec(coef: coef2, exp: exp2) = d2 = to_decimal(num2)
+    dec(coef: coef1, exp: exp1) = to_decimal(num1)
+    dec(coef: coef2, exp: exp2) = to_decimal(num2)
 
     dec(coef: coef1 * coef2, exp: exp1 + exp2) |> round(context)
+  end
+
+  def reduce(num) do
+    dec(coef: coef, exp: exp) = to_decimal(num)
+    do_reduce(coef, exp)
   end
 
   def to_decimal(num, context // unlimited)
@@ -252,7 +253,19 @@ defmodule Decimal do
     do: { coef, exp }
 
   defp truncate(coef, exp) when exp < 0,
-    do: truncate(div(coef, 10), exp + 1)
+    do: truncate(Kernel.div(coef, 10), exp + 1)
+
+  defp do_reduce(0, _exp) do
+    dec(coef: 0, exp: 0)
+  end
+
+  defp do_reduce(coef, exp) do
+    if Kernel.rem(coef, 10) == 0 do
+      do_reduce(Kernel.div(coef, 10), exp + 1)
+    else
+      dec(coef: coef, exp: exp)
+    end
+  end
 
   ## PARSING ##
 
