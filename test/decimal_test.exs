@@ -144,6 +144,26 @@ defmodule DecimalTest do
     end
   end
 
+  test "max" do
+    c5 = Context[precision: 5]
+    assert Decimal.max("0", "0", c5) == dec(coef: 0, exp: 0)
+    assert Decimal.max("1", "0", c5) == dec(coef: 1, exp: 0)
+    assert Decimal.max("0", "1", c5) == dec(coef: 1, exp: 0)
+    assert Decimal.max("-1", "1", c5) == dec(coef: 1, exp: 0)
+    assert Decimal.max("1", "-1", c5) == dec(coef: 1, exp: 0)
+    assert Decimal.max("-30", "-40", c5) == dec(coef: -30, exp: 0)
+  end
+
+  test "min" do
+    c5 = Context[precision: 5]
+    assert Decimal.min("0", "0", c5) == dec(coef: 0, exp: 0)
+    assert Decimal.min("-1", "0", c5) == dec(coef: -1, exp: 0)
+    assert Decimal.min("0", "-1", c5) == dec(coef: -1, exp: 0)
+    assert Decimal.min("-1", "1", c5) == dec(coef: -1, exp: 0)
+    assert Decimal.min("1", "0", c5) == dec(coef: 0, exp: 0)
+    assert Decimal.min("-30", "-40", c5) == dec(coef: -40, exp: 0)
+  end
+
   test "to_string normal" do
     assert Decimal.to_string("0")       == "0"
     assert Decimal.to_string("42")      == "42"

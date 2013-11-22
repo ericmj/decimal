@@ -1,5 +1,5 @@
 defmodule Decimal do
-  import Kernel, except: [abs: 1, round: 1]
+  import Kernel, except: [abs: 1, max: 2, min: 2, round: 1]
 
   use Decimal.Record
   import Decimal.Context
@@ -18,7 +18,7 @@ defmodule Decimal do
 
     { coef1, coef2 } = add_align(coef1, exp1, coef2, exp2)
     coef = coef1 + coef2
-    exp = min(exp1, exp2)
+    exp = Kernel.min(exp1, exp2)
     dec(coef: coef, exp: exp) |> round(context)
   end
 
@@ -89,6 +89,22 @@ defmodule Decimal do
       { dec(coef: div_sign * coef, exp: exp),
         dec(coef: rem_sign * Util.int_pow10(rem, adjust3), exp: 0) }
     end
+  end
+
+  def max(num1, num2, context // unlimited) do
+    d1 = to_decimal(num1)
+    d2 = to_decimal(num2)
+    if compare(d1, d2, context) == -1,
+      do: d2,
+      else: d1
+  end
+
+  def min(num1, num2, context // unlimited) do
+    d1 = to_decimal(num1)
+    d2 = to_decimal(num2)
+    if compare(d1, d2, context) == 1,
+      do: d2,
+      else: d1
   end
 
   def to_decimal(num, context // unlimited)
