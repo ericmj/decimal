@@ -164,6 +164,12 @@ defmodule DecimalTest do
     assert Decimal.min("-30", "-40", c5) == dec(coef: -40, exp: 0)
   end
 
+  test "minus" do
+    assert Decimal.minus("0") == dec(coef: 0, exp: 0)
+    assert Decimal.minus("1") == dec(coef: -1, exp: 0)
+    assert Decimal.minus("-1") == dec(coef: 1, exp: 0)
+  end
+
   test "to_string normal" do
     assert Decimal.to_string("0")       == "0"
     assert Decimal.to_string("42")      == "42"

@@ -107,6 +107,11 @@ defmodule Decimal do
       else: d1
   end
 
+  def minus(num) do
+    dec(coef: coef) = d = to_decimal(num)
+    dec(d, coef: -coef)
+  end
+
   def to_decimal(num, context // unlimited)
 
   def to_decimal(dec() = d, ctxt),
