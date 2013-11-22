@@ -5,13 +5,13 @@ defmodule Decimal do
   alias Decimal.Error
 
   def abs(num) do
-    dec(coef: coef) = d = to_decimal(num)
+    dec(coef: coef) = d = new(num)
     dec(d, coef: Kernel.abs(coef))
   end
 
   def add(num1, num2) do
-    dec(coef: coef1, exp: exp1) = to_decimal(num1)
-    dec(coef: coef2, exp: exp2) = to_decimal(num2)
+    dec(coef: coef1, exp: exp1) = new(num1)
+    dec(coef: coef2, exp: exp2) = new(num2)
 
     { coef1, coef2 } = add_align(coef1, exp1, coef2, exp2)
     coef = coef1 + coef2
@@ -20,7 +20,7 @@ defmodule Decimal do
   end
 
   def sub(num1, num2) do
-    dec(coef: coef2) = d2 = to_decimal(num2)
+    dec(coef: coef2) = d2 = new(num2)
     add(num1, dec(d2, coef: -coef2))
   end
 
@@ -33,8 +33,8 @@ defmodule Decimal do
   end
 
   def div(num1, num2, precision // 0) do
-    dec(coef: coef1, exp: exp1) = d1 = to_decimal(num1)
-    dec(coef: coef2, exp: exp2) = to_decimal(num2)
+    dec(coef: coef1, exp: exp1) = d1 = new(num1)
+    dec(coef: coef2, exp: exp2) = new(num2)
 
     # TODO
     # Is there a performant way to check if a decimal expansion
@@ -65,8 +65,8 @@ defmodule Decimal do
   end
 
   def div_rem(num1, num2) do
-    dec(coef: coef1, exp: exp1) = d1 = to_decimal(num1)
-    dec(coef: coef2, exp: exp2) = d2 = to_decimal(num2)
+    dec(coef: coef1, exp: exp1) = d1 = new(num1)
+    dec(coef: coef2, exp: exp2) = d2 = new(num2)
     abs_coef1 = Kernel.abs(coef1)
     abs_coef2 = Kernel.abs(coef2)
 
@@ -88,36 +88,36 @@ defmodule Decimal do
   end
 
   def max(num1, num2) do
-    d1 = to_decimal(num1)
-    d2 = to_decimal(num2)
+    d1 = new(num1)
+    d2 = new(num2)
     if compare(d1, d2) == -1, do: d2, else: d1
   end
 
   def min(num1, num2) do
-    d1 = to_decimal(num1)
-    d2 = to_decimal(num2)
+    d1 = new(num1)
+    d2 = new(num2)
     if compare(d1, d2) == 1, do: d2, else: d1
   end
 
   def minus(num) do
-    dec(coef: coef) = d = to_decimal(num)
+    dec(coef: coef) = d = new(num)
     dec(d, coef: -coef)
   end
 
   def mult(num1, num2) do
-    dec(coef: coef1, exp: exp1) = to_decimal(num1)
-    dec(coef: coef2, exp: exp2) = to_decimal(num2)
+    dec(coef: coef1, exp: exp1) = new(num1)
+    dec(coef: coef2, exp: exp2) = new(num2)
 
     dec(coef: coef1 * coef2, exp: exp1 + exp2)
   end
 
   def reduce(num) do
-    dec(coef: coef, exp: exp) = to_decimal(num)
+    dec(coef: coef, exp: exp) = new(num)
     do_reduce(coef, exp)
   end
 
   def precision(num, precision, rounding) do
-    dec(coef: coef, exp: exp) = d = to_decimal(num)
+    dec(coef: coef, exp: exp) = d = new(num)
 
     if precision > 0 do
       sign = if coef < 0, do: -1, else: 1
@@ -129,21 +129,21 @@ defmodule Decimal do
     end
   end
 
-  def to_decimal(dec() = d),
+  def new(dec() = d),
     do: d
-  def to_decimal(int) when is_integer(int),
+  def new(int) when is_integer(int),
     do: dec(coef: int)
-  def to_decimal(float) when is_float(float),
-    do: to_decimal(float_to_binary(float))
-  def to_decimal(binary) when is_binary(binary),
+  def new(float) when is_float(float),
+    do: new(float_to_binary(float))
+  def new(binary) when is_binary(binary),
     do: parse(binary)
-  def to_decimal(_),
+  def new(_),
     do: raise ArgumentError
 
   def to_string(num, type // :normal)
 
   def to_string(num, :normal) do
-    dec(coef: coef, exp: exp) = to_decimal(num)
+    dec(coef: coef, exp: exp) = new(num)
     list = integer_to_list(Kernel.abs(coef))
 
     list =
@@ -166,7 +166,7 @@ defmodule Decimal do
   end
 
   def to_string(num, :scientific) do
-    dec(coef: coef, exp: exp) = to_decimal(num)
+    dec(coef: coef, exp: exp) = new(num)
     list = integer_to_list(Kernel.abs(coef))
 
     { list, exp_offset } = trim_coef(list)
@@ -188,7 +188,7 @@ defmodule Decimal do
   end
 
   def to_string(num, :simple) do
-    dec(coef: coef, exp: exp) = to_decimal(num)
+    dec(coef: coef, exp: exp) = new(num)
     str = integer_to_binary(coef)
 
     if exp != 0 do
