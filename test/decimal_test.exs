@@ -1,7 +1,6 @@
 defmodule DecimalTest do
   use ExUnit.Case, async: true
   use Decimal.Record
-  alias Decimal.Context
 
   test "basic conversion" do
     assert Decimal.to_decimal(dec(coef: 0, exp: 0)) == dec(coef: 0, exp: 0)
@@ -104,81 +103,68 @@ defmodule DecimalTest do
   end
 
   test "div" do
-    c5 = Context[precision: 5]
-    assert Decimal.div("1", "3", c5)       == dec(coef: 33333, exp: -5)
-    assert Decimal.div("42", "2", c5)      == dec(coef: 21, exp: 0)
-    assert Decimal.div("123", "12345", c5) == dec(coef: 99635, exp: -7)
-    assert Decimal.div("123", "123", c5)   == dec(coef: 1, exp: 0)
-    assert Decimal.div("-1", "5", c5)      == dec(coef: -2, exp: -1)
-    assert Decimal.div("-1", "-1", c5)     == dec(coef: 1, exp: 0)
-    assert Decimal.div("2", "-5", c5)      == dec(coef: -4, exp: -1)
+    assert Decimal.div("1", "3", 5)       == dec(coef: 33333, exp: -5)
+    assert Decimal.div("42", "2", 5)      == dec(coef: 21, exp: 0)
+    assert Decimal.div("123", "12345", 5) == dec(coef: 99635, exp: -7)
+    assert Decimal.div("123", "123", 5)   == dec(coef: 1, exp: 0)
+    assert Decimal.div("-1", "5", 5)      == dec(coef: -2, exp: -1)
+    assert Decimal.div("-1", "-1", 5)     == dec(coef: 1, exp: 0)
+    assert Decimal.div("2", "-5", 5)      == dec(coef: -4, exp: -1)
   end
 
   test "div_int" do
-    c5 = Context[precision: 5]
-    assert Decimal.div_int("1", "3", c5)      == dec(coef: 0, exp: 0)
-    assert Decimal.div_int("42", "2", c5)     == dec(coef: 21, exp: 0)
-    assert Decimal.div_int("123", "23", c5)   == dec(coef: 5, exp: 0)
-    assert Decimal.div_int("123", "-23", c5)  == dec(coef: -5, exp: 0)
-    assert Decimal.div_int("-123", "23", c5)  == dec(coef: -5, exp: 0)
-    assert Decimal.div_int("-123", "-23", c5) == dec(coef: 5, exp: 0)
-    assert Decimal.div_int("1", "0.3", c5)    == dec(coef: 3, exp: 0)
-
-    assert_raise Decimal.Error, fn ->
-      Decimal.div_int("1000000", "3", c5)
-    end
+    assert Decimal.div_int("1", "3")      == dec(coef: 0, exp: 0)
+    assert Decimal.div_int("42", "2")     == dec(coef: 21, exp: 0)
+    assert Decimal.div_int("123", "23")   == dec(coef: 5, exp: 0)
+    assert Decimal.div_int("123", "-23")  == dec(coef: -5, exp: 0)
+    assert Decimal.div_int("-123", "23")  == dec(coef: -5, exp: 0)
+    assert Decimal.div_int("-123", "-23") == dec(coef: 5, exp: 0)
+    assert Decimal.div_int("1", "0.3")    == dec(coef: 3, exp: 0)
   end
 
   test "rem" do
-    c5 = Context[precision: 5]
-    assert Decimal.rem("1", "3", c5)      == dec(coef: 1, exp: 0)
-    assert Decimal.rem("42", "2", c5)     == dec(coef: 0, exp: 0)
-    assert Decimal.rem("123", "23", c5)   == dec(coef: 8, exp: 0)
-    assert Decimal.rem("123", "-23", c5)  == dec(coef: 8, exp: 0)
-    assert Decimal.rem("-123", "23", c5)  == dec(coef: -8, exp: 0)
-    assert Decimal.rem("-123", "-23", c5) == dec(coef: -8, exp: 0)
-    assert Decimal.rem("1", "0.3", c5)    == dec(coef: 1, exp: 0)
-
-    assert_raise Decimal.Error, fn ->
-      Decimal.rem("1000000", "3", c5)
-    end
+    assert Decimal.rem("1", "3")      == dec(coef: 1, exp: 0)
+    assert Decimal.rem("42", "2")     == dec(coef: 0, exp: 0)
+    assert Decimal.rem("123", "23")   == dec(coef: 8, exp: 0)
+    assert Decimal.rem("123", "-23")  == dec(coef: 8, exp: 0)
+    assert Decimal.rem("-123", "23")  == dec(coef: -8, exp: 0)
+    assert Decimal.rem("-123", "-23") == dec(coef: -8, exp: 0)
+    assert Decimal.rem("1", "0.3")    == dec(coef: 1, exp: 0)
   end
 
   test "max" do
-    c5 = Context[precision: 5]
-    assert Decimal.max("0", "0", c5) == dec(coef: 0, exp: 0)
-    assert Decimal.max("1", "0", c5) == dec(coef: 1, exp: 0)
-    assert Decimal.max("0", "1", c5) == dec(coef: 1, exp: 0)
-    assert Decimal.max("-1", "1", c5) == dec(coef: 1, exp: 0)
-    assert Decimal.max("1", "-1", c5) == dec(coef: 1, exp: 0)
-    assert Decimal.max("-30", "-40", c5) == dec(coef: -30, exp: 0)
+    assert Decimal.max("0", "0")     == dec(coef: 0, exp: 0)
+    assert Decimal.max("1", "0")     == dec(coef: 1, exp: 0)
+    assert Decimal.max("0", "1")     == dec(coef: 1, exp: 0)
+    assert Decimal.max("-1", "1")    == dec(coef: 1, exp: 0)
+    assert Decimal.max("1", "-1")    == dec(coef: 1, exp: 0)
+    assert Decimal.max("-30", "-40") == dec(coef: -30, exp: 0)
   end
 
   test "min" do
-    c5 = Context[precision: 5]
-    assert Decimal.min("0", "0", c5) == dec(coef: 0, exp: 0)
-    assert Decimal.min("-1", "0", c5) == dec(coef: -1, exp: 0)
-    assert Decimal.min("0", "-1", c5) == dec(coef: -1, exp: 0)
-    assert Decimal.min("-1", "1", c5) == dec(coef: -1, exp: 0)
-    assert Decimal.min("1", "0", c5) == dec(coef: 0, exp: 0)
-    assert Decimal.min("-30", "-40", c5) == dec(coef: -40, exp: 0)
+    assert Decimal.min("0", "0")     == dec(coef: 0, exp: 0)
+    assert Decimal.min("-1", "0")    == dec(coef: -1, exp: 0)
+    assert Decimal.min("0", "-1")    == dec(coef: -1, exp: 0)
+    assert Decimal.min("-1", "1")    == dec(coef: -1, exp: 0)
+    assert Decimal.min("1", "0")     == dec(coef: 0, exp: 0)
+    assert Decimal.min("-30", "-40") == dec(coef: -40, exp: 0)
   end
 
   test "minus" do
-    assert Decimal.minus("0") == dec(coef: 0, exp: 0)
-    assert Decimal.minus("1") == dec(coef: -1, exp: 0)
+    assert Decimal.minus("0")  == dec(coef: 0, exp: 0)
+    assert Decimal.minus("1")  == dec(coef: -1, exp: 0)
     assert Decimal.minus("-1") == dec(coef: 1, exp: 0)
   end
 
   test "mult" do
-    assert Decimal.mult("0", "0") == dec(coef: 0, exp: 0)
-    assert Decimal.mult("42", "0") == dec(coef: 0, exp: 0)
-    assert Decimal.mult("0", "42") == dec(coef: 0, exp: 0)
-    assert Decimal.mult("5", "5") == dec(coef: 25, exp: 0)
-    assert Decimal.mult("-5", "5") == dec(coef: -25, exp: 0)
-    assert Decimal.mult("5", "-5") == dec(coef: -25, exp: 0)
-    assert Decimal.mult("-5", "-5") == dec(coef: 25, exp: 0)
-    assert Decimal.mult("42", "0.42") == dec(coef: 1764, exp: -2)
+    assert Decimal.mult("0", "0")      == dec(coef: 0, exp: 0)
+    assert Decimal.mult("42", "0")     == dec(coef: 0, exp: 0)
+    assert Decimal.mult("0", "42")     == dec(coef: 0, exp: 0)
+    assert Decimal.mult("5", "5")      == dec(coef: 25, exp: 0)
+    assert Decimal.mult("-5", "5")     == dec(coef: -25, exp: 0)
+    assert Decimal.mult("5", "-5")     == dec(coef: -25, exp: 0)
+    assert Decimal.mult("-5", "-5")    == dec(coef: 25, exp: 0)
+    assert Decimal.mult("42", "0.42")  == dec(coef: 1764, exp: -2)
     assert Decimal.mult("0.03", "0.3") == dec(coef: 9, exp: -3)
   end
 
@@ -203,7 +189,7 @@ defmodule DecimalTest do
     assert Decimal.to_string("-0.0003", :scientific)  == "-3e-4"
   end
 
-  test "to_string normal" do
+  test "to_string simple" do
     assert Decimal.to_string("2", :simple)        == "2"
     assert Decimal.to_string("300", :simple)      == "300"
     assert Decimal.to_string("4321.768", :simple) == "4321768e-3"
@@ -211,5 +197,58 @@ defmodule DecimalTest do
     assert Decimal.to_string("0.0042", :simple)   == "42e-4"
     assert Decimal.to_string("0.2", :simple)      == "2e-1"
     assert Decimal.to_string("-0.0003", :simple)  == "-3e-4"
+  end
+
+  test "precision truncate" do
+    precision = &Decimal.precision(&1, 2, :truncate)
+    assert precision.("1.02") == dec(coef: 10, exp: -1)
+    assert precision.("102")  == dec(coef: 10, exp: 1)
+    assert precision.("1.1")  == dec(coef: 11, exp: -1)
+  end
+
+  test "precision ceiling" do
+    precision = &Decimal.precision(&1, 2, :ceiling)
+    assert precision.("1.02") == dec(coef: 11, exp: -1)
+    assert precision.("102")  == dec(coef: 11, exp: 1)
+    assert precision.("-102") == dec(coef: -10, exp: 1)
+    assert precision.("106")  == dec(coef: 11, exp: 1)
+  end
+
+  test "precision floor" do
+    precision = &Decimal.precision(&1, 2, :floor)
+    assert precision.("1.02") == dec(coef: 10, exp: -1)
+    assert precision.("1.10") == dec(coef: 11, exp: -1)
+    assert precision.("-123") == dec(coef: -13, exp: 1)
+  end
+
+  test "precision half away zero" do
+    precision = &Decimal.precision(&1, 2, :half_away_zero)
+    assert precision.("1.02")  == dec(coef: 10, exp: -1)
+    assert precision.("1.05")  == dec(coef: 11, exp: -1)
+    assert precision.("-1.05") == dec(coef: -11, exp: -1)
+    assert precision.("123")   == dec(coef: 12, exp: 1)
+    assert precision.("125")   == dec(coef: 13, exp: 1)
+    assert precision.("-125")  == dec(coef: -13, exp: 1)
+  end
+
+  test "precision half up" do
+    precision = &Decimal.precision(&1, 2, :half_up)
+    assert precision.("1.02")  == dec(coef: 10, exp: -1)
+    assert precision.("1.05")  == dec(coef: 11, exp: -1)
+    assert precision.("-1.05") == dec(coef: -10, exp: -1)
+    assert precision.("123")   == dec(coef: 12, exp: 1)
+    assert precision.("-123")  == dec(coef: -12, exp: 1)
+    assert precision.("125")   == dec(coef: 13, exp: 1)
+    assert precision.("-125")  == dec(coef: -12, exp: 1)
+  end
+
+  test "precision half even" do
+    precision = &Decimal.precision(&1, 2, :half_even)
+    assert precision.("1.0")   == dec(coef: 10, exp: -1)
+    assert precision.("123")   == dec(coef: 12, exp: 1)
+    assert precision.("6.66")  == dec(coef: 67, exp: -1)
+    assert precision.("9.99")  == dec(coef: 10, exp: 0)
+    assert precision.("-6.66") == dec(coef: -67, exp: -1)
+    assert precision.("-9.99") == dec(coef: -10, exp: 0)
   end
 end

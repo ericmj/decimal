@@ -2,45 +2,44 @@ defmodule Decimal do
   import Kernel, except: [abs: 1, div: 2, max: 2, min: 2, rem: 1, round: 1]
 
   use Decimal.Record
-  import Decimal.Context
-  alias Decimal.Context
   alias Decimal.Error
-  alias Decimal.Util
 
-  def abs(num, context // unlimited) do
+  def abs(num) do
     dec(coef: coef) = d = to_decimal(num)
-    dec(d, coef: Kernel.abs(coef)) |> round(context)
+    dec(d, coef: Kernel.abs(coef))
   end
 
-  def add(num1, num2, context // unlimited) do
+  def add(num1, num2) do
     dec(coef: coef1, exp: exp1) = to_decimal(num1)
     dec(coef: coef2, exp: exp2) = to_decimal(num2)
 
     { coef1, coef2 } = add_align(coef1, exp1, coef2, exp2)
     coef = coef1 + coef2
     exp = Kernel.min(exp1, exp2)
-    dec(coef: coef, exp: exp) |> round(context)
+    dec(coef: coef, exp: exp)
   end
 
-  def sub(num1, num2, context // unlimited) do
+  def sub(num1, num2) do
     dec(coef: coef2) = d2 = to_decimal(num2)
-    add(num1, dec(d2, coef: -coef2)) |> round(context)
+    add(num1, dec(d2, coef: -coef2))
   end
 
-  def compare(num1, num2, context // unlimited) do
-    case sub(num1, num2, context) do
+  def compare(num1, num2) do
+    case sub(num1, num2) do
       dec(coef: 0) -> 0
       dec(coef: coef) when coef > 0 -> 1
       dec(coef: coef) when coef < 0 -> -1
     end
   end
 
-  def div(num1, num2, Context[] = context) do
+  def div(num1, num2, precision // 0) do
     dec(coef: coef1, exp: exp1) = d1 = to_decimal(num1)
     dec(coef: coef2, exp: exp2) = to_decimal(num2)
 
-    # TODO?
-    unless context.precision > 0,
+    # TODO
+    # Is there a performant way to check if a decimal expansion
+    # is non-terminating?
+    unless precision > 0,
       do: raise(Error, message: "unlimited precision not supported for division")
 
     if coef2 == 0, do: raise(Error, message: "division by zero")
@@ -49,23 +48,23 @@ defmodule Decimal do
       d1
     else
       sign = div_sign(coef1, coef2)
-      prec10 = Util.int_pow10(1, context.precision)
+      prec10 = int_pow10(1, precision-1)
 
       { coef1, coef2, adjust } = div_adjust(Kernel.abs(coef1), Kernel.abs(coef2), 0)
       { coef, adjust, _rem } = div_calc(coef1, coef2, 0, adjust, prec10)
-      dec(coef: sign * coef, exp: exp1 - exp2 - adjust) |> round(context)
+      dec(coef: sign * coef, exp: exp1 - exp2 - adjust)
     end
   end
 
-  def div_int(num1, num2, Context[] = context // unlimited) do
-    div_rem(num1, num2, context) |> elem(0)
+  def div_int(num1, num2) do
+    div_rem(num1, num2) |> elem(0)
   end
 
-  def rem(num1, num2, Context[] = context // unlimited) do
-    div_rem(num1, num2, context) |> elem(1)
+  def rem(num1, num2) do
+    div_rem(num1, num2) |> elem(1)
   end
 
-  def div_rem(num1, num2, Context[] = context // unlimited) do
+  def div_rem(num1, num2) do
     dec(coef: coef1, exp: exp1) = d1 = to_decimal(num1)
     dec(coef: coef2, exp: exp2) = d2 = to_decimal(num2)
     abs_coef1 = Kernel.abs(coef1)
@@ -78,29 +77,26 @@ defmodule Decimal do
       rem_sign = if coef1 < 0, do: -1, else: 1
       { coef1, coef2, adjust } = div_adjust(abs_coef1, abs_coef2, 0)
 
-      unless context.precision == 0 or -adjust < context.precision,
-        do: raise(Error, message: "division requires higher precision than context allows")
-
       adjust2 = if adjust < 0, do: 0, else: adjust
       { coef, rem } = div_int_calc(coef1, coef2, 0, adjust)
       { coef, exp } = truncate(coef, exp1 - exp2 - adjust2)
 
       adjust3 = if adjust > 0, do: 0, else: adjust
       { dec(coef: div_sign * coef, exp: exp),
-        dec(coef: rem_sign * Util.int_pow10(rem, adjust3), exp: 0) }
+        dec(coef: rem_sign * int_pow10(rem, adjust3), exp: 0) }
     end
   end
 
-  def max(num1, num2, context // unlimited) do
+  def max(num1, num2) do
     d1 = to_decimal(num1)
     d2 = to_decimal(num2)
-    if compare(d1, d2, context) == -1, do: d2, else: d1
+    if compare(d1, d2) == -1, do: d2, else: d1
   end
 
-  def min(num1, num2, context // unlimited) do
+  def min(num1, num2) do
     d1 = to_decimal(num1)
     d2 = to_decimal(num2)
-    if compare(d1, d2, context) == 1, do: d2, else: d1
+    if compare(d1, d2) == 1, do: d2, else: d1
   end
 
   def minus(num) do
@@ -108,11 +104,11 @@ defmodule Decimal do
     dec(d, coef: -coef)
   end
 
-  def mult(num1, num2, context // unlimited) do
+  def mult(num1, num2) do
     dec(coef: coef1, exp: exp1) = to_decimal(num1)
     dec(coef: coef2, exp: exp2) = to_decimal(num2)
 
-    dec(coef: coef1 * coef2, exp: exp1 + exp2) |> round(context)
+    dec(coef: coef1 * coef2, exp: exp1 + exp2)
   end
 
   def reduce(num) do
@@ -120,17 +116,28 @@ defmodule Decimal do
     do_reduce(coef, exp)
   end
 
-  def to_decimal(num, context // unlimited)
+  def precision(num, precision, rounding) do
+    dec(coef: coef, exp: exp) = d = to_decimal(num)
 
-  def to_decimal(dec() = d, ctxt),
-    do: d |> round(ctxt)
-  def to_decimal(int, ctxt) when is_integer(int),
-    do: dec(coef: int) |> round(ctxt)
-  def to_decimal(float, ctxt) when is_float(float),
-    do: to_decimal(float_to_binary(float)) |> round(ctxt)
-  def to_decimal(binary, ctxt) when is_binary(binary),
-    do: parse(binary) |> round(ctxt)
-  def to_decimal(_, _),
+    if precision > 0 do
+      sign = if coef < 0, do: -1, else: 1
+      coef = Kernel.abs(coef)
+      prec10 = int_pow10(1, precision)
+      do_precision(coef, exp, sign, prec10, rounding)
+    else
+      d
+    end
+  end
+
+  def to_decimal(dec() = d),
+    do: d
+  def to_decimal(int) when is_integer(int),
+    do: dec(coef: int)
+  def to_decimal(float) when is_float(float),
+    do: to_decimal(float_to_binary(float))
+  def to_decimal(binary) when is_binary(binary),
+    do: parse(binary)
+  def to_decimal(_),
     do: raise ArgumentError
 
   def to_string(num, type // :normal)
@@ -215,10 +222,10 @@ defmodule Decimal do
     do: { coef1, coef2 }
 
   defp add_align(coef1, exp1, coef2, exp2) when exp1 > exp2,
-    do: { coef1 * Util.int_pow10(1, exp1 - exp2), coef2 }
+    do: { coef1 * int_pow10(1, exp1 - exp2), coef2 }
 
   defp add_align(coef1, exp1, coef2, exp2) when exp1 < exp2,
-    do: { coef1, coef2 * Util.int_pow10(1, exp2 - exp1) }
+    do: { coef1, coef2 * int_pow10(1, exp2 - exp1) }
 
   defp div_adjust(coef1, coef2, adjust) when coef1 < coef2,
     do: div_adjust(coef1 * 10, coef2, adjust + 1)
@@ -277,6 +284,45 @@ defmodule Decimal do
       dec(coef: coef, exp: exp)
     end
   end
+
+  defp int_pow10(num, 0),
+    do: num
+  defp int_pow10(num, pow) when pow > 0,
+    do: int_pow10(10 * num, pow - 1)
+  defp int_pow10(num, pow) when pow < 0,
+    do: int_pow10(Kernel.div(num, 10), pow + 1)
+
+  ## ROUNDING ##
+
+  defp do_precision(coef, exp, sign, prec10, rounding) do
+    if coef >= prec10 do
+      significant = Kernel.div(coef, 10)
+      remainder = Kernel.rem(coef, 10)
+      if increment?(rounding, sign, significant, remainder),
+        do: significant = significant + 1
+      do_precision(significant, exp + 1, sign, prec10, rounding)
+    else
+      dec(coef: sign * coef, exp: exp)
+    end
+  end
+
+  defp increment?(:truncate, _, _, _),
+    do: false
+
+  defp increment?(:ceiling, sign, _, remain),
+    do: sign == 1 and remain != 0
+
+  defp increment?(:floor, sign, _, remain),
+    do: sign == -1 and remain != 0
+
+  defp increment?(:half_up, sign, _, remain),
+    do: sign == 1 and remain >= 5
+
+  defp increment?(:half_away_zero, _, _, remain),
+    do: remain >= 5
+
+  defp increment?(:half_even, _, signif, remain),
+    do: remain > 5 or (remain == 5 and Kernel.rem(signif, 2) == 1)
 
   ## PARSING ##
 

@@ -14,7 +14,7 @@ defimpl Inspect, for: Decimal.Record do
 end
 
 defimpl String.Chars, for: Decimal.Record do
-  def to_string(dec, _opts) do
+  def to_string(dec) do
     Decimal.to_string(dec)
   end
 end
