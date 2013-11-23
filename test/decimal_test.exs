@@ -251,4 +251,16 @@ defmodule DecimalTest do
     assert precision.("-6.66") == dec(coef: -67, exp: -1)
     assert precision.("-9.99") == dec(coef: -10, exp: 0)
   end
+
+  test "coef" do
+    assert Decimal.coef("123") == 123
+    assert Decimal.coef("0.0123") == 123
+    assert Decimal.coef("-1e5") == -1
+  end
+
+  test "exp" do
+    assert Decimal.exp("123") == 0
+    assert Decimal.exp("0.0123") == -4
+    assert Decimal.exp("-1e5") == 5
+  end
 end

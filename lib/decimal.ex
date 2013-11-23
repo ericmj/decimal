@@ -165,6 +165,16 @@ defmodule Decimal do
     String.from_char_list!(list)
   end
 
+  def coef(num) do
+    dec(coef: coef) = new(num)
+    coef
+  end
+
+  def exp(num) do
+    dec(exp: exp) = new(num)
+    exp
+  end
+
   def to_string(num, :scientific) do
     dec(coef: coef, exp: exp) = new(num)
     list = integer_to_list(Kernel.abs(coef))
