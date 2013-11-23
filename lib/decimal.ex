@@ -140,6 +140,26 @@ defmodule Decimal do
   def new(_),
     do: raise ArgumentError
 
+  def coef(num) do
+    dec(coef: coef) = new(num)
+    coef
+  end
+
+  def exp(num) do
+    dec(exp: exp) = new(num)
+    exp
+  end
+
+  def frac(num) do
+    dec(coef: coef, exp: exp) = new(num)
+    if exp < 0 do
+      coef = calc_frac(Kernel.abs(coef), exp, 0, 1)
+      dec(coef: coef, exp: exp)
+    else
+      dec(coef: 0, exp: 0)
+    end
+  end
+
   def to_string(num, type // :normal)
 
   def to_string(num, :normal) do
@@ -163,16 +183,6 @@ defmodule Decimal do
     end
 
     String.from_char_list!(list)
-  end
-
-  def coef(num) do
-    dec(coef: coef) = new(num)
-    coef
-  end
-
-  def exp(num) do
-    dec(exp: exp) = new(num)
-    exp
   end
 
   def to_string(num, :scientific) do
@@ -301,6 +311,13 @@ defmodule Decimal do
     do: int_pow10(10 * num, pow - 1)
   defp int_pow10(num, pow) when pow < 0,
     do: int_pow10(Kernel.div(num, 10), pow + 1)
+
+  def calc_frac(_coef, 0, frac, _fexp), do: frac
+
+  def calc_frac(coef, exp, frac, fexp) do
+    frac = frac + fexp * Kernel.rem(coef, 10)
+    calc_frac(Kernel.div(coef, 10), exp + 1, frac, fexp * 10)
+  end
 
   ## ROUNDING ##
 

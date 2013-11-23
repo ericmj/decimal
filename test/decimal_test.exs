@@ -253,14 +253,20 @@ defmodule DecimalTest do
   end
 
   test "coef" do
-    assert Decimal.coef("123") == 123
+    assert Decimal.coef("123")    == 123
     assert Decimal.coef("0.0123") == 123
-    assert Decimal.coef("-1e5") == -1
+    assert Decimal.coef("-1e5")   == -1
   end
 
   test "exp" do
-    assert Decimal.exp("123") == 0
+    assert Decimal.exp("123")    == 0
     assert Decimal.exp("0.0123") == -4
-    assert Decimal.exp("-1e5") == 5
+    assert Decimal.exp("-1e5")   == 5
+  end
+
+  test "frac" do
+    assert Decimal.frac("123") == dec(coef: 0, exp: 0)
+    assert Decimal.frac("123.123") == dec(coef: 123, exp: -3)
+    assert Decimal.frac("-42.42") == dec(coef: 42, exp: -2)
   end
 end
