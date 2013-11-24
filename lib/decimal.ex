@@ -1,8 +1,9 @@
 defmodule Decimal do
   import Kernel, except: [abs: 1, div: 2, max: 2, min: 2, rem: 1, round: 1]
 
-  use Decimal.Record
   alias Decimal.Error
+
+  defrecordp :dec, __MODULE__, [coef: 0, exp: 0]
 
   def abs(num) do
     dec(coef: coef) = d = new(num)
@@ -427,5 +428,19 @@ defmodule Decimal do
 
   defp parse_digits(rest, acc) do
     { :lists.reverse(acc), rest }
+  end
+end
+
+defexception Decimal.Error, [:message]
+
+defimpl Inspect, for: Decimal do
+  def inspect(dec, _opts) do
+    "#Decimal<" <> Decimal.to_string(dec, :simple) <> ">"
+  end
+end
+
+defimpl String.Chars, for: Decimal do
+  def to_string(dec) do
+    Decimal.to_string(dec)
   end
 end

@@ -1,6 +1,7 @@
 defmodule DecimalTest do
   use ExUnit.Case, async: true
-  use Decimal.Record
+
+  defrecordp :dec, Decimal, [coef: 0, exp: 0]
 
   test "basic conversion" do
     assert Decimal.new(dec(coef: 0, exp: 0)) == dec(coef: 0, exp: 0)
