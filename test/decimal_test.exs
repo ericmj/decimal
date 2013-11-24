@@ -203,6 +203,7 @@ defmodule DecimalTest do
     precision = &Decimal.precision(&1, 2, :truncate)
     assert precision.("1.02") == dec(coef: 10, exp: -1)
     assert precision.("102")  == dec(coef: 10, exp: 1)
+    assert precision.("-102")  == dec(coef: -10, exp: 1)
     assert precision.("1.1")  == dec(coef: 11, exp: -1)
   end
 
@@ -250,6 +251,80 @@ defmodule DecimalTest do
     assert precision.("9.99")  == dec(coef: 10, exp: 0)
     assert precision.("-6.66") == dec(coef: -67, exp: -1)
     assert precision.("-9.99") == dec(coef: -10, exp: 0)
+  end
+
+  test "round truncate" do
+    round = &Decimal.round(&1, 2, :truncate)
+    roundneg = &Decimal.round(&1, -2, :truncate)
+    assert round.("1.02")    == dec(coef: 102, exp: -2)
+    assert round.("1.029")   == dec(coef: 102, exp: -2)
+    assert round.("-1.029")  == dec(coef: -102, exp: -2)
+    assert round.("102")     == dec(coef: 102, exp: 0)
+    assert roundneg.("1.02") == dec(coef: 0, exp: 2)
+    assert roundneg.("102")  == dec(coef: 1, exp: 2)
+    assert roundneg.("1099") == dec(coef: 10, exp: 2)
+  end
+
+  test "round ceiling" do
+    round = &Decimal.round(&1, 2, :ceiling)
+    roundneg = &Decimal.round(&1, -2, :ceiling)
+    assert round.("1.02")    == dec(coef: 102, exp: -2)
+    assert round.("1.021")   == dec(coef: 103, exp: -2)
+    assert round.("-1.021")  == dec(coef: -102, exp: -2)
+    assert round.("102")     == dec(coef: 102, exp: 0)
+    assert roundneg.("1.02") == dec(coef: 1, exp: 2)
+    assert roundneg.("102")  == dec(coef: 2, exp: 2)
+  end
+
+  test "round floor" do
+    round = &Decimal.round(&1, 2, :floor)
+    roundneg = &Decimal.round(&1, -2, :floor)
+    assert round.("1.02")    == dec(coef: 102, exp: -2)
+    assert round.("1.029")   == dec(coef: 102, exp: -2)
+    assert round.("-1.029")  == dec(coef: -103, exp: -2)
+    assert roundneg.("123")  == dec(coef: 1, exp: 2)
+    assert roundneg.("-123") == dec(coef: -2, exp: 2)
+  end
+
+  test "round half away zero" do
+    round = &Decimal.round(&1, 2, :half_away_zero)
+    roundneg = &Decimal.round(&1, -2, :half_away_zero)
+    assert round.("1.02")    == dec(coef: 102, exp: -2)
+    assert round.("1.025")   == dec(coef: 103, exp: -2)
+    assert round.("-1.02")   == dec(coef: -102, exp: -2)
+    assert round.("-1.025")  == dec(coef: -103, exp: -2)
+    assert roundneg.("120")  == dec(coef: 1, exp: 2)
+    assert roundneg.("150")  == dec(coef: 2, exp: 2)
+    assert roundneg.("-120") == dec(coef: -1, exp: 2)
+    assert roundneg.("-150") == dec(coef: -2, exp: 2)
+  end
+
+  test "round half up" do
+    round = &Decimal.round(&1, 2, :half_up)
+    roundneg = &Decimal.round(&1, -2, :half_up)
+    assert round.("1.02")    == dec(coef: 102, exp: -2)
+    assert round.("1.025")   == dec(coef: 103, exp: -2)
+    assert round.("-1.02")   == dec(coef: -102, exp: -2)
+    assert round.("-1.025")  == dec(coef: -102, exp: -2)
+    assert roundneg.("120")  == dec(coef: 1, exp: 2)
+    assert roundneg.("150")  == dec(coef: 2, exp: 2)
+    assert roundneg.("-120") == dec(coef: -1, exp: 2)
+    assert roundneg.("-150") == dec(coef: -1, exp: 2)
+  end
+
+  test "round half even" do
+    round = &Decimal.round(&1, 2, :half_even)
+    roundneg = &Decimal.round(&1, -2, :half_even)
+    assert round.("1.03")    == dec(coef: 103, exp: -2)
+    assert round.("1.035")   == dec(coef: 104, exp: -2)
+    assert round.("1.045")   == dec(coef: 104, exp: -2)
+    assert round.("-1.035")  == dec(coef: -104, exp: -2)
+    assert round.("-1.045")  == dec(coef: -104, exp: -2)
+    assert roundneg.("130")  == dec(coef: 1, exp: 2)
+    assert roundneg.("150")  == dec(coef: 2, exp: 2)
+    assert roundneg.("250")  == dec(coef: 2, exp: 2)
+    assert roundneg.("-150") == dec(coef: -2, exp: 2)
+    assert roundneg.("-250") == dec(coef: -2, exp: 2)
   end
 
   test "coef" do

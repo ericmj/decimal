@@ -113,7 +113,11 @@ defmodule Decimal do
 
   def reduce(num) do
     dec(coef: coef, exp: exp) = new(num)
-    do_reduce(coef, exp)
+    if coef == 0 do
+      dec(coef: 0, exp: 0)
+    else
+      do_reduce(coef, exp)
+    end
   end
 
   def precision(num, precision, rounding) do
@@ -127,6 +131,13 @@ defmodule Decimal do
     else
       d
     end
+  end
+
+  def round(num, n // 0, mode // :half_up) do
+    dec(coef: coef, exp: exp) = reduce(num)
+    sign = if coef < 0, do: -1, else: 1
+    coef = Kernel.abs(coef)
+    do_round(coef, exp, sign, -n, mode)
   end
 
   def new(dec() = d),
@@ -321,16 +332,30 @@ defmodule Decimal do
 
   ## ROUNDING ##
 
-  defp do_precision(coef, exp, sign, prec10, rounding) do
-    if coef >= prec10 do
-      significant = Kernel.div(coef, 10)
-      remainder = Kernel.rem(coef, 10)
-      if increment?(rounding, sign, significant, remainder),
-        do: significant = significant + 1
-      do_precision(significant, exp + 1, sign, prec10, rounding)
-    else
-      dec(coef: sign * coef, exp: exp)
-    end
+  defp do_precision(coef, exp, sign, prec10, rounding) when coef >= prec10 do
+    significant = Kernel.div(coef, 10)
+    remainder = Kernel.rem(coef, 10)
+    if increment?(rounding, sign, significant, remainder),
+      do: significant = significant + 1
+
+    do_precision(significant, exp + 1, sign, prec10, rounding)
+  end
+
+  defp do_precision(coef, exp, sign, _prec10, _rounding) do
+    dec(coef: sign * coef, exp: exp)
+  end
+
+  defp do_round(coef, exp, sign, n, rounding) when n > exp do
+    significant = Kernel.div(coef, 10)
+    remainder = Kernel.rem(coef, 10)
+    if increment?(rounding, sign, significant, remainder),
+      do: significant = significant + 1
+
+    do_round(significant, exp + 1, sign, n, rounding)
+  end
+
+  defp do_round(coef, exp, sign, _n, _rounding) do
+    dec(coef: sign * coef, exp: exp)
   end
 
   defp increment?(:truncate, _, _, _),
