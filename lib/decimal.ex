@@ -5,23 +5,18 @@ defmodule Decimal do
 
   defrecordp :dec, __MODULE__, [coef: 0, exp: 0]
 
-  def abs(num) do
-    dec(coef: coef) = d = new(num)
+  def abs(dec(coef: coef) = d) do
     dec(d, coef: Kernel.abs(coef))
   end
 
-  def add(num1, num2) do
-    dec(coef: coef1, exp: exp1) = new(num1)
-    dec(coef: coef2, exp: exp2) = new(num2)
-
+  def add(dec(coef: coef1, exp: exp1), dec(coef: coef2, exp: exp2)) do
     { coef1, coef2 } = add_align(coef1, exp1, coef2, exp2)
     coef = coef1 + coef2
     exp = Kernel.min(exp1, exp2)
     dec(coef: coef, exp: exp)
   end
 
-  def sub(num1, num2) do
-    dec(coef: coef2) = d2 = new(num2)
+  def sub(num1, dec(coef: coef2) = d2) do
     add(num1, dec(d2, coef: -coef2))
   end
 
@@ -33,10 +28,7 @@ defmodule Decimal do
     end
   end
 
-  def div(num1, num2, precision // 0) do
-    dec(coef: coef1, exp: exp1) = d1 = new(num1)
-    dec(coef: coef2, exp: exp2) = new(num2)
-
+  def div(dec(coef: coef1, exp: exp1) = d1, dec(coef: coef2, exp: exp2), precision // 0) do
     # TODO
     # Is there a performant way to check if a decimal expansion
     # is non-terminating?
@@ -65,9 +57,7 @@ defmodule Decimal do
     div_rem(num1, num2) |> elem(1)
   end
 
-  def div_rem(num1, num2) do
-    dec(coef: coef1, exp: exp1) = d1 = new(num1)
-    dec(coef: coef2, exp: exp2) = d2 = new(num2)
+  def div_rem(dec(coef: coef1, exp: exp1) = d1, dec(coef: coef2, exp: exp2) = d2) do
     abs_coef1 = Kernel.abs(coef1)
     abs_coef2 = Kernel.abs(coef2)
 
@@ -89,26 +79,18 @@ defmodule Decimal do
   end
 
   def max(num1, num2) do
-    d1 = new(num1)
-    d2 = new(num2)
-    if compare(d1, d2) == -1, do: d2, else: d1
+    if compare(num1, num2) == -1, do: num2, else: num1
   end
 
   def min(num1, num2) do
-    d1 = new(num1)
-    d2 = new(num2)
-    if compare(d1, d2) == 1, do: d2, else: d1
+    if compare(num1, num2) == 1, do: num2, else: num1
   end
 
-  def minus(num) do
-    dec(coef: coef) = d = new(num)
+  def minus(dec(coef: coef) = d) do
     dec(d, coef: -coef)
   end
 
-  def mult(num1, num2) do
-    dec(coef: coef1, exp: exp1) = new(num1)
-    dec(coef: coef2, exp: exp2) = new(num2)
-
+  def mult(dec(coef: coef1, exp: exp1), dec(coef: coef2, exp: exp2)) do
     dec(coef: coef1 * coef2, exp: exp1 + exp2)
   end
 
@@ -121,9 +103,7 @@ defmodule Decimal do
     end
   end
 
-  def precision(num, precision, rounding) do
-    dec(coef: coef, exp: exp) = d = new(num)
-
+  def precision(dec(coef: coef, exp: exp) = d, precision, rounding) do
     if precision > 0 do
       sign = if coef < 0, do: -1, else: 1
       coef = Kernel.abs(coef)
@@ -146,24 +126,21 @@ defmodule Decimal do
   def new(int) when is_integer(int),
     do: dec(coef: int)
   def new(float) when is_float(float),
-    do: new(float_to_binary(float))
+    do: new(:io_lib_format.fwrite_g(float) |> iolist_to_binary)
   def new(binary) when is_binary(binary),
     do: parse(binary)
   def new(_),
     do: raise ArgumentError
 
-  def coef(num) do
-    dec(coef: coef) = new(num)
+  def coef(dec(coef: coef)) do
     coef
   end
 
-  def exp(num) do
-    dec(exp: exp) = new(num)
+  def exp(dec(exp: exp)) do
     exp
   end
 
-  def frac(num) do
-    dec(coef: coef, exp: exp) = new(num)
+  def frac(dec(coef: coef, exp: exp)) do
     if exp < 0 do
       coef = calc_frac(Kernel.abs(coef), exp, 0, 1)
       dec(coef: coef, exp: exp)
@@ -174,8 +151,7 @@ defmodule Decimal do
 
   def to_string(num, type // :normal)
 
-  def to_string(num, :normal) do
-    dec(coef: coef, exp: exp) = new(num)
+  def to_string(dec(coef: coef, exp: exp), :normal) do
     list = integer_to_list(Kernel.abs(coef))
 
     list =
@@ -194,11 +170,10 @@ defmodule Decimal do
       list = [?-|list]
     end
 
-    String.from_char_list!(list)
+    iolist_to_binary(list)
   end
 
-  def to_string(num, :scientific) do
-    dec(coef: coef, exp: exp) = new(num)
+  def to_string(dec(coef: coef, exp: exp), :scientific) do
     list = integer_to_list(Kernel.abs(coef))
 
     { list, exp_offset } = trim_coef(list)
@@ -216,11 +191,10 @@ defmodule Decimal do
       list = [?-|list]
     end
 
-    String.from_char_list!(list)
+    iolist_to_binary(list)
   end
 
-  def to_string(num, :simple) do
-    dec(coef: coef, exp: exp) = new(num)
+  def to_string(dec(coef: coef, exp: exp), :simple) do
     str = integer_to_binary(coef)
 
     if exp != 0 do
