@@ -1,19 +1,22 @@
 defmodule Decimal do
   import Kernel, except: [abs: 1, div: 2, max: 2, min: 2, rem: 1, round: 1]
 
-  alias Decimal.Error
+  defexception Error, [:message]
+  defrecord Context, [:precision, :rounding]
 
   defrecordp :dec, __MODULE__, [coef: 0, exp: 0]
 
+  @context_key :"$decimal_context"
+
   def abs(dec(coef: coef) = d) do
-    dec(d, coef: Kernel.abs(coef))
+    dec(d, coef: Kernel.abs(coef)) |> context
   end
 
   def add(dec(coef: coef1, exp: exp1), dec(coef: coef2, exp: exp2)) do
     { coef1, coef2 } = add_align(coef1, exp1, coef2, exp2)
     coef = coef1 + coef2
     exp = Kernel.min(exp1, exp2)
-    dec(coef: coef, exp: exp)
+    dec(coef: coef, exp: exp) |> context
   end
 
   def sub(num1, dec(coef: coef2) = d2) do
@@ -28,24 +31,20 @@ defmodule Decimal do
     end
   end
 
-  def div(dec(coef: coef1, exp: exp1) = d1, dec(coef: coef2, exp: exp2), precision // 0) do
-    # TODO
-    # Is there a performant way to check if a decimal expansion
-    # is non-terminating?
-    unless precision > 0,
-      do: raise(Error, message: "unlimited precision not supported for division")
+  def div(dec(coef: coef1, exp: exp1) = d1, dec(coef: coef2, exp: exp2)) do
 
     if coef2 == 0, do: raise(Error, message: "division by zero")
 
     if coef1 == 0 do
-      d1
+      d1 |> context
     else
       sign = div_sign(coef1, coef2)
-      prec10 = int_pow10(1, precision-1)
+      context = Context[] = get_context
+      prec10 = int_pow10(1, context.precision-1)
 
       { coef1, coef2, adjust } = div_adjust(Kernel.abs(coef1), Kernel.abs(coef2), 0)
       { coef, adjust, _rem } = div_calc(coef1, coef2, 0, adjust, prec10)
-      dec(coef: sign * coef, exp: exp1 - exp2 - adjust)
+      dec(coef: sign * coef, exp: exp1 - exp2 - adjust) |> context
     end
   end
 
@@ -73,44 +72,32 @@ defmodule Decimal do
       { coef, exp } = truncate(coef, exp1 - exp2 - adjust2)
 
       adjust3 = if adjust > 0, do: 0, else: adjust
-      { dec(coef: div_sign * coef, exp: exp),
-        dec(coef: rem_sign * int_pow10(rem, adjust3), exp: 0) }
+      { dec(coef: div_sign * coef, exp: exp) |> context,
+        dec(coef: rem_sign * int_pow10(rem, adjust3), exp: 0) |> context }
     end
   end
 
   def max(num1, num2) do
-    if compare(num1, num2) == -1, do: num2, else: num1
+    context(if compare(num1, num2) == -1, do: num2, else: num1)
   end
 
   def min(num1, num2) do
-    if compare(num1, num2) == 1, do: num2, else: num1
+    context(if compare(num1, num2) == 1, do: num2, else: num1)
   end
 
   def minus(dec(coef: coef) = d) do
-    dec(d, coef: -coef)
+    dec(d, coef: -coef) |> context
   end
 
   def mult(dec(coef: coef1, exp: exp1), dec(coef: coef2, exp: exp2)) do
-    dec(coef: coef1 * coef2, exp: exp1 + exp2)
+    dec(coef: coef1 * coef2, exp: exp1 + exp2) |> context
   end
 
-  def reduce(num) do
-    dec(coef: coef, exp: exp) = new(num)
+  def reduce(dec(coef: coef, exp: exp)) do
     if coef == 0 do
       dec(coef: 0, exp: 0)
     else
-      do_reduce(coef, exp)
-    end
-  end
-
-  def precision(dec(coef: coef, exp: exp) = d, precision, rounding) do
-    if precision > 0 do
-      sign = if coef < 0, do: -1, else: 1
-      coef = Kernel.abs(coef)
-      prec10 = int_pow10(1, precision)
-      do_precision(coef, exp, sign, prec10, rounding)
-    else
-      d
+      do_reduce(coef, exp) |> context
     end
   end
 
@@ -118,7 +105,7 @@ defmodule Decimal do
     dec(coef: coef, exp: exp) = reduce(num)
     sign = if coef < 0, do: -1, else: 1
     coef = Kernel.abs(coef)
-    do_round(coef, exp, sign, -n, mode)
+    do_round(coef, exp, sign, -n, mode) |> context
   end
 
   def new(dec() = d),
@@ -143,7 +130,7 @@ defmodule Decimal do
   def frac(dec(coef: coef, exp: exp)) do
     if exp < 0 do
       coef = calc_frac(Kernel.abs(coef), exp, 0, 1)
-      dec(coef: coef, exp: exp)
+      dec(coef: coef, exp: exp) |> context
     else
       dec(coef: 0, exp: 0)
     end
@@ -202,6 +189,27 @@ defmodule Decimal do
     else
       str
     end
+  end
+
+  def with_context(Context[] = context, fun) when is_function(fun, 0) do
+    old = set_context(context)
+    try do
+      fun.()
+    after
+      set_context(old)
+    end
+  end
+
+  def get_context do
+    Process.get(@context_key, default_context)
+  end
+
+  def set_context(context) do
+    Process.put(@context_key, context)
+  end
+
+  def default_context do
+    Context[precision: 9, rounding: :half_up]
   end
 
   ## STRINGIFY ##
@@ -307,19 +315,6 @@ defmodule Decimal do
 
   ## ROUNDING ##
 
-  defp do_precision(coef, exp, sign, prec10, rounding) when coef >= prec10 do
-    significant = Kernel.div(coef, 10)
-    remainder = Kernel.rem(coef, 10)
-    if increment?(rounding, sign, significant, remainder),
-      do: significant = significant + 1
-
-    do_precision(significant, exp + 1, sign, prec10, rounding)
-  end
-
-  defp do_precision(coef, exp, sign, _prec10, _rounding) do
-    dec(coef: sign * coef, exp: exp)
-  end
-
   defp do_round(coef, exp, sign, n, rounding) when n > exp do
     significant = Kernel.div(coef, 10)
     remainder = Kernel.rem(coef, 10)
@@ -330,6 +325,26 @@ defmodule Decimal do
   end
 
   defp do_round(coef, exp, sign, _n, _rounding) do
+    dec(coef: sign * coef, exp: exp)
+  end
+
+  defp precision(dec(coef: coef, exp: exp), precision, rounding) do
+    sign = if coef < 0, do: -1, else: 1
+    coef = Kernel.abs(coef)
+    prec10 = int_pow10(1, precision)
+    do_precision(coef, exp, sign, prec10, rounding)
+  end
+
+  defp do_precision(coef, exp, sign, prec10, rounding) when coef >= prec10 do
+    significant = Kernel.div(coef, 10)
+    remainder = Kernel.rem(coef, 10)
+    if increment?(rounding, sign, significant, remainder),
+      do: significant = significant + 1
+
+    do_precision(significant, exp + 1, sign, prec10, rounding)
+  end
+
+  defp do_precision(coef, exp, sign, _prec10, _rounding) do
     dec(coef: sign * coef, exp: exp)
   end
 
@@ -350,6 +365,13 @@ defmodule Decimal do
 
   defp increment?(:half_even, _, signif, remain),
     do: remain > 5 or (remain == 5 and Kernel.rem(signif, 2) == 1)
+
+  ## CONTEXT ##
+
+  defp context(num) do
+    ctxt = Context[] = get_context
+    precision(num, ctxt.precision, ctxt.rounding)
+  end
 
   ## PARSING ##
 
@@ -404,8 +426,6 @@ defmodule Decimal do
     { :lists.reverse(acc), rest }
   end
 end
-
-defexception Decimal.Error, [:message]
 
 defimpl Inspect, for: Decimal do
   def inspect(dec, _opts) do

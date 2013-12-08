@@ -2,6 +2,7 @@ defmodule DecimalTest do
   use ExUnit.Case, async: true
 
   defrecordp :dec, Decimal, [coef: 0, exp: 0]
+  alias Decimal.Context
 
   defmacrop sigil_d(str, _opts) do
     quote do
@@ -110,13 +111,15 @@ defmodule DecimalTest do
   end
 
   test "div" do
-    assert Decimal.div(%d"1", %d"3", 5)       == dec(coef: 33333, exp: -5)
-    assert Decimal.div(%d"42", %d"2", 5)      == dec(coef: 21, exp: 0)
-    assert Decimal.div(%d"123", %d"12345", 5) == dec(coef: 99635, exp: -7)
-    assert Decimal.div(%d"123", %d"123", 5)   == dec(coef: 1, exp: 0)
-    assert Decimal.div(%d"-1", %d"5", 5)      == dec(coef: -2, exp: -1)
-    assert Decimal.div(%d"-1", %d"-1", 5)     == dec(coef: 1, exp: 0)
-    assert Decimal.div(%d"2", %d"-5", 5)      == dec(coef: -4, exp: -1)
+    Decimal.with_context(Context[precision: 5, rounding: :half_up], fn ->
+      assert Decimal.div(%d"1", %d"3")       == dec(coef: 33333, exp: -5)
+      assert Decimal.div(%d"42", %d"2")      == dec(coef: 21, exp: 0)
+      assert Decimal.div(%d"123", %d"12345") == dec(coef: 99635, exp: -7)
+      assert Decimal.div(%d"123", %d"123")   == dec(coef: 1, exp: 0)
+      assert Decimal.div(%d"-1", %d"5")      == dec(coef: -2, exp: -1)
+      assert Decimal.div(%d"-1", %d"-1")     == dec(coef: 1, exp: 0)
+      assert Decimal.div(%d"2", %d"-5")      == dec(coef: -4, exp: -1)
+    end)
   end
 
   test "div_int" do
@@ -207,57 +210,63 @@ defmodule DecimalTest do
   end
 
   test "precision truncate" do
-    precision = &Decimal.precision(&1, 2, :truncate)
-    assert precision.(%d"1.02") == dec(coef: 10, exp: -1)
-    assert precision.(%d"102")  == dec(coef: 10, exp: 1)
-    assert precision.(%d"-102")  == dec(coef: -10, exp: 1)
-    assert precision.(%d"1.1")  == dec(coef: 11, exp: -1)
+    Decimal.with_context(Context[precision: 2, rounding: :truncate], fn ->
+      assert Decimal.add(%d"0", %d"1.02") == dec(coef: 10, exp: -1)
+      assert Decimal.add(%d"0", %d"102")  == dec(coef: 10, exp: 1)
+      assert Decimal.add(%d"0", %d"-102") == dec(coef: -10, exp: 1)
+      assert Decimal.add(%d"0", %d"1.1")  == dec(coef: 11, exp: -1)
+    end)
   end
 
   test "precision ceiling" do
-    precision = &Decimal.precision(&1, 2, :ceiling)
-    assert precision.(%d"1.02") == dec(coef: 11, exp: -1)
-    assert precision.(%d"102")  == dec(coef: 11, exp: 1)
-    assert precision.(%d"-102") == dec(coef: -10, exp: 1)
-    assert precision.(%d"106")  == dec(coef: 11, exp: 1)
+    Decimal.with_context(Context[precision: 2, rounding: :ceiling], fn ->
+      assert Decimal.add(%d"0", %d"1.02") == dec(coef: 11, exp: -1)
+      assert Decimal.add(%d"0", %d"102")  == dec(coef: 11, exp: 1)
+      assert Decimal.add(%d"0", %d"-102") == dec(coef: -10, exp: 1)
+      assert Decimal.add(%d"0", %d"106")  == dec(coef: 11, exp: 1)
+    end)
   end
 
   test "precision floor" do
-    precision = &Decimal.precision(&1, 2, :floor)
-    assert precision.(%d"1.02") == dec(coef: 10, exp: -1)
-    assert precision.(%d"1.10") == dec(coef: 11, exp: -1)
-    assert precision.(%d"-123") == dec(coef: -13, exp: 1)
+    Decimal.with_context(Context[precision: 2, rounding: :floor], fn ->
+      assert Decimal.add(%d"0", %d"1.02") == dec(coef: 10, exp: -1)
+      assert Decimal.add(%d"0", %d"1.10") == dec(coef: 11, exp: -1)
+      assert Decimal.add(%d"0", %d"-123") == dec(coef: -13, exp: 1)
+    end)
   end
 
   test "precision half away zero" do
-    precision = &Decimal.precision(&1, 2, :half_away_zero)
-    assert precision.(%d"1.02")  == dec(coef: 10, exp: -1)
-    assert precision.(%d"1.05")  == dec(coef: 11, exp: -1)
-    assert precision.(%d"-1.05") == dec(coef: -11, exp: -1)
-    assert precision.(%d"123")   == dec(coef: 12, exp: 1)
-    assert precision.(%d"125")   == dec(coef: 13, exp: 1)
-    assert precision.(%d"-125")  == dec(coef: -13, exp: 1)
+    Decimal.with_context(Context[precision: 2, rounding: :half_away_zero], fn ->
+      assert Decimal.add(%d"0", %d"1.02")  == dec(coef: 10, exp: -1)
+      assert Decimal.add(%d"0", %d"1.05")  == dec(coef: 11, exp: -1)
+      assert Decimal.add(%d"0", %d"-1.05") == dec(coef: -11, exp: -1)
+      assert Decimal.add(%d"0", %d"123")   == dec(coef: 12, exp: 1)
+      assert Decimal.add(%d"0", %d"125")   == dec(coef: 13, exp: 1)
+      assert Decimal.add(%d"0", %d"-125")  == dec(coef: -13, exp: 1)
+    end)
   end
 
   test "precision half up" do
-    precision = &Decimal.precision(&1, 2, :half_up)
-    assert precision.(%d"1.02")  == dec(coef: 10, exp: -1)
-    assert precision.(%d"1.05")  == dec(coef: 11, exp: -1)
-    assert precision.(%d"-1.05") == dec(coef: -10, exp: -1)
-    assert precision.(%d"123")   == dec(coef: 12, exp: 1)
-    assert precision.(%d"-123")  == dec(coef: -12, exp: 1)
-    assert precision.(%d"125")   == dec(coef: 13, exp: 1)
-    assert precision.(%d"-125")  == dec(coef: -12, exp: 1)
+    Decimal.with_context(Context[precision: 2, rounding: :half_up], fn ->
+      assert Decimal.add(%d"0", %d"1.02")  == dec(coef: 10, exp: -1)
+      assert Decimal.add(%d"0", %d"1.05")  == dec(coef: 11, exp: -1)
+      assert Decimal.add(%d"0", %d"-1.05") == dec(coef: -10, exp: -1)
+      assert Decimal.add(%d"0", %d"123")   == dec(coef: 12, exp: 1)
+      assert Decimal.add(%d"0", %d"-123")  == dec(coef: -12, exp: 1)
+      assert Decimal.add(%d"0", %d"125")   == dec(coef: 13, exp: 1)
+      assert Decimal.add(%d"0", %d"-125")  == dec(coef: -12, exp: 1)
+    end)
   end
 
   test "precision half even" do
-    precision = &Decimal.precision(&1, 2, :half_even)
-    assert precision.(%d"1.0")   == dec(coef: 10, exp: -1)
-    assert precision.(%d"123")   == dec(coef: 12, exp: 1)
-    assert precision.(%d"6.66")  == dec(coef: 67, exp: -1)
-    assert precision.(%d"9.99")  == dec(coef: 10, exp: 0)
-    assert precision.(%d"-6.66") == dec(coef: -67, exp: -1)
-    assert precision.(%d"-9.99") == dec(coef: -10, exp: 0)
+    Decimal.with_context(Context[precision: 2, rounding: :half_even], fn ->
+      assert Decimal.add(%d"0", %d"1.0")   == dec(coef: 10, exp: -1)
+      assert Decimal.add(%d"0", %d"123")   == dec(coef: 12, exp: 1)
+      assert Decimal.add(%d"0", %d"6.66")  == dec(coef: 67, exp: -1)
+      assert Decimal.add(%d"0", %d"9.99")  == dec(coef: 10, exp: 0)
+      assert Decimal.add(%d"0", %d"-6.66") == dec(coef: -67, exp: -1)
+      assert Decimal.add(%d"0", %d"-9.99") == dec(coef: -10, exp: 0)
+    end)
   end
 
   test "round truncate" do
