@@ -20,8 +20,8 @@ defmodule Decimal do
     dec(sign: sign, coef: Kernel.abs(coef), exp: exp) |> context
   end
 
-  def sub(num1, dec(coef: coef2) = d2) do
-    add(num1, dec(d2, coef: -coef2))
+  def sub(num1, dec(sign: sign) = d2) do
+    add(num1, dec(d2, sign: -sign))
   end
 
   def compare(num1, num2) do
@@ -31,20 +31,22 @@ defmodule Decimal do
     end
   end
 
-  def div(dec(sign: sign1, coef: coef1, exp: exp1) = d1, dec(sign: sign2, coef: coef2, exp: exp2)) do
+  def div(dec(sign: sign1, coef: coef1, exp: exp1), dec(sign: sign2, coef: coef2, exp: exp2)) do
     if coef2 == 0, do: raise(Error, message: "division by zero")
 
     if coef1 == 0 do
-      d1 |> context
+      coef = 0
+      adjust = 0
     else
-      sign = if sign1 == sign2, do: 1, else: -1
       context = Context[] = get_context
       prec10 = int_pow10(1, context.precision-1)
 
       { coef1, coef2, adjust } = div_adjust(coef1, coef2, 0)
       { coef, adjust, _rem } = div_calc(coef1, coef2, 0, adjust, prec10)
-      dec(sign: sign, coef: coef, exp: exp1 - exp2 - adjust) |> context
     end
+
+    sign = if sign1 == sign2, do: 1, else: -1
+    dec(sign: sign, coef: coef, exp: exp1 - exp2 - adjust) |> context
   end
 
   def div_int(num1, num2) do
@@ -56,10 +58,11 @@ defmodule Decimal do
   end
 
   def div_rem(dec(sign: sign1, coef: coef1, exp: exp1) = d1, dec(sign: sign2, coef: coef2, exp: exp2) = d2) do
+    div_sign = if sign1 == sign2, do: 1, else: -1
+
     if compare(dec(d1, sign: 1), dec(d2, sign: 1)) == -1 do
-      { dec(sign: 1, coef: 0, exp: 0), d1 }
+      { dec(sign: div_sign, coef: 0, exp: exp1 - exp2), d1 }
     else
-      div_sign = if sign1 == sign2, do: 1, else: -1
       { coef1, coef2, adjust } = div_adjust(coef1, coef2, 0)
 
       adjust2 = if adjust < 0, do: 0, else: adjust
@@ -91,7 +94,7 @@ defmodule Decimal do
 
   def reduce(dec(sign: sign, coef: coef, exp: exp)) do
     if coef == 0 do
-      dec(coef: 0, exp: 0)
+      dec(sign: sign, coef: 0, exp: 0)
     else
       dec(do_reduce(coef, exp), sign: sign) |> context
     end
@@ -182,7 +185,7 @@ defmodule Decimal do
     try do
       fun.()
     after
-      set_context(old)
+      if old, do: set_context(old)
     end
   end
 

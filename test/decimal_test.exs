@@ -101,6 +101,13 @@ defmodule DecimalTest do
     assert Decimal.add(%d"1.3e3", %d"2.4e2") == d(1, 154, 1)
     assert Decimal.add(%d"0.42", %d"-1.5")   == d(-1, 108, -2)
     assert Decimal.add(%d"-2e-2", %d"-2e-2") == d(-1, 4, -2)
+    assert Decimal.add(%d"-0", %d"0")        == d(1, 0, 0)
+    assert Decimal.add(%d"-0", %d"-0")       == d(-1, 0, 0)
+
+    assert Decimal.add(%d"2", %d"-2")        == d(1, 0, 0)
+    Decimal.with_context(Context[precision: 5, rounding: :floor], fn ->
+      assert Decimal.add(%d"2", %d"-2")      == d(-1, 0, 0)
+    end)
   end
 
   test "sub" do
@@ -109,6 +116,8 @@ defmodule DecimalTest do
     assert Decimal.sub(%d"1.3e3", %d"2.4e2") == d(1, 106, 1)
     assert Decimal.sub(%d"0.42", %d"-1.5")   == d(1, 192, -2)
     assert Decimal.sub(%d"2e-2", %d"-2e-2")  == d(1, 4, -2)
+    assert Decimal.sub(%d"-0", %d"0")        == d(-1, 0, 0)
+    assert Decimal.sub(%d"-0", %d"-0")       == d(1, 0, 0)
   end
 
   test "compare" do
@@ -127,6 +136,10 @@ defmodule DecimalTest do
       assert Decimal.div(%d"-1", %d"-1")     == d(1, 1, 0)
       assert Decimal.div(%d"2", %d"-5")      == d(-1, 4, -1)
     end)
+
+    assert Decimal.div(%d"0", %d"3")         == d(1, 0, 0)
+    assert Decimal.div(%d"-0", %d"3")        == d(-1, 0, 0)
+    assert Decimal.div(%d"0", %d"-3")        == d(-1, 0, 0)
   end
 
   test "div_int" do
@@ -137,6 +150,10 @@ defmodule DecimalTest do
     assert Decimal.div_int(%d"-123", %d"23")  == d(-1, 5, 0)
     assert Decimal.div_int(%d"-123", %d"-23") == d(1, 5, 0)
     assert Decimal.div_int(%d"1", %d"0.3")    == d(1, 3, 0)
+
+    assert Decimal.div_int(%d"0", %d"3")      == d(1, 0, 0)
+    assert Decimal.div_int(%d"-0", %d"3")     == d(-1, 0, 0)
+    assert Decimal.div_int(%d"0", %d"-3")     == d(-1, 0, 0)
   end
 
   test "rem" do
@@ -183,6 +200,20 @@ defmodule DecimalTest do
     assert Decimal.mult(%d"-5", %d"-5")    == d(1, 25, 0)
     assert Decimal.mult(%d"42", %d"0.42")  == d(1, 1764, -2)
     assert Decimal.mult(%d"0.03", %d"0.3") == d(1, 9, -3)
+
+    assert Decimal.mult(%d"0", %d"3")      == d(1, 0, 0)
+    assert Decimal.mult(%d"-0", %d"3")     == d(-1, 0, 0)
+    assert Decimal.mult(%d"0", %d"-3")     == d(-1, 0, 0)
+  end
+
+  test "reduce" do
+    assert Decimal.reduce(%d"2.1")   == d(1, 21, -1)
+    assert Decimal.reduce(%d"2.10")  == d(1, 21, -1)
+    assert Decimal.reduce(%d"-2")    == d(-1, 2, 0)
+    assert Decimal.reduce(%d"-2.00") == d(-1, 2, 0)
+    assert Decimal.reduce(%d"200")   == d(1, 2, 2)
+    assert Decimal.reduce(%d"0")     == d(1, 0, 0)
+    assert Decimal.reduce(%d"-0")    == d(-1, 0, 0)
   end
 
   test "to_string normal" do
