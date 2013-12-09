@@ -4,19 +4,20 @@ defmodule Decimal do
   defexception Error, [:message]
   defrecord Context, [:precision, :rounding]
 
-  defrecordp :dec, __MODULE__, [coef: 0, exp: 0]
+  defrecordp :dec, __MODULE__, [sign: 1, coef: 0, exp: 0]
 
   @context_key :"$decimal_context"
 
-  def abs(dec(coef: coef) = d) do
-    dec(d, coef: Kernel.abs(coef)) |> context
+  def abs(dec() = d) do
+    dec(d, sign: 1) |> context
   end
 
-  def add(dec(coef: coef1, exp: exp1), dec(coef: coef2, exp: exp2)) do
+  def add(dec(sign: sign1, coef: coef1, exp: exp1), dec(sign: sign2, coef: coef2, exp: exp2)) do
     { coef1, coef2 } = add_align(coef1, exp1, coef2, exp2)
-    coef = coef1 + coef2
+    coef = sign1 * coef1 + sign2 * coef2
     exp = Kernel.min(exp1, exp2)
-    dec(coef: coef, exp: exp) |> context
+    sign = add_sign(sign1, sign2, coef)
+    dec(sign: sign, coef: Kernel.abs(coef), exp: exp) |> context
   end
 
   def sub(num1, dec(coef: coef2) = d2) do
@@ -26,25 +27,23 @@ defmodule Decimal do
   def compare(num1, num2) do
     case sub(num1, num2) do
       dec(coef: 0) -> 0
-      dec(coef: coef) when coef > 0 -> 1
-      dec(coef: coef) when coef < 0 -> -1
+      dec(sign: sign) -> sign
     end
   end
 
-  def div(dec(coef: coef1, exp: exp1) = d1, dec(coef: coef2, exp: exp2)) do
-
+  def div(dec(sign: sign1, coef: coef1, exp: exp1) = d1, dec(sign: sign2, coef: coef2, exp: exp2)) do
     if coef2 == 0, do: raise(Error, message: "division by zero")
 
     if coef1 == 0 do
       d1 |> context
     else
-      sign = div_sign(coef1, coef2)
+      sign = if sign1 == sign2, do: 1, else: -1
       context = Context[] = get_context
       prec10 = int_pow10(1, context.precision-1)
 
-      { coef1, coef2, adjust } = div_adjust(Kernel.abs(coef1), Kernel.abs(coef2), 0)
+      { coef1, coef2, adjust } = div_adjust(coef1, coef2, 0)
       { coef, adjust, _rem } = div_calc(coef1, coef2, 0, adjust, prec10)
-      dec(coef: sign * coef, exp: exp1 - exp2 - adjust) |> context
+      dec(sign: sign, coef: coef, exp: exp1 - exp2 - adjust) |> context
     end
   end
 
@@ -56,24 +55,20 @@ defmodule Decimal do
     div_rem(num1, num2) |> elem(1)
   end
 
-  def div_rem(dec(coef: coef1, exp: exp1) = d1, dec(coef: coef2, exp: exp2) = d2) do
-    abs_coef1 = Kernel.abs(coef1)
-    abs_coef2 = Kernel.abs(coef2)
-
-    if compare(dec(d1, coef: abs_coef1), dec(d2, coef: abs_coef2)) == -1 do
-      { dec(coef: 0, exp: 0), d1 }
+  def div_rem(dec(sign: sign1, coef: coef1, exp: exp1) = d1, dec(sign: sign2, coef: coef2, exp: exp2) = d2) do
+    if compare(dec(d1, sign: 1), dec(d2, sign: 1)) == -1 do
+      { dec(sign: 1, coef: 0, exp: 0), d1 }
     else
-      div_sign = div_sign(coef1, coef2)
-      rem_sign = if coef1 < 0, do: -1, else: 1
-      { coef1, coef2, adjust } = div_adjust(abs_coef1, abs_coef2, 0)
+      div_sign = if sign1 == sign2, do: 1, else: -1
+      { coef1, coef2, adjust } = div_adjust(coef1, coef2, 0)
 
       adjust2 = if adjust < 0, do: 0, else: adjust
       { coef, rem } = div_int_calc(coef1, coef2, 0, adjust)
       { coef, exp } = truncate(coef, exp1 - exp2 - adjust2)
 
       adjust3 = if adjust > 0, do: 0, else: adjust
-      { dec(coef: div_sign * coef, exp: exp) |> context,
-        dec(coef: rem_sign * int_pow10(rem, adjust3), exp: 0) |> context }
+      { dec(sign: div_sign, coef: coef, exp: exp) |> context,
+        dec(sign: sign1, coef: int_pow10(rem, adjust3), exp: 0) |> context }
     end
   end
 
@@ -85,33 +80,32 @@ defmodule Decimal do
     context(if compare(num1, num2) == 1, do: num2, else: num1)
   end
 
-  def minus(dec(coef: coef) = d) do
-    dec(d, coef: -coef) |> context
+  def minus(dec(sign: sign) = d) do
+    dec(d, sign: -sign) |> context
   end
 
-  def mult(dec(coef: coef1, exp: exp1), dec(coef: coef2, exp: exp2)) do
-    dec(coef: coef1 * coef2, exp: exp1 + exp2) |> context
+  def mult(dec(sign: sign1, coef: coef1, exp: exp1), dec(sign: sign2, coef: coef2, exp: exp2)) do
+    sign = if sign1 == sign2, do: 1, else: -1
+    dec(sign: sign, coef: coef1 * coef2, exp: exp1 + exp2) |> context
   end
 
-  def reduce(dec(coef: coef, exp: exp)) do
+  def reduce(dec(sign: sign, coef: coef, exp: exp)) do
     if coef == 0 do
       dec(coef: 0, exp: 0)
     else
-      do_reduce(coef, exp) |> context
+      dec(do_reduce(coef, exp), sign: sign) |> context
     end
   end
 
   def round(num, n // 0, mode // :half_up) do
-    dec(coef: coef, exp: exp) = reduce(num)
-    sign = if coef < 0, do: -1, else: 1
-    coef = Kernel.abs(coef)
+    dec(sign: sign, coef: coef, exp: exp) = reduce(num)
     do_round(coef, exp, sign, -n, mode) |> context
   end
 
   def new(dec() = d),
     do: d
   def new(int) when is_integer(int),
-    do: dec(coef: int)
+    do: dec(sign: (if int < 0, do: -1, else: 1), coef: Kernel.abs(int))
   def new(float) when is_float(float),
     do: new(:io_lib_format.fwrite_g(float) |> iolist_to_binary)
   def new(binary) when is_binary(binary),
@@ -119,27 +113,19 @@ defmodule Decimal do
   def new(_),
     do: raise ArgumentError
 
-  def coef(dec(coef: coef)) do
-    coef
-  end
-
-  def exp(dec(exp: exp)) do
-    exp
-  end
-
-  def frac(dec(coef: coef, exp: exp)) do
+  def frac(dec(coef: coef, exp: exp) = d) do
     if exp < 0 do
-      coef = calc_frac(Kernel.abs(coef), exp, 0, 1)
-      dec(coef: coef, exp: exp) |> context
+      coef = calc_frac(coef, exp, 0, 1)
+      dec(d, sign: 1, coef: coef) |> context
     else
-      dec(coef: 0, exp: 0)
+      dec(sign: 1, coef: 0, exp: 0)
     end
   end
 
   def to_string(num, type // :normal)
 
-  def to_string(dec(coef: coef, exp: exp), :normal) do
-    list = integer_to_list(Kernel.abs(coef))
+  def to_string(dec(sign: sign, coef: coef, exp: exp), :normal) do
+    list = integer_to_list(coef)
 
     list =
       if exp >= 0 do
@@ -153,15 +139,15 @@ defmodule Decimal do
         end
       end
 
-    if coef < 0 do
+    if sign == -1 do
       list = [?-|list]
     end
 
     iolist_to_binary(list)
   end
 
-  def to_string(dec(coef: coef, exp: exp), :scientific) do
-    list = integer_to_list(Kernel.abs(coef))
+  def to_string(dec(sign: sign, coef: coef, exp: exp), :scientific) do
+    list = integer_to_list(coef)
 
     { list, exp_offset } = trim_coef(list)
     exp = exp + exp_offset
@@ -174,15 +160,15 @@ defmodule Decimal do
 
     list = list ++ 'e' ++ integer_to_list(exp)
 
-    if coef < 0 do
+    if sign == -1 do
       list = [?-|list]
     end
 
     iolist_to_binary(list)
   end
 
-  def to_string(dec(coef: coef, exp: exp), :simple) do
-    str = integer_to_binary(coef)
+  def to_string(dec(sign: sign, coef: coef, exp: exp), :simple) do
+    str = integer_to_binary(sign * coef)
 
     if exp != 0 do
       str <> "e" <> integer_to_binary(exp)
@@ -241,6 +227,16 @@ defmodule Decimal do
   defp add_align(coef1, exp1, coef2, exp2) when exp1 < exp2,
     do: { coef1, coef2 * int_pow10(1, exp2 - exp1) }
 
+  defp add_sign(sign1, sign2, coef) do
+    cond do
+      coef > 0 -> 1
+      coef < 0 -> -1
+      sign1 == -1 and sign2 == -1 -> -1
+      sign1 != sign2 and (Context[] = get_context).rounding == :floor -> -1
+      true -> 1
+    end
+  end
+
   defp div_adjust(coef1, coef2, adjust) when coef1 < coef2,
     do: div_adjust(coef1 * 10, coef2, adjust + 1)
 
@@ -263,12 +259,6 @@ defmodule Decimal do
 
   defp div_complete?(coef1, coef, adjust, prec10),
     do: (coef1 == 0 and adjust >= 0) or coef >= prec10
-
-  defp div_sign(coef1, coef2) do
-    coef1_sign = if coef1 < 0, do: -1, else: 1
-    coef2_sign = if coef2 < 0, do: -1, else: 1
-    coef1_sign * coef2_sign
-  end
 
   defp div_int_calc(coef1, coef2, coef, adjust) do
     cond do
@@ -325,12 +315,10 @@ defmodule Decimal do
   end
 
   defp do_round(coef, exp, sign, _n, _rounding) do
-    dec(coef: sign * coef, exp: exp)
+    dec(sign: sign, coef: coef, exp: exp)
   end
 
-  defp precision(dec(coef: coef, exp: exp), precision, rounding) do
-    sign = if coef < 0, do: -1, else: 1
-    coef = Kernel.abs(coef)
+  defp precision(dec(sign: sign, coef: coef, exp: exp), precision, rounding) do
     prec10 = int_pow10(1, precision)
     do_precision(coef, exp, sign, prec10, rounding)
   end
@@ -345,7 +333,7 @@ defmodule Decimal do
   end
 
   defp do_precision(coef, exp, sign, _prec10, _rounding) do
-    dec(coef: sign * coef, exp: exp)
+    dec(sign: sign, coef: coef, exp: exp)
   end
 
   defp increment?(:truncate, _, _, _),
@@ -380,8 +368,8 @@ defmodule Decimal do
   end
 
   defp parse("-" <> bin) do
-    dec(coef: coef) = d = parse_unsign(bin)
-    dec(d, coef: -coef)
+    d = parse_unsign(bin)
+    dec(d, sign: -1)
   end
 
   defp parse(bin) do
