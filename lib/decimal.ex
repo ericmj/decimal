@@ -171,13 +171,17 @@ defmodule Decimal do
   end
 
   def to_string(dec(sign: sign, coef: coef, exp: exp), :simple) do
-    str = integer_to_binary(sign * coef)
+    str = integer_to_binary(coef)
+
+    if sign == -1 do
+      str = [?-|str]
+    end
 
     if exp != 0 do
-      str <> "e" <> integer_to_binary(exp)
-    else
-      str
+      str = [str, "e", integer_to_binary(exp)]
     end
+
+    iolist_to_binary(str)
   end
 
   def with_context(Context[] = context, fun) when is_function(fun, 0) do

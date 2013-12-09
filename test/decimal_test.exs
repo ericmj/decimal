@@ -223,6 +223,7 @@ defmodule DecimalTest do
     assert Decimal.to_string(%d"0.42")    == "0.42"
     assert Decimal.to_string(%d"0.0042")  == "0.0042"
     assert Decimal.to_string(%d"-1")      == "-1"
+    assert Decimal.to_string(%d"-0")      == "-0"
     assert Decimal.to_string(%d"-1.23")   == "-1.23"
     assert Decimal.to_string(%d"-0.0123") == "-0.0123"
   end
@@ -235,6 +236,7 @@ defmodule DecimalTest do
     assert Decimal.to_string(%d"0.0042", :scientific)   == "4.2e-3"
     assert Decimal.to_string(%d"0.2", :scientific)      == "2e-1"
     assert Decimal.to_string(%d"-0.0003", :scientific)  == "-3e-4"
+    assert Decimal.to_string(%d"-0", :scientific)       == "-0e0"
   end
 
   test "to_string simple" do
@@ -245,6 +247,7 @@ defmodule DecimalTest do
     assert Decimal.to_string(%d"0.0042", :simple)   == "42e-4"
     assert Decimal.to_string(%d"0.2", :simple)      == "2e-1"
     assert Decimal.to_string(%d"-0.0003", :simple)  == "-3e-4"
+    assert Decimal.to_string(%d"-0", :simple)       == "-0"
   end
 
   test "precision truncate" do
