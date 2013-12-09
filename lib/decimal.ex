@@ -68,7 +68,7 @@ defmodule Decimal do
 
       adjust3 = if adjust > 0, do: 0, else: adjust
       { dec(sign: div_sign, coef: coef, exp: exp) |> context,
-        dec(sign: sign1, coef: int_pow10(rem, adjust3), exp: 0) |> context }
+        dec(sign: sign1, coef: rem, exp: adjust3) |> context }
     end
   end
 

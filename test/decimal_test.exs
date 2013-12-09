@@ -141,7 +141,7 @@ defmodule DecimalTest do
 
   test "rem" do
     assert Decimal.rem(%d"1", %d"3")      == d(1, 1, 0)
-    assert Decimal.rem(%d"42", %d"2")     == d(1, 0, 0)
+    assert Decimal.rem(%d"42", %d"2")     == d(1, 0, -1)
     assert Decimal.rem(%d"123", %d"23")   == d(1, 8, 0)
     assert Decimal.rem(%d"123", %d"-23")  == d(1, 8, 0)
     assert Decimal.rem(%d"-123", %d"23")  == d(-1, 8, 0)
@@ -283,6 +283,8 @@ defmodule DecimalTest do
     assert round.(%d"1.029")   == d(1, 102, -2)
     assert round.(%d"-1.029")  == d(-1, 102, -2)
     assert round.(%d"102")     == d(1, 102, 0)
+    assert round.(%d"0.001")   == d(1, 0, -2)
+    assert round.(%d"-0.001")  == d(-1, 0, -2)
     assert roundneg.(%d"1.02") == d(1, 0, 2)
     assert roundneg.(%d"102")  == d(1, 1, 2)
     assert roundneg.(%d"1099") == d(1, 10, 2)
