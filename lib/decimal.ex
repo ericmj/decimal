@@ -25,13 +25,13 @@ defmodule Decimal do
     end
   end
 
-  defmacrop is_nan(d) do
+  defmacro is_nan(d) do
     quote do
       dec(unquote(d), :coef) in [:sNaN, :qNaN]
     end
   end
 
-  defmacrop is_inf(d) do
+  defmacro is_inf(d) do
     quote do
       dec(unquote(d), :coef) == :inf
     end
@@ -55,12 +55,15 @@ defmodule Decimal do
     error(:invalid_operation, "operation on NaN", first_nan(d1, d2))
   end
 
-  def add(dec(coef: :inf) = d1, dec()) do
-    d1
-  end
-
-  def add(dec(), dec(coef: :inf) = d2) do
-    d2
+  def add(dec(coef: coef1) = d1, dec(coef: coef2) = d2) when is_inf(d1) or is_inf(d2) do
+    cond do
+      coef1 == coef2 ->
+        error(:invalid_operation, "-Infinity + Infinity", dec(coef: :NaN))
+      coef1 == :inf ->
+        d1
+      coef2 == :inf ->
+        d2
+    end
   end
 
   def add(dec(sign: sign1, coef: coef1, exp: exp1), dec(sign: sign2, coef: coef2, exp: exp2)) do
@@ -75,11 +78,17 @@ defmodule Decimal do
     add(num1, dec(d2, sign: -sign))
   end
 
-  def compare(num1, num2) do
-    case sub(num1, num2) do
-      d when is_nan(d) -> d
-      dec(coef: 0) -> dec(sign: 1)
-      dec(sign: sign) -> dec(sign: sign, coef: 1)
+  def compare(dec(coef: coef1) = num1, dec(coef: coef2) = num2) do
+    cond do
+      coef1 == :qNaN ->
+        num1
+      coef2 == :qNaN ->
+        num2
+      true ->
+        case sub(num1, num2) do
+          dec(coef: 0) -> dec(sign: 1)
+          dec(sign: sign) -> dec(sign: sign, coef: 1)
+        end
     end
   end
 
@@ -156,6 +165,11 @@ defmodule Decimal do
     end
   end
 
+  def div_rem(dec(coef: 0), dec(coef: 0)) do
+    { error(:invalid_operation, "0 / 0", dec(coef: :NaN)),
+      error(:invalid_operation, "0 / 0", dec(coef: :NaN)) }
+  end
+
   def div_rem(dec(sign: sign1, coef: coef1, exp: exp1) = d1, dec(sign: sign2, coef: coef2, exp: exp2) = d2) do
     div_sign = if sign1 == sign2, do: 1, else: -1
 
@@ -187,12 +201,26 @@ defmodule Decimal do
     end
   end
 
-  def max(num1, num2) do
-    context(if match?(dec(sign: -1), compare(num1, num2)), do: num2, else: num1)
+  def max(dec(coef: coef1) = num1, dec(coef: coef2) = num2) do
+    cond do
+      coef1 == :qNaN ->
+        num2
+      coef2 == :qNaN ->
+        num1
+      true ->
+        context(if match?(dec(sign: -1), compare(num1, num2)), do: num2, else: num1)
+    end
   end
 
-  def min(num1, num2) do
-    context(if match?(dec(sign: 1), compare(num1, num2)), do: num2, else: num1)
+  def min(dec(coef: coef1) = num1, dec(coef: coef2) = num2) do
+    cond do
+      coef1 == :qNaN ->
+        num2
+      coef2 == :qNaN ->
+        num1
+      true ->
+        context(if match?(dec(sign: 1), compare(num1, num2)), do: num2, else: num1)
+    end
   end
 
   def minus(dec() = d) when is_nan(d) do
@@ -480,6 +508,11 @@ defmodule Decimal do
   end
 
   # TODO: Inexact, rounded
+  defp precision(dec() = d, _precision, _rounding)
+      when is_inf(d) or is_nan(d) do
+    d
+  end
+
   defp precision(dec(sign: sign, coef: coef, exp: exp), precision, rounding) do
     prec10 = int_pow10(1, precision)
     do_precision(coef, exp, sign, prec10, rounding)
@@ -535,7 +568,7 @@ defmodule Decimal do
   end
 
   defp parse(bin) do
-    parse_unsign(bin)
+    String.downcase(bin) |> parse_unsign
   end
 
   defp parse_unsign("inf") do
