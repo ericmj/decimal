@@ -1,15 +1,66 @@
 defmodule Decimal do
   import Kernel, except: [abs: 1, div: 2, max: 2, min: 2, rem: 1, round: 1]
 
-  defexception Error, [:message]
+  defexception Error, [:type, :reason, :result] do
+    def message(Error[type: type, reason: reason]) do
+      if reason do
+        "#{type}: #{reason}"
+      else
+        "#{type}"
+      end
+    end
+  end
+
   defrecord Context, [:precision, :rounding]
 
   defrecordp :dec, __MODULE__, [sign: 1, coef: 0, exp: 0]
 
+  defmacrop error(type, reason // nil, result) do
+    quote do
+      # TODO: check traps and set flags
+      # remember to convert :NaN to :sNaN or :qNaN (handle tuple from div_rem)
+      # keep macro minimal by calling functions but raise from macro
+      # to preserve correct stacktrace
+      raise Error, type: unquote(type), reason: unquote(reason), result: unquote(result)
+    end
+  end
+
+  defmacrop is_nan(d) do
+    quote do
+      dec(unquote(d), :coef) in [:sNaN, :qNaN]
+    end
+  end
+
+  defmacrop is_inf(d) do
+    quote do
+      dec(unquote(d), :coef) == :inf
+    end
+  end
+
+  defp first_nan(d1, d2) do
+    if is_nan(d1), do: d1, else: d2
+  end
+
   @context_key :"$decimal_context"
+
+  def abs(dec() = d) when is_nan(d) do
+    error(:invalid_operation, "operation on NaN", d)
+  end
 
   def abs(dec() = d) do
     dec(d, sign: 1) |> context
+  end
+
+  def add(dec() = d1, dec() = d2) when is_nan(d1) or is_nan(d2) do
+    error(:invalid_operation, "operation on NaN", first_nan(d1, d2))
+  end
+
+  def add(dec(coef: :inf) = d1, dec()) do
+    d1
+  end
+
+  def add(dec(), dec(coef: :inf) = d2) do
+    d2
   end
 
   def add(dec(sign: sign1, coef: coef1, exp: exp1), dec(sign: sign2, coef: coef2, exp: exp2)) do
@@ -26,27 +77,55 @@ defmodule Decimal do
 
   def compare(num1, num2) do
     case sub(num1, num2) do
-      dec(coef: 0) -> 0
-      dec(sign: sign) -> sign
+      d when is_nan(d) -> d
+      dec(coef: 0) -> dec(sign: 1)
+      dec(sign: sign) -> dec(sign: sign, coef: 1)
     end
   end
 
-  def div(dec(sign: sign1, coef: coef1, exp: exp1), dec(sign: sign2, coef: coef2, exp: exp2)) do
-    if coef2 == 0, do: raise(Error, message: "division by zero")
+  def div(dec() = d1, dec() = d2) when is_nan(d1) or is_nan(d2) do
+    error(:invalid_operation, "operation on NaN", first_nan(d1, d2))
+  end
 
-    if coef1 == 0 do
-      coef = 0
-      adjust = 0
-    else
-      context = Context[] = get_context
-      prec10 = int_pow10(1, context.precision-1)
-
-      { coef1, coef2, adjust } = div_adjust(coef1, coef2, 0)
-      { coef, adjust, _rem } = div_calc(coef1, coef2, 0, adjust, prec10)
-    end
-
+  def div(dec(sign: sign1, coef: coef1, exp: exp1) = d1, dec(sign: sign2, coef: coef2, exp: exp2) = d2)
+      when is_inf(d1) or is_inf(d2) do
     sign = if sign1 == sign2, do: 1, else: -1
-    dec(sign: sign, coef: coef, exp: exp1 - exp2 - adjust) |> context
+
+    cond do
+      coef1 == coef2 ->
+        error(:invalid_operation, "(+-)Infinity / (+-)Infinity", dec(coef: :NaN))
+      coef1 == :inf ->
+        dec(d1, sign: sign)
+      coef2 == :inf ->
+        # TODO: Subnormal
+        # exponent?
+        dec(sign: sign, coef: 0, exp: exp1 - exp2)
+    end
+  end
+
+  def div(dec(coef: 0), dec(coef: 0)) do
+    error(:invalid_operation, "0 / 0", dec(coef: :NaN))
+  end
+
+  def div(dec(sign: sign1, coef: coef1, exp: exp1), dec(sign: sign2, coef: coef2, exp: exp2)) do
+    sign = if sign1 == sign2, do: 1, else: -1
+
+    if coef2 == 0 do
+      error(:division_by_zero, dec(sign: sign, coef: :inf))
+    else
+      if coef1 == 0 do
+        coef = 0
+        adjust = 0
+      else
+        context = Context[] = get_context
+        prec10 = int_pow10(1, context.precision-1)
+
+        { coef1, coef2, adjust } = div_adjust(coef1, coef2, 0)
+        { coef, adjust, _rem } = div_calc(coef1, coef2, 0, adjust, prec10)
+      end
+
+      dec(sign: sign, coef: coef, exp: exp1 - exp2 - adjust) |> context
+    end
   end
 
   def div_int(num1, num2) do
@@ -57,39 +136,101 @@ defmodule Decimal do
     div_rem(num1, num2) |> elem(1)
   end
 
+  def div_rem(dec() = d1, dec() = d2) when is_nan(d1) or is_nan(d2) do
+    error(:invalid_operation, "operation on NaN", first_nan(d1, d2))
+  end
+
+  def div_rem(dec(sign: sign1, coef: coef1, exp: exp1) = d1, dec(sign: sign2, coef: coef2, exp: exp2) = d2)
+      when is_inf(d1) or is_inf(d2) do
+    sign = if sign1 == sign2, do: 1, else: -1
+
+    cond do
+      coef1 == coef2 ->
+        error(:invalid_operation, "(+-)Infinity / (+-)Infinity", { dec(coef: :NaN), dec(coef: :NaN) })
+      coef1 == :inf ->
+        { dec(d1, sign: sign), dec(sign: sign1, coef: 0) }
+      coef2 == :inf ->
+        # TODO: Subnormal
+        # exponent?
+        { dec(sign: sign, coef: 0, exp: exp1 - exp2), dec(d2, sign: sign1) }
+    end
+  end
+
   def div_rem(dec(sign: sign1, coef: coef1, exp: exp1) = d1, dec(sign: sign2, coef: coef2, exp: exp2) = d2) do
     div_sign = if sign1 == sign2, do: 1, else: -1
 
     if compare(dec(d1, sign: 1), dec(d2, sign: 1)) == -1 do
       { dec(sign: div_sign, coef: 0, exp: exp1 - exp2), d1 }
     else
-      { coef1, coef2, adjust } = div_adjust(coef1, coef2, 0)
+      if coef1 == 0 do
+        { dec(d1, sign: div_sign) |> context,
+          dec(d2, sign: sign1) |> context }
+      else
+        { coef1, coef2, adjust } = div_adjust(coef1, coef2, 0)
 
-      adjust2 = if adjust < 0, do: 0, else: adjust
-      { coef, rem } = div_int_calc(coef1, coef2, 0, adjust)
-      { coef, exp } = truncate(coef, exp1 - exp2 - adjust2)
+        adjust2 = if adjust < 0, do: 0, else: adjust
+        { coef, rem } = div_int_calc(coef1, coef2, 0, adjust)
+        { coef, exp } = truncate(coef, exp1 - exp2 - adjust2)
 
-      adjust3 = if adjust > 0, do: 0, else: adjust
-      { dec(sign: div_sign, coef: coef, exp: exp) |> context,
-        dec(sign: sign1, coef: rem, exp: adjust3) |> context }
+        div_coef = int_pow10(coef, exp)
+        context = Context[] = get_context
+        prec10 = int_pow10(1, context.precision-1)
+
+        if div_coef > prec10 do
+          error(:invalid_operation, "integer division impossible, quotient too large", dec(coef: :NaN))
+        else
+          adjust3 = if adjust > 0, do: 0, else: adjust
+          { dec(sign: div_sign, coef: div_coef) |> context,
+            dec(sign: sign1, coef: rem, exp: adjust3) |> context }
+        end
+      end
     end
   end
 
   def max(num1, num2) do
-    context(if compare(num1, num2) == -1, do: num2, else: num1)
+    context(if match?(dec(sign: -1), compare(num1, num2)), do: num2, else: num1)
   end
 
   def min(num1, num2) do
-    context(if compare(num1, num2) == 1, do: num2, else: num1)
+    context(if match?(dec(sign: 1), compare(num1, num2)), do: num2, else: num1)
+  end
+
+  def minus(dec() = d) when is_nan(d) do
+    error(:invalid_operation, "operation on NaN", d)
   end
 
   def minus(dec(sign: sign) = d) do
     dec(d, sign: -sign) |> context
   end
 
+  def mult(dec() = d1, dec() = d2) when is_nan(d1) or is_nan(d2) do
+    error(:invalid_operation, "operation on NaN", first_nan(d1, d2))
+  end
+
+  def mult(dec(sign: sign1, coef: coef1, exp: exp1) = d1, dec(sign: sign2, coef: coef2, exp: exp2) = d2)
+      when is_inf(d1) or is_inf(d2) do
+
+    if coef1 == 0 or coef2 == 0 do
+      error(:invalid_operation, "0 * (+-)Infinity", dec(coef: :NaN))
+    else
+      sign = if sign1 == sign2, do: 1, else: -1
+      # exponent?
+      dec(sign: sign, coef: :inf, exp: exp1 + exp2)
+    end
+  end
+
   def mult(dec(sign: sign1, coef: coef1, exp: exp1), dec(sign: sign2, coef: coef2, exp: exp2)) do
     sign = if sign1 == sign2, do: 1, else: -1
     dec(sign: sign, coef: coef1 * coef2, exp: exp1 + exp2) |> context
+  end
+
+  def reduce(dec() = d) when is_nan(d) do
+    error(:invalid_operation, "operation on NaN", d)
+  end
+
+  def reduce(dec(coef: :inf) = d) do
+    # exponent?
+    dec(d, exp: 0)
   end
 
   def reduce(dec(sign: sign, coef: coef, exp: exp)) do
@@ -98,6 +239,14 @@ defmodule Decimal do
     else
       dec(do_reduce(coef, exp), sign: sign) |> context
     end
+  end
+
+  def round(dec() = d) when is_nan(d) do
+    error(:invalid_operation, "operation on NaN", d)
+  end
+
+  def round(dec(coef: :inf) = d) do
+    d
   end
 
   def round(num, n // 0, mode // :half_up) do
@@ -116,16 +265,19 @@ defmodule Decimal do
   def new(_),
     do: raise ArgumentError
 
-  def frac(dec(coef: coef, exp: exp) = d) do
-    if exp < 0 do
-      coef = calc_frac(coef, exp, 0, 1)
-      dec(d, sign: 1, coef: coef) |> context
-    else
-      dec(sign: 1, coef: 0, exp: 0)
-    end
+  def to_string(num, type // :normal)
+
+  def to_string(dec(sign: sign, coef: :qNaN), _type) do
+    if sign == 1, do: "NaN", else: "-NaN"
   end
 
-  def to_string(num, type // :normal)
+  def to_string(dec(sign: sign, coef: :sNaN), _type) do
+    if sign == 1, do: "sNaN", else: "-sNaN"
+  end
+
+  def to_string(dec(sign: sign, coef: :inf), _type) do
+    if sign == 1, do: "Infinity", else: "-Infinity"
+  end
 
   def to_string(dec(sign: sign, coef: coef, exp: exp), :normal) do
     list = integer_to_list(coef)
@@ -151,17 +303,31 @@ defmodule Decimal do
 
   def to_string(dec(sign: sign, coef: coef, exp: exp), :scientific) do
     list = integer_to_list(coef)
-
-    { list, exp_offset } = trim_coef(list)
-    exp = exp + exp_offset
     length = length(list)
+    adjusted = exp + length - 1
 
-    if length > 1 do
-      list = List.insert_at(list, 1, ?.)
-      exp = exp + length - 1
+    cond do
+      exp == 0 ->
+        :ok
+
+      exp < 0 and adjusted >= -6 ->
+        abs_exp = Kernel.abs(exp)
+        diff = -length + abs_exp + 1
+        if diff > 0 do
+          list = :lists.duplicate(diff, ?0) ++ list
+          list = List.insert_at(list, 1, ?.)
+        else
+          list = List.insert_at(list, abs_exp + 1, ?.)
+        end
+
+      true ->
+        if length > 2 do
+          list = List.insert_at(list, 1, ?.)
+        end
+        list = list ++ 'E'
+        if exp >= 0, do: list = list ++ '+'
+        list = list ++ integer_to_list(adjusted)
     end
-
-    list = list ++ 'e' ++ integer_to_list(exp)
 
     if sign == -1 do
       list = [?-|list]
@@ -178,7 +344,7 @@ defmodule Decimal do
     end
 
     if exp != 0 do
-      str = [str, "e", integer_to_binary(exp)]
+      str = [str, "E", integer_to_binary(exp)]
     end
 
     iolist_to_binary(str)
@@ -204,24 +370,6 @@ defmodule Decimal do
   def default_context do
     Context[precision: 9, rounding: :half_up]
   end
-
-  ## STRINGIFY ##
-
-  defp trim_coef('0') do
-    { '0', 0 }
-  end
-
-  defp trim_coef(list) do
-    num = count_trailing_zeros(list, 0)
-    { Enum.drop(list, -num), num }
-  end
-
-  defp count_trailing_zeros([], count),
-    do: count
-  defp count_trailing_zeros([?0|tail], count),
-    do: count_trailing_zeros(tail, count+1)
-  defp count_trailing_zeros([_|tail], _count),
-    do: count_trailing_zeros(tail, 0)
 
   ## ARITHMETIC ##
 
@@ -264,6 +412,7 @@ defmodule Decimal do
     end
   end
 
+  # TODO: Inexact, rounded
   defp div_complete?(coef1, coef, adjust, prec10),
     do: (coef1 == 0 and adjust >= 0) or coef >= prec10
 
@@ -278,16 +427,19 @@ defmodule Decimal do
     end
   end
 
-  defp truncate(coef, exp) when exp >= 0,
-    do: { coef, exp }
+  defp truncate(coef, exp) when exp >= 0 do
+    { coef, exp }
+  end
 
-  defp truncate(coef, exp) when exp < 0,
-    do: truncate(Kernel.div(coef, 10), exp + 1)
+  defp truncate(coef, exp) when exp < 0 do
+    truncate(Kernel.div(coef, 10), exp + 1)
+  end
 
   defp do_reduce(0, _exp) do
     dec(coef: 0, exp: 0)
   end
 
+  # TODO: Inexact, rounded
   defp do_reduce(coef, exp) do
     if Kernel.rem(coef, 10) == 0 do
       do_reduce(Kernel.div(coef, 10), exp + 1)
@@ -296,6 +448,7 @@ defmodule Decimal do
     end
   end
 
+  # TODO: Inexact, rounded
   defp int_pow10(num, 0),
     do: num
   defp int_pow10(num, pow) when pow > 0,
@@ -312,6 +465,7 @@ defmodule Decimal do
 
   ## ROUNDING ##
 
+  # TODO: Inexact, rounded
   defp do_round(coef, exp, sign, n, rounding) when n > exp do
     significant = Kernel.div(coef, 10)
     remainder = Kernel.rem(coef, 10)
@@ -325,6 +479,7 @@ defmodule Decimal do
     dec(sign: sign, coef: coef, exp: exp)
   end
 
+  # TODO: Inexact, rounded
   defp precision(dec(sign: sign, coef: coef, exp: exp), precision, rounding) do
     prec10 = int_pow10(1, precision)
     do_precision(coef, exp, sign, prec10, rounding)
@@ -371,11 +526,11 @@ defmodule Decimal do
   ## PARSING ##
 
   defp parse("+" <> bin) do
-    parse_unsign(bin)
+    String.downcase(bin) |> parse_unsign
   end
 
   defp parse("-" <> bin) do
-    d = parse_unsign(bin)
+    d = String.downcase(bin) |> parse_unsign
     dec(d, sign: -1)
   end
 
@@ -383,21 +538,40 @@ defmodule Decimal do
     parse_unsign(bin)
   end
 
+  defp parse_unsign("inf") do
+    dec(coef: :inf)
+  end
+
+  defp parse_unsign("infinity") do
+    dec(coef: :inf)
+  end
+
+  defp parse_unsign("snan") do
+    dec(coef: :sNaN)
+  end
+
+  defp parse_unsign("nan") do
+    dec(coef: :qNaN)
+  end
+
   defp parse_unsign(bin) do
     { int, rest } = parse_digits(bin)
     { float, rest } = parse_float(rest)
     { exp, rest } = parse_exp(rest)
 
-    if int == [] or rest != "", do: raise ArgumentError
-    if exp == [], do: exp = '0'
-
-    dec(coef: list_to_integer(int ++ float), exp: list_to_integer(exp) - length(float))
+    if rest != "" or (int == [] and float == []) do
+      error(:invalid_operation, "number parsing syntax", dec(coef: :NaN))
+    else
+      if int == [], do: int = '0'
+      if exp == [], do: exp = '0'
+      dec(coef: list_to_integer(int ++ float), exp: list_to_integer(exp) - length(float))
+    end
   end
 
   defp parse_float("." <> rest), do: parse_digits(rest)
   defp parse_float(bin), do: { [], bin }
 
-  defp parse_exp(<< e, rest :: binary >>) when e in [?e, ?E] do
+  defp parse_exp(<< ?e, rest :: binary >>) do
     case rest do
       << sign, rest :: binary >> when sign in [?+, ?-] ->
         { digits, rest } = parse_digits(rest)

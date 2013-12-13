@@ -2,6 +2,7 @@ defmodule DecimalTest do
   use ExUnit.Case, async: false
 
   alias Decimal.Context
+  alias Decimal.Error
 
   defrecordp :dec, Decimal, [sign: 1, coef: 0, exp: 0]
 
@@ -40,6 +41,9 @@ defmodule DecimalTest do
     assert Decimal.new("+1.5") == d(1, 15, -1)
     assert Decimal.new("-1.5") == d(-1, 15, -1)
 
+    assert Decimal.new(".0") == d(1, 0, -1)
+    assert Decimal.new("0.") == d(1, 0, 0)
+
     assert Decimal.new("0")  == d(1, 0, 0)
     assert Decimal.new("+0") == d(1, 0, 0)
     assert Decimal.new("-0") == d(-1, 0, 0)
@@ -59,32 +63,28 @@ defmodule DecimalTest do
   end
 
   test "conversion error" do
-    assert_raise ArgumentError, fn ->
-      assert Decimal.new("")
+    assert_raise Error, fn ->
+      IO.inspect Decimal.new("")
+    end
+
+    assert_raise Error, fn ->
+      Decimal.new("test")
+    end
+
+    assert_raise Error, fn ->
+      Decimal.new("e0")
+    end
+
+    assert_raise Error, fn ->
+      Decimal.new("42.+42")
     end
 
     assert_raise ArgumentError, fn ->
-      assert Decimal.new("test")
+      Decimal.new(:atom)
     end
 
-    assert_raise ArgumentError, fn ->
-      assert Decimal.new(".0")
-    end
-
-    assert_raise ArgumentError, fn ->
-      assert Decimal.new("e0")
-    end
-
-    assert_raise ArgumentError, fn ->
-      assert Decimal.new("42.+42")
-    end
-
-    assert_raise ArgumentError, fn ->
-      assert Decimal.new(:atom)
-    end
-
-    assert_raise ArgumentError, fn ->
-      assert Decimal.new("42e0.0")
+    assert_raise Error, fn ->
+      Decimal.new("42e0.0")
     end
   end
 
@@ -121,9 +121,9 @@ defmodule DecimalTest do
   end
 
   test "compare" do
-    assert Decimal.compare(%d"420", %d"42e1") == 0
-    assert Decimal.compare(%d"1", %d"0")      == 1
-    assert Decimal.compare(%d"0", %d"1")      == -1
+    assert Decimal.compare(%d"420", %d"42e1") == d(1, 0, 0)
+    assert Decimal.compare(%d"1", %d"0")      == d(1, 1, 0)
+    assert Decimal.compare(%d"0", %d"1")      == d(-1, 1, 0)
   end
 
   test "div" do
@@ -143,7 +143,8 @@ defmodule DecimalTest do
   end
 
   test "div_int" do
-    assert Decimal.div_int(%d"1", %d"3")      == d(1, 0, 0)
+    assert Decimal.div_int(%d"1", %d"0.3")   == d(1, 3, 0)
+    assert Decimal.div_int(%d"2", %d"3")      == d(1, 0, 0)
     assert Decimal.div_int(%d"42", %d"2")     == d(1, 21, 0)
     assert Decimal.div_int(%d"123", %d"23")   == d(1, 5, 0)
     assert Decimal.div_int(%d"123", %d"-23")  == d(-1, 5, 0)
@@ -229,24 +230,33 @@ defmodule DecimalTest do
   end
 
   test "to_string scientific" do
-    assert Decimal.to_string(%d"2", :scientific)        == "2e0"
-    assert Decimal.to_string(%d"300", :scientific)      == "3e2"
-    assert Decimal.to_string(%d"4321.768", :scientific) == "4.321768e3"
-    assert Decimal.to_string(%d"-53000", :scientific)   == "-5.3e4"
-    assert Decimal.to_string(%d"0.0042", :scientific)   == "4.2e-3"
-    assert Decimal.to_string(%d"0.2", :scientific)      == "2e-1"
-    assert Decimal.to_string(%d"-0.0003", :scientific)  == "-3e-4"
-    assert Decimal.to_string(%d"-0", :scientific)       == "-0e0"
+    assert Decimal.to_string(%d"123", :scientific)      == "123"
+    assert Decimal.to_string(%d"-123", :scientific)     == "-123"
+    assert Decimal.to_string(%d"123e1", :scientific)    == "1.23E+3"
+    assert Decimal.to_string(%d"123e3", :scientific)    == "1.23E+5"
+    assert Decimal.to_string(%d"123e-1", :scientific)   == "12.3"
+    assert Decimal.to_string(%d"123e-5", :scientific)   == "0.00123"
+    assert Decimal.to_string(%d"123e-10", :scientific)  == "1.23E-8"
+    assert Decimal.to_string(%d"-123e-12", :scientific) == "-1.23E-10"
+    assert Decimal.to_string(%d"0", :scientific)        == "0"
+    assert Decimal.to_string(%d"0e-2", :scientific)     == "0.00"
+    assert Decimal.to_string(%d"0e2", :scientific)      == "0E+2"
+    assert Decimal.to_string(%d"-0", :scientific)       == "-0"
+    assert Decimal.to_string(%d"5e-6", :scientific)     == "0.000005"
+    assert Decimal.to_string(%d"50e-7", :scientific)    == "0.0000050"
+    assert Decimal.to_string(%d"5e-7", :scientific)     == "5E-7"
+    assert Decimal.to_string(%d"4321.768", :scientific) == "4321.768"
+    assert Decimal.to_string(%d"-0", :scientific)       == "-0"
   end
 
   test "to_string simple" do
     assert Decimal.to_string(%d"2", :simple)        == "2"
     assert Decimal.to_string(%d"300", :simple)      == "300"
-    assert Decimal.to_string(%d"4321.768", :simple) == "4321768e-3"
+    assert Decimal.to_string(%d"4321.768", :simple) == "4321768E-3"
     assert Decimal.to_string(%d"-53000", :simple)   == "-53000"
-    assert Decimal.to_string(%d"0.0042", :simple)   == "42e-4"
-    assert Decimal.to_string(%d"0.2", :simple)      == "2e-1"
-    assert Decimal.to_string(%d"-0.0003", :simple)  == "-3e-4"
+    assert Decimal.to_string(%d"0.0042", :simple)   == "42E-4"
+    assert Decimal.to_string(%d"0.2", :simple)      == "2E-1"
+    assert Decimal.to_string(%d"-0.0003", :simple)  == "-3E-4"
     assert Decimal.to_string(%d"-0", :simple)       == "-0"
   end
 
@@ -384,11 +394,5 @@ defmodule DecimalTest do
     assert roundneg.(%d"250")  == d(1, 2, 2)
     assert roundneg.(%d"-150") == d(-1, 2, 2)
     assert roundneg.(%d"-250") == d(-1, 2, 2)
-  end
-
-  test "frac" do
-    assert Decimal.frac(%d"123")     == d(1, 0, 0)
-    assert Decimal.frac(%d"123.123") == d(1, 123, -3)
-    assert Decimal.frac(%d"-42.42")  == d(1, 42, -2)
   end
 end
