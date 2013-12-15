@@ -1,27 +1,53 @@
 defmodule Decimal do
   import Kernel, except: [abs: 1, div: 2, max: 2, min: 2, rem: 1, round: 1]
 
-  defexception Error, [:type, :reason, :result] do
-    def message(Error[type: type, reason: reason]) do
+  defexception Error, [:flag, :reason, :result] do
+    def message(Error[flag: flag, reason: reason]) do
       if reason do
-        "#{type}: #{reason}"
+        "#{flag}: #{reason}"
       else
-        "#{type}"
+        "#{flag}"
       end
     end
   end
 
-  defrecord Context, [:precision, :rounding]
+  defrecord Context,
+    precision: 9,
+    rounding: :half_up,
+    flags: [],
+    traps: [:invalid_operation, :division_by_zero]
 
   defrecordp :dec, __MODULE__, [sign: 1, coef: 0, exp: 0]
 
-  defmacrop error(type, reason // nil, result) do
-    quote do
-      # TODO: check traps and set flags
-      # remember to convert :NaN to :sNaN or :qNaN (handle tuple from div_rem)
-      # keep macro minimal by calling functions but raise from macro
-      # to preserve correct stacktrace
-      raise Error, type: unquote(type), reason: unquote(reason), result: unquote(result)
+  defmacrop error(flags, reason, result, context // nil) do
+    quote bind_quoted: binding do
+      case handle_error(flags, reason, result, context) do
+        { :ok, result } -> result
+        { :error, error } -> raise Error, error
+      end
+    end
+  end
+
+  defp handle_error(flags, reason, result, context) do
+    context = Context[] = context || get_context
+    flags = List.wrap(flags)
+
+    Enum.reduce(flags, context.flags, &put_uniq(&2, &1))
+      |> context.flags
+      |> set_context
+
+    error_flag = Enum.find(flags, &(&1 in context.traps))
+    nan = if error_flag, do: :sNaN, else: :qNaN
+
+    if match?(dec(coef: :NaN), result) do
+      result = dec(result, coef: nan)
+    end
+
+    if error_flag do
+      error = [flag: error_flag, reason: reason, result: result]
+      { :error, error }
+    else
+      { :ok, result }
     end
   end
 
@@ -120,20 +146,21 @@ defmodule Decimal do
     sign = if sign1 == sign2, do: 1, else: -1
 
     if coef2 == 0 do
-      error(:division_by_zero, dec(sign: sign, coef: :inf))
+      error(:division_by_zero, nil, dec(sign: sign, coef: :inf))
     else
       if coef1 == 0 do
         coef = 0
         adjust = 0
+        flags = []
       else
         context = Context[] = get_context
         prec10 = int_pow10(1, context.precision-1)
 
         { coef1, coef2, adjust } = div_adjust(coef1, coef2, 0)
-        { coef, adjust, _rem } = div_calc(coef1, coef2, 0, adjust, prec10)
+        { coef, adjust, _rem, flags } = div_calc(coef1, coef2, 0, adjust, prec10)
       end
 
-      dec(sign: sign, coef: coef, exp: exp1 - exp2 - adjust) |> context
+      dec(sign: sign, coef: coef, exp: exp1 - exp2 - adjust) |> context(flags)
     end
   end
 
@@ -279,7 +306,8 @@ defmodule Decimal do
 
   def round(num, n // 0, mode // :half_up) do
     dec(sign: sign, coef: coef, exp: exp) = reduce(num)
-    do_round(coef, exp, sign, -n, mode) |> context
+    { value, flags } = do_round(coef, exp, sign, -n, mode, [])
+    context(value, flags)
   end
 
   def new(dec() = d),
@@ -290,8 +318,6 @@ defmodule Decimal do
     do: new(:io_lib_format.fwrite_g(float) |> iolist_to_binary)
   def new(binary) when is_binary(binary),
     do: parse(binary)
-  def new(_),
-    do: raise ArgumentError
 
   def to_string(num, type // :normal)
 
@@ -388,15 +414,11 @@ defmodule Decimal do
   end
 
   def get_context do
-    Process.get(@context_key, default_context)
+    Process.get(@context_key, Context[])
   end
 
   def set_context(context) do
     Process.put(@context_key, context)
-  end
-
-  def default_context do
-    Context[precision: 9, rounding: :half_up]
   end
 
   ## ARITHMETIC ##
@@ -433,16 +455,19 @@ defmodule Decimal do
     cond do
       coef1 >= coef2 ->
         div_calc(coef1 - coef2, coef2, coef + 1, adjust, prec10)
-      div_complete?(coef1, coef, adjust, prec10) ->
-        { coef, adjust, coef1 }
+
+      coef1 == 0 and adjust >= 0 ->
+        { coef, adjust, coef1, [] }
+
+      coef >= prec10 ->
+        flags = [:rounded]
+        unless base_10?(coef1), do: flags = [:inexact|flags]
+        { coef, adjust, coef1, flags }
+
       true ->
         div_calc(coef1 * 10, coef2, coef * 10, adjust + 1, prec10)
     end
   end
-
-  # TODO: Inexact, rounded
-  defp div_complete?(coef1, coef, adjust, prec10),
-    do: (coef1 == 0 and adjust >= 0) or coef >= prec10
 
   defp div_int_calc(coef1, coef2, coef, adjust) do
     cond do
@@ -452,6 +477,16 @@ defmodule Decimal do
         div_int_calc(coef1 * 10, coef2, coef * 10, adjust + 1)
       true ->
         { coef, coef1 }
+    end
+  end
+
+  defp base_10?(1), do: true
+
+  defp base_10?(num) do
+    if Kernel.rem(num, 10) == 0 do
+      base_10?(Kernel.div(num, 10))
+    else
+      false
     end
   end
 
@@ -467,7 +502,6 @@ defmodule Decimal do
     dec(coef: 0, exp: 0)
   end
 
-  # TODO: Inexact, rounded
   defp do_reduce(coef, exp) do
     if Kernel.rem(coef, 10) == 0 do
       do_reduce(Kernel.div(coef, 10), exp + 1)
@@ -476,13 +510,10 @@ defmodule Decimal do
     end
   end
 
-  # TODO: Inexact, rounded
   defp int_pow10(num, 0),
     do: num
   defp int_pow10(num, pow) when pow > 0,
     do: int_pow10(10 * num, pow - 1)
-  defp int_pow10(num, pow) when pow < 0,
-    do: int_pow10(Kernel.div(num, 10), pow + 1)
 
   def calc_frac(_coef, 0, frac, _fexp), do: frac
 
@@ -493,42 +524,45 @@ defmodule Decimal do
 
   ## ROUNDING ##
 
-  # TODO: Inexact, rounded
-  defp do_round(coef, exp, sign, n, rounding) when n > exp do
+  defp do_round(coef, exp, sign, n, rounding, flags) when n > exp do
     significant = Kernel.div(coef, 10)
     remainder = Kernel.rem(coef, 10)
     if increment?(rounding, sign, significant, remainder),
       do: significant = significant + 1
 
-    do_round(significant, exp + 1, sign, n, rounding)
+    do_round(significant, exp + 1, sign, n, rounding, flags)
   end
 
-  defp do_round(coef, exp, sign, _n, _rounding) do
-    dec(sign: sign, coef: coef, exp: exp)
+  defp do_round(coef, exp, sign, _n, _rounding, flags) do
+    { dec(sign: sign, coef: coef, exp: exp), flags }
   end
 
-  # TODO: Inexact, rounded
   defp precision(dec() = d, _precision, _rounding)
       when is_inf(d) or is_nan(d) do
-    d
+    { d, [] }
   end
 
   defp precision(dec(sign: sign, coef: coef, exp: exp), precision, rounding) do
     prec10 = int_pow10(1, precision)
-    do_precision(coef, exp, sign, prec10, rounding)
+    do_precision(coef, exp, sign, prec10, rounding, [])
   end
 
-  defp do_precision(coef, exp, sign, prec10, rounding) when coef >= prec10 do
+  defp do_precision(coef, exp, sign, prec10, rounding, flags) when coef >= prec10 do
     significant = Kernel.div(coef, 10)
     remainder = Kernel.rem(coef, 10)
     if increment?(rounding, sign, significant, remainder),
       do: significant = significant + 1
 
-    do_precision(significant, exp + 1, sign, prec10, rounding)
+    flags = put_uniq(flags, :rounded)
+    if remainder != 0 do
+      flags = put_uniq(flags, :inexact)
+    end
+
+    do_precision(significant, exp + 1, sign, prec10, rounding, flags)
   end
 
-  defp do_precision(coef, exp, sign, _prec10, _rounding) do
-    dec(sign: sign, coef: coef, exp: exp)
+  defp do_precision(coef, exp, sign, _prec10, _rounding, flags) do
+    { dec(sign: sign, coef: coef, exp: exp), flags }
   end
 
   defp increment?(:truncate, _, _, _),
@@ -551,9 +585,18 @@ defmodule Decimal do
 
   ## CONTEXT ##
 
-  defp context(num) do
+  defp context(num, flags // []) do
     ctxt = Context[] = get_context
-    precision(num, ctxt.precision, ctxt.rounding)
+    { result, prec_flags } = precision(num, ctxt.precision, ctxt.rounding)
+    error(put_uniq(flags, prec_flags), nil, result, ctxt)
+  end
+
+  defp put_uniq(list, elems) when is_list(elems) do
+    Enum.reduce(elems, list, &put_uniq(&2, &1))
+  end
+
+  defp put_uniq(list, elem) do
+    if elem in list, do: list, else: [elem|list]
   end
 
   ## PARSING ##

@@ -74,7 +74,7 @@ defmodule DecimalTest do
 
   test "conversion error" do
     assert_raise Error, fn ->
-      IO.inspect Decimal.new("")
+      Decimal.new("")
     end
 
     assert_raise Error, fn ->
@@ -89,7 +89,7 @@ defmodule DecimalTest do
       Decimal.new("42.+42")
     end
 
-    assert_raise ArgumentError, fn ->
+    assert_raise FunctionClauseError, fn ->
       Decimal.new(:atom)
     end
 
@@ -546,5 +546,41 @@ defmodule DecimalTest do
     assert roundneg.(%d"250")  == d(1, 2, 2)
     assert roundneg.(%d"-150") == d(-1, 2, 2)
     assert roundneg.(%d"-250") == d(-1, 2, 2)
+  end
+
+  test "set context flags" do
+    Decimal.with_context(Context[precision: 2], fn ->
+      assert [] = Decimal.get_context.flags
+      Decimal.add(%d"2", %d"2")
+      assert [] = Decimal.get_context.flags
+      Decimal.add(%d"2.0000", %d"2")
+      assert [:rounded] = Decimal.get_context.flags
+      Decimal.add(%d"2.0001", %d"2")
+      assert :inexact in Decimal.get_context.flags
+    end)
+
+    Decimal.with_context(Context[precision: 2], fn ->
+      assert [] = Decimal.get_context.flags
+      assert_raise Error, fn ->
+        assert Decimal.mult(%d"inf", %d"0")
+      end
+      assert :invalid_operation in Decimal.get_context.flags
+    end)
+  end
+
+  test "traps" do
+    Decimal.with_context(Context[traps: []], fn ->
+     assert Decimal.mult(%d"inf", %d"0") == d(1, :qNaN, 0)
+     assert Decimal.div(%d"5", %d"0") == d(1, :inf, 0)
+     assert :division_by_zero in Decimal.get_context.flags
+    end)
+  end
+
+  test "error sets result" do
+    try do
+      Decimal.mult(%d"inf", %d"0")
+    rescue x in [Error] ->
+      assert x.result == d(1, :sNaN, 0)
+    end
   end
 end
