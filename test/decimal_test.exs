@@ -104,9 +104,10 @@ defmodule DecimalTest do
     assert Decimal.abs(%d"-12.5e2") == d(1, 125, 1)
     assert Decimal.abs(%d"-42e-42") == d(1, 42, -42)
     assert Decimal.abs(%d"-inf")    == d(1, :inf, 0)
+    assert Decimal.abs(%d"nan")     == d(1, :qNaN, 0)
 
     assert_raise Error, fn ->
-      Decimal.abs(%d"nan")
+      Decimal.abs(%d"snan")
     end
   end
 
@@ -119,6 +120,7 @@ defmodule DecimalTest do
     assert Decimal.add(%d"-0", %d"0")        == d(1, 0, 0)
     assert Decimal.add(%d"-0", %d"-0")       == d(-1, 0, 0)
     assert Decimal.add(%d"2", %d"-2")        == d(1, 0, 0)
+    assert Decimal.add(%d"5", %d"nan")       == d(1, :qNaN, 0)
 
     Decimal.with_context(Context[precision: 5, rounding: :floor], fn ->
       Decimal.add(%d"2", %d"-2") == d(-1, 0, 0)
@@ -131,10 +133,7 @@ defmodule DecimalTest do
       Decimal.add(%d"inf", %d"-inf")
     end
     assert_raise Error, fn ->
-      Decimal.add(%d"nan", %d"0")
-    end
-    assert_raise Error, fn ->
-      Decimal.add(%d"nan", %d"nan")
+      Decimal.add(%d"snan", %d"0")
     end
   end
 
@@ -146,6 +145,7 @@ defmodule DecimalTest do
     assert Decimal.sub(%d"2e-2", %d"-2e-2")  == d(1, 4, -2)
     assert Decimal.sub(%d"-0", %d"0")        == d(-1, 0, 0)
     assert Decimal.sub(%d"-0", %d"-0")       == d(1, 0, 0)
+    assert Decimal.add(%d"5", %d"nan")       == d(1, :qNaN, 0)
 
     Decimal.with_context(Context[precision: 5, rounding: :floor], fn ->
       Decimal.sub(%d"2", %d"2") == d(-1, 0, 0)
@@ -158,10 +158,7 @@ defmodule DecimalTest do
       Decimal.sub(%d"inf", %d"inf")
     end
     assert_raise Error, fn ->
-      Decimal.sub(%d"nan", %d"0")
-    end
-    assert_raise Error, fn ->
-      Decimal.sub(%d"nan", %d"nan")
+      Decimal.sub(%d"snan", %d"0")
     end
   end
 
@@ -172,6 +169,10 @@ defmodule DecimalTest do
     assert Decimal.compare(%d"0", %d"-0")     == d(1, 0, 0)
     assert Decimal.compare(%d"nan", %d"1")    == d(1, :qNaN, 0)
     assert Decimal.compare(%d"1", %d"nan")    == d(1, :qNaN, 0)
+
+    assert_raise Error, fn ->
+      Decimal.compare(%d"snan", %d"0")
+    end
   end
 
   test "div" do
@@ -188,18 +189,19 @@ defmodule DecimalTest do
     assert Decimal.div(%d"0", %d"3")         == d(1, 0, 0)
     assert Decimal.div(%d"-0", %d"3")        == d(-1, 0, 0)
     assert Decimal.div(%d"0", %d"-3")        == d(-1, 0, 0)
+    assert Decimal.div(%d"nan", %d"2")       == d(1, :qNaN, 0)
 
-    assert Decimal.div(%d"-inf", %d"-2")    == d(1, :inf, 0)
-    assert Decimal.div(%d"5", %d"-inf")     == d(-1, 0, 0)
+    assert Decimal.div(%d"-inf", %d"-2")     == d(1, :inf, 0)
+    assert Decimal.div(%d"5", %d"-inf")      == d(-1, 0, 0)
 
     assert_raise Error, fn ->
       Decimal.div(%d"inf", %d"inf")
     end
     assert_raise Error, fn ->
-      Decimal.div(%d"nan", %d"2")
+      Decimal.div(%d"snan", %d"2")
     end
     assert_raise Error, fn ->
-      Decimal.div(%d"-2", %d"-nan")
+      Decimal.div(%d"-2", %d"-snan")
     end
     assert_raise Error, fn ->
       Decimal.div(%d"0", %d"-0")
@@ -219,6 +221,7 @@ defmodule DecimalTest do
     assert Decimal.div_int(%d"0", %d"3")      == d(1, 0, 0)
     assert Decimal.div_int(%d"-0", %d"3")     == d(-1, 0, 0)
     assert Decimal.div_int(%d"0", %d"-3")     == d(-1, 0, 0)
+    assert Decimal.div_int(%d"nan", %d"2")    == d(1, :qNaN, 0)
 
     assert Decimal.div_int(%d"-inf", %d"-2")  == d(1, :inf, 0)
     assert Decimal.div_int(%d"5", %d"-inf")   == d(-1, 0, 0)
@@ -227,10 +230,10 @@ defmodule DecimalTest do
       Decimal.div_int(%d"inf", %d"inf")
     end
     assert_raise Error, fn ->
-      Decimal.div_int(%d"nan", %d"2")
+      Decimal.div_int(%d"snan", %d"2")
     end
     assert_raise Error, fn ->
-      Decimal.div_int(%d"-2", %d"-nan")
+      Decimal.div_int(%d"-2", %d"-snan")
     end
     assert_raise Error, fn ->
       Decimal.div_int(%d"0", %d"-0")
@@ -248,15 +251,16 @@ defmodule DecimalTest do
 
     assert Decimal.rem(%d"-inf", %d"-2")  == d(-1, 0, 0)
     assert Decimal.rem(%d"5", %d"-inf")   == d(1, :inf, 0)
+    assert Decimal.rem(%d"nan", %d"2")    == d(1, :qNaN, 0)
 
     assert_raise Error, fn ->
       Decimal.rem(%d"inf", %d"inf")
     end
     assert_raise Error, fn ->
-      Decimal.rem(%d"nan", %d"2")
+      Decimal.rem(%d"snan", %d"2")
     end
     assert_raise Error, fn ->
-      Decimal.rem(%d"-2", %d"-nan")
+      Decimal.rem(%d"-2", %d"-snan")
     end
     assert_raise Error, fn ->
       Decimal.rem(%d"0", %d"-0")
@@ -276,6 +280,10 @@ defmodule DecimalTest do
 
     assert Decimal.max(%d"nan", %d"1")   == d(1, 1, 0)
     assert Decimal.max(%d"2", %d"nan")   == d(1, 2, 0)
+
+    assert_raise Error, fn ->
+      Decimal.max(%d"snan", %d"2")
+    end
   end
 
   test "min" do
@@ -291,17 +299,35 @@ defmodule DecimalTest do
 
     assert Decimal.min(%d"nan", %d"1")   == d(1, 1, 0)
     assert Decimal.min(%d"2", %d"nan")   == d(1, 2, 0)
+
+    assert_raise Error, fn ->
+      Decimal.min(%d"snan", %d"2")
+    end
   end
 
   test "minus" do
-    assert Decimal.minus(%d"0")  == d(-1, 0, 0)
-    assert Decimal.minus(%d"1")  == d(-1, 1, 0)
-    assert Decimal.minus(%d"-1") == d(1, 1, 0)
+    assert Decimal.minus(%d"0")   == d(-1, 0, 0)
+    assert Decimal.minus(%d"1")   == d(-1, 1, 0)
+    assert Decimal.minus(%d"-1")  == d(1, 1, 0)
 
     assert Decimal.minus(%d"inf") == d(-1, :inf, 0)
+    assert Decimal.minus(%d"nan") == d(1, :qNaN, 0)
 
     assert_raise Error, fn ->
-      Decimal.minus(%d"nan")
+      Decimal.minus(%d"snan")
+    end
+  end
+
+  test "plus" do
+    Decimal.with_context(Context[precision: 2], fn ->
+      assert Decimal.plus(%d"0")    == d(1, 0, 0)
+      assert Decimal.plus(%d"5")    == d(1, 5, 0)
+      assert Decimal.plus(%d"123")  == d(1, 12, 1)
+      assert Decimal.plus(%d"nan") == d(1, :qNaN, 0)
+    end)
+
+    assert_raise Error, fn ->
+      Decimal.plus(%d"snan")
     end
   end
 
@@ -322,12 +348,13 @@ defmodule DecimalTest do
     assert Decimal.mult(%d"0", %d"-3")     == d(-1, 0, 0)
 
     assert Decimal.mult(%d"inf", %d"-3")   == d(-1, :inf, 0)
+    assert Decimal.mult(%d"nan", %d"2")    == d(1, :qNaN, 0)
 
     assert_raise Error, fn ->
-      Decimal.mult(%d"nan", %d"2")
+      Decimal.mult(%d"snan", %d"2")
     end
     assert_raise Error, fn ->
-      Decimal.mult(%d"-2", %d"-nan")
+      Decimal.mult(%d"-2", %d"-snan")
     end
     assert_raise Error, fn ->
       Decimal.mult(%d"inf", %d"0")
@@ -346,9 +373,10 @@ defmodule DecimalTest do
     assert Decimal.reduce(%d"0")     == d(1, 0, 0)
     assert Decimal.reduce(%d"-0")    == d(-1, 0, 0)
     assert Decimal.reduce(%d"-inf")  == d(-1, :inf, 0)
+    assert Decimal.reduce(%d"nan")   == d(1, :qNaN, 0)
 
     assert_raise Error, fn ->
-      Decimal.reduce(%d"nan")
+      Decimal.reduce(%d"snan")
     end
   end
 
@@ -466,9 +494,10 @@ defmodule DecimalTest do
 
   test "round special" do
     assert Decimal.round(%d"inf", 2, :truncate) == d(1, :inf, 0)
+    assert Decimal.round(%d"nan", 2, :truncate) == d(1, :qNaN, 0)
 
     assert_raise Error, fn ->
-      Decimal.round(%d"nan", 2, :truncate)
+      Decimal.round(%d"snan", 2, :truncate)
     end
   end
 

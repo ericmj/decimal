@@ -1,6 +1,10 @@
 defmodule Decimal do
   import Kernel, except: [abs: 1, div: 2, max: 2, min: 2, rem: 1, round: 1]
 
+  defrecordp :dec, __MODULE__, [sign: 1, coef: 0, exp: 0]
+
+  @context_key :"$decimal_context"
+
   defexception Error, [:flag, :reason, :result] do
     def message(Error[flag: flag, reason: reason]) do
       if reason do
@@ -17,8 +21,6 @@ defmodule Decimal do
     flags: [],
     traps: [:invalid_operation, :division_by_zero]
 
-  defrecordp :dec, __MODULE__, [sign: 1, coef: 0, exp: 0]
-
   defmacrop error(flags, reason, result, context // nil) do
     quote bind_quoted: binding do
       case handle_error(flags, reason, result, context) do
@@ -28,32 +30,21 @@ defmodule Decimal do
     end
   end
 
-  defp handle_error(flags, reason, result, context) do
-    context = Context[] = context || get_context
-    flags = List.wrap(flags)
-
-    Enum.reduce(flags, context.flags, &put_uniq(&2, &1))
-      |> context.flags
-      |> set_context
-
-    error_flag = Enum.find(flags, &(&1 in context.traps))
-    nan = if error_flag, do: :sNaN, else: :qNaN
-
-    if match?(dec(coef: :NaN), result) do
-      result = dec(result, coef: nan)
-    end
-
-    if error_flag do
-      error = [flag: error_flag, reason: reason, result: result]
-      { :error, error }
-    else
-      { :ok, result }
-    end
-  end
-
   defmacro is_nan(d) do
     quote do
       dec(unquote(d), :coef) in [:sNaN, :qNaN]
+    end
+  end
+
+  defmacrop is_qnan(d) do
+    quote do
+      dec(unquote(d), :coef) == :qNaN
+    end
+  end
+
+  defmacrop is_snan(d) do
+    quote do
+      dec(unquote(d), :coef) == :sNaN
     end
   end
 
@@ -63,22 +54,24 @@ defmodule Decimal do
     end
   end
 
-  defp first_nan(d1, d2) do
-    if is_nan(d1), do: d1, else: d2
+  def abs(dec(coef: :sNaN) = d) do
+    error(:invalid_operation, "operation on NaN", d)
   end
 
-  @context_key :"$decimal_context"
-
-  def abs(dec() = d) when is_nan(d) do
-    error(:invalid_operation, "operation on NaN", d)
+  def abs(dec(coef: :qNaN) = d) do
+    d
   end
 
   def abs(dec() = d) do
     dec(d, sign: 1) |> context
   end
 
-  def add(dec() = d1, dec() = d2) when is_nan(d1) or is_nan(d2) do
+  def add(dec() = d1, dec() = d2) when is_snan(d1) or is_snan(d2) do
     error(:invalid_operation, "operation on NaN", first_nan(d1, d2))
+  end
+
+  def add(dec() = d1, dec() = d2) when is_qnan(d1) or is_qnan(d2) do
+    first_nan(d1, d2)
   end
 
   def add(dec(coef: coef1) = d1, dec(coef: coef2) = d2) when is_inf(d1) or is_inf(d2) do
@@ -118,8 +111,12 @@ defmodule Decimal do
     end
   end
 
-  def div(dec() = d1, dec() = d2) when is_nan(d1) or is_nan(d2) do
+  def div(dec() = d1, dec() = d2) when is_snan(d1) or is_snan(d2) do
     error(:invalid_operation, "operation on NaN", first_nan(d1, d2))
+  end
+
+  def div(dec() = d1, dec() = d2) when is_qnan(d1) or is_qnan(d2) do
+    first_nan(d1, d2)
   end
 
   def div(dec(sign: sign1, coef: coef1, exp: exp1) = d1, dec(sign: sign2, coef: coef2, exp: exp2) = d2)
@@ -172,8 +169,15 @@ defmodule Decimal do
     div_rem(num1, num2) |> elem(1)
   end
 
-  def div_rem(dec() = d1, dec() = d2) when is_nan(d1) or is_nan(d2) do
-    error(:invalid_operation, "operation on NaN", first_nan(d1, d2))
+  def div_rem(dec() = d1, dec() = d2) when is_snan(d1) or is_snan(d2) do
+    d = first_nan(d1, d2)
+    { error(:invalid_operation, "operation on NaN", d),
+      error(:invalid_operation, "operation on NaN", d) }
+  end
+
+  def div_rem(dec() = d1, dec() = d2) when is_qnan(d1) or is_qnan(d2) do
+    d = first_nan(d1, d2)
+    { d, d }
   end
 
   def div_rem(dec(sign: sign1, coef: coef1, exp: exp1) = d1, dec(sign: sign2, coef: coef2, exp: exp2) = d2)
@@ -250,16 +254,32 @@ defmodule Decimal do
     end
   end
 
-  def minus(dec() = d) when is_nan(d) do
+  def minus(dec(coef: :sNaN) = d) do
     error(:invalid_operation, "operation on NaN", d)
+  end
+
+  def minus(dec(coef: :qNaN) = d) do
+    d
   end
 
   def minus(dec(sign: sign) = d) do
     dec(d, sign: -sign) |> context
   end
 
-  def mult(dec() = d1, dec() = d2) when is_nan(d1) or is_nan(d2) do
+  def plus(dec(coef: :sNaN) = d) do
+    error(:invalid_operation, "operation on NaN", d)
+  end
+
+  def plus(dec() = d) do
+    context(d)
+  end
+
+  def mult(dec() = d1, dec() = d2) when is_snan(d1) or is_snan(d2) do
     error(:invalid_operation, "operation on NaN", first_nan(d1, d2))
+  end
+
+  def mult(dec() = d1, dec() = d2) when is_qnan(d1) or is_qnan(d2) do
+    first_nan(d1, d2)
   end
 
   def mult(dec(sign: sign1, coef: coef1, exp: exp1) = d1, dec(sign: sign2, coef: coef2, exp: exp2) = d2)
@@ -279,8 +299,12 @@ defmodule Decimal do
     dec(sign: sign, coef: coef1 * coef2, exp: exp1 + exp2) |> context
   end
 
-  def reduce(dec() = d) when is_nan(d) do
+  def reduce(dec(coef: :sNaN) = d) do
     error(:invalid_operation, "operation on NaN", d)
+  end
+
+  def reduce(dec(coef: :qNaN) = d) do
+    d
   end
 
   def reduce(dec(coef: :inf) = d) do
@@ -296,8 +320,12 @@ defmodule Decimal do
     end
   end
 
-  def round(dec() = d) when is_nan(d) do
+  def round(dec(coef: :sNaN) = d) do
     error(:invalid_operation, "operation on NaN", d)
+  end
+
+  def round(dec(coef: :qNaN) = d) do
+    d
   end
 
   def round(dec(coef: :inf) = d) do
@@ -669,6 +697,35 @@ defmodule Decimal do
 
   defp parse_digits(rest, acc) do
     { :lists.reverse(acc), rest }
+  end
+
+  # Util
+
+  defp handle_error(flags, reason, result, context) do
+    context = Context[] = context || get_context
+    flags = List.wrap(flags)
+
+    Enum.reduce(flags, context.flags, &put_uniq(&2, &1))
+      |> context.flags
+      |> set_context
+
+    error_flag = Enum.find(flags, &(&1 in context.traps))
+    nan = if error_flag, do: :sNaN, else: :qNaN
+
+    if match?(dec(coef: :NaN), result) do
+      result = dec(result, coef: nan)
+    end
+
+    if error_flag do
+      error = [flag: error_flag, reason: reason, result: result]
+      { :error, error }
+    else
+      { :ok, result }
+    end
+  end
+
+  defp first_nan(d1, d2) do
+    if is_nan(d1), do: d1, else: d2
   end
 end
 
