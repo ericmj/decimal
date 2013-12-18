@@ -342,26 +342,54 @@ defmodule Decimal do
     end
   end
 
-  def max(dec(coef: coef1) = num1, dec(coef: coef2) = num2) do
+  def max(dec(sign: sign1, coef: coef1, exp: exp1) = num1, dec(sign: sign2, coef: coef2, exp: exp2) = num2) do
     cond do
       coef1 == :qNaN ->
         num2
       coef2 == :qNaN ->
         num1
       true ->
-        context(if match?(dec(sign: -1), compare(num1, num2)), do: num2, else: num1)
-    end
+        case compare(num1, num2) do
+          dec(sign: -1, coef: 1) ->
+            num2
+          dec(sign: 1, coef: 1) ->
+            num1
+          dec(coef: 0) ->
+            cond do
+              sign1 != sign2 ->
+                if sign1 == 1, do: num1, else: num2
+              sign1 == 1 ->
+                if exp1 > exp2, do: num1, else: num2
+              sign1 == -1 ->
+                if exp1 < exp2, do: num1, else: num2
+            end
+        end
+    end |> context
   end
 
-  def min(dec(coef: coef1) = num1, dec(coef: coef2) = num2) do
+  def min(dec(sign: sign1, coef: coef1, exp: exp1) = num1, dec(sign: sign2, coef: coef2, exp: exp2) = num2) do
     cond do
       coef1 == :qNaN ->
         num2
       coef2 == :qNaN ->
         num1
       true ->
-        context(if match?(dec(sign: 1), compare(num1, num2)), do: num2, else: num1)
-    end
+        case compare(num1, num2) do
+          dec(sign: -1, coef: 1) ->
+            num1
+          dec(sign: 1, coef: 1) ->
+            num2
+          dec(coef: 0) ->
+            cond do
+              sign1 != sign2 ->
+                if sign1 == -1, do: num1, else: num2
+              sign1 == 1 ->
+                if exp1 < exp2, do: num1, else: num2
+              sign1 == -1 ->
+                if exp1 > exp2, do: num1, else: num2
+            end
+        end
+    end |> context
   end
 
   def minus(dec(coef: :sNaN) = d) do

@@ -268,18 +268,22 @@ defmodule DecimalTest do
   end
 
   test "max" do
-    assert Decimal.max(%d"0", %d"0")     == d(1, 0, 0)
-    assert Decimal.max(%d"1", %d"0")     == d(1, 1, 0)
-    assert Decimal.max(%d"0", %d"1")     == d(1, 1, 0)
-    assert Decimal.max(%d"-1", %d"1")    == d(1, 1, 0)
-    assert Decimal.max(%d"1", %d"-1")    == d(1, 1, 0)
-    assert Decimal.max(%d"-30", %d"-40") == d(-1, 30, 0)
+    assert Decimal.max(%d"0", %d"0")      == d(1, 0, 0)
+    assert Decimal.max(%d"1", %d"0")      == d(1, 1, 0)
+    assert Decimal.max(%d"0", %d"1")      == d(1, 1, 0)
+    assert Decimal.max(%d"-1", %d"1")     == d(1, 1, 0)
+    assert Decimal.max(%d"1", %d"-1")     == d(1, 1, 0)
+    assert Decimal.max(%d"-30", %d"-40")  == d(-1, 30, 0)
 
-    assert Decimal.max(%d"-inf", %d"5")  == d(1, 5, 0)
-    assert Decimal.max(%d"inf", %d"5")   == d(1, :inf, 0)
+    assert Decimal.max(%d"+0", %d"-0")    == d(1, 0, 0)
+    assert Decimal.max(%d"2e1", %d"20")   == d(1, 2, 1)
+    assert Decimal.max(%d"-2e1", %d"-20") == d(-1, 20, 0)
 
-    assert Decimal.max(%d"nan", %d"1")   == d(1, 1, 0)
-    assert Decimal.max(%d"2", %d"nan")   == d(1, 2, 0)
+    assert Decimal.max(%d"-inf", %d"5")   == d(1, 5, 0)
+    assert Decimal.max(%d"inf", %d"5")    == d(1, :inf, 0)
+
+    assert Decimal.max(%d"nan", %d"1")    == d(1, 1, 0)
+    assert Decimal.max(%d"2", %d"nan")    == d(1, 2, 0)
 
     assert_raise Error, fn ->
       Decimal.max(%d"snan", %d"2")
@@ -287,18 +291,22 @@ defmodule DecimalTest do
   end
 
   test "min" do
-    assert Decimal.min(%d"0", %d"0")     == d(1, 0, 0)
-    assert Decimal.min(%d"-1", %d"0")    == d(-1, 1, 0)
-    assert Decimal.min(%d"0", %d"-1")    == d(-1, 1, 0)
-    assert Decimal.min(%d"-1", %d"1")    == d(-1, 1, 0)
-    assert Decimal.min(%d"1", %d"0")     == d(1, 0, 0)
-    assert Decimal.min(%d"-30", %d"-40") == d(-1, 40, 0)
+    assert Decimal.min(%d"0", %d"0")      == d(1, 0, 0)
+    assert Decimal.min(%d"-1", %d"0")     == d(-1, 1, 0)
+    assert Decimal.min(%d"0", %d"-1")     == d(-1, 1, 0)
+    assert Decimal.min(%d"-1", %d"1")     == d(-1, 1, 0)
+    assert Decimal.min(%d"1", %d"0")      == d(1, 0, 0)
+    assert Decimal.min(%d"-30", %d"-40")  == d(-1, 40, 0)
 
-    assert Decimal.min(%d"-inf", %d"5")  == d(-1, :inf, 0)
-    assert Decimal.min(%d"inf", %d"5")   == d(1, 5, 0)
+    assert Decimal.min(%d"+0", %d"-0")    == d(-1, 0, 0)
+    assert Decimal.min(%d"2e1", %d"20")   == d(1, 20, 0)
+    assert Decimal.min(%d"-2e1", %d"-20") == d(-1, 2, 1)
 
-    assert Decimal.min(%d"nan", %d"1")   == d(1, 1, 0)
-    assert Decimal.min(%d"2", %d"nan")   == d(1, 2, 0)
+    assert Decimal.min(%d"-inf", %d"5")   == d(-1, :inf, 0)
+    assert Decimal.min(%d"inf", %d"5")    == d(1, 5, 0)
+
+    assert Decimal.min(%d"nan", %d"1")    == d(1, 1, 0)
+    assert Decimal.min(%d"2", %d"nan")    == d(1, 2, 0)
 
     assert_raise Error, fn ->
       Decimal.min(%d"snan", %d"2")
