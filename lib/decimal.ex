@@ -1,25 +1,135 @@
 defmodule Decimal do
+  @moduledoc """
+  Decimal arithmetic on arbitrary precision floating-point numbers.
+
+  A number is represented by a signed coefficient and exponent such that: `sign
+  * coefficient * 10^exponent`. All numbers are represented and calculated
+  exactly, but the result of an operation may be rounded depending on the
+  context the operation is performed with, see: `Decimal.Context`. Trailing
+  zeros in the coefficient are never truncated to preserve the number of
+  significant digits unless explicitly done so.
+
+  There are also special values such as NaN and (+-)Infinity. -0 and +0 are two
+  distinct values.
+
+  Exceptional conditions are grouped into signals, each signal has a flag and a
+  trap enabler in the context. Whenever a signal is triggered it's flag is set
+  in the context and will be set until explicitly cleared. If the signal is trap
+  enabled `Decimal.Error` will be raised.
+
+  The specifications influencing the API:
+  * [IBM's General Decimal Arithmetic Specification](http://speleotrove.com/decimal/decarith.html)
+  * [IEEE standard 854-1987](http://754r.ucbtest.org/standards/854.pdf)
+  """
+
+  @opaque t :: { Decimal, 1 | -1, non_neg_integer, integer }
+
+  @type signal :: :invalid_operation |
+                  :division_by_zero |
+                  :rounded |
+                  :inexact
+
+  @type rounding :: :down |
+                    :half_up |
+                    :half_even |
+                    :ceiling |
+                    :floor |
+                    :half_down |
+                    :up
+
   import Kernel, except: [abs: 1, div: 2, max: 2, min: 2, rem: 1, round: 1]
 
   defrecordp :dec, __MODULE__, [sign: 1, coef: 0, exp: 0]
 
   @context_key :"$decimal_context"
 
-  defexception Error, [:flag, :reason, :result] do
-    def message(Error[flag: flag, reason: reason]) do
+  defexception Error, [:signal, :reason, :result] do
+    @moduledoc """
+    The exception that all Decimal operations may raise.
+
+    ## Fields
+
+    * `signal` - The signalled error, additional signalled errors will be found
+      in the context.
+    * `reason` - The reason for the error.
+    * `result` - The result of the operation signalling the error.
+
+    Rescuing the error to access the result or the other fields of the error is
+    discouraged and should only be done for exceptional conditions. It is more
+    pragmatic to set the appropriate traps on the context and check the flags
+    after the operation if the result needs to be inspected.
+    """
+
+    record_type signal: Decimal.signal,
+                reason: String.t,
+                result: Decimal.t
+
+    def message(Error[signal: signal, reason: reason]) do
       if reason do
-        "#{flag}: #{reason}"
+        "#{signal}: #{reason}"
       else
-        "#{flag}"
+        "#{signal}"
       end
     end
   end
 
   defrecord Context,
-    precision: 9,
-    rounding: :half_up,
-    flags: [],
-    traps: [:invalid_operation, :division_by_zero]
+      precision: 9,
+      rounding: :half_up,
+      flags: [],
+      traps: [:invalid_operation, :division_by_zero] do
+    @moduledoc """
+    The context is kept in the process dictionary. It can be accessed with
+    `Decimal.get_context/0` and `Decimal.set_context/1`.
+
+    ## Fields
+
+    * `precision` - Maximum number of decimal digits in the coefficient. If an
+      operation's result has more digits it will be rounded to `precision`
+      digits with the rounding algorithm in `rounding`.
+    * `rounding` - The rounding algorithm used when the coefficient's number of
+      exceeds `precision`. Strategies explained below.
+    * `flags` - A list of signals that for which the flag is sent. When an
+      exceptional condition is signalled it's flag is set. The flags are sticky
+      and will be set until explicitly cleared.
+    * `traps` - A list of set trap enablers for signals. When a signal's trap
+      enabler is set the condition causes `Decimal.Error` to be raised.
+
+    ## Rounding algorithms
+
+    * `:down` - Round toward zero (truncate). Discarded digits are ignored,
+      result is unchanged.
+    * `:half_up` - If the discarded digits is greater than or equal to half of
+      the value of a one in the next left position then the coefficient will be
+      incremented by one (rounded up). Otherwise, the discarded digits will be
+      ignored.
+    * `:half_even` - Also known as "round to nearest" or "banker's rounding". If
+      the discarded digits is greater than half of the value of a one in the
+      next left position then the coefficient will be incremented by one
+      (rounded up). If they represent less than half discarded digits will be
+      ignored. Otherwise (exactly half), the coefficient is not altered if it's
+      even, or incremented by one (rounded up) if it's odd (to make an even
+      number).
+    * `:ceiling` - Round toward +Infinity. If all of the discarded digits are
+      zero or the sign is negative the result is unchanged. Otherwise, the
+      coefficient will be incremented by one (rounded up).
+    * `:floor` - Round toward -Infinity. If all of the discarded digits are zero
+      or the sign is positive the result is unchanged. Otherwise, the sign is
+      negative and coefficient will be incremented by one.
+    * `:half_down` - If the discarded digits is greater than half of the value
+      of a one in the next left position then the coefficient will be
+      incremented by one (rounded up). Otherwise the discarded digits are
+      ignored.
+    * `:up` - Round away from zero. If all discarded digits are zero the
+      coefficient is not changed, otherwise it is incremented by one (rounded
+      up).
+    """
+
+    record_type precision: pos_integer,
+                rounding: Decimal.rounding,
+                flags: [Decimal.signal],
+                traps: [Decimal.signal]
+  end
 
   defmacrop error(flags, reason, result, context // nil) do
     quote bind_quoted: binding do
@@ -148,16 +258,16 @@ defmodule Decimal do
       if coef1 == 0 do
         coef = 0
         adjust = 0
-        flags = []
+        signals = []
       else
         context = Context[] = get_context
         prec10 = int_pow10(1, context.precision-1)
 
         { coef1, coef2, adjust } = div_adjust(coef1, coef2, 0)
-        { coef, adjust, _rem, flags } = div_calc(coef1, coef2, 0, adjust, prec10)
+        { coef, adjust, _rem, signals } = div_calc(coef1, coef2, 0, adjust, prec10)
       end
 
-      dec(sign: sign, coef: coef, exp: exp1 - exp2 - adjust) |> context(flags)
+      dec(sign: sign, coef: coef, exp: exp1 - exp2 - adjust) |> context(signals)
     end
   end
 
@@ -334,8 +444,8 @@ defmodule Decimal do
 
   def round(num, n // 0, mode // :half_up) do
     dec(sign: sign, coef: coef, exp: exp) = reduce(num)
-    { value, flags } = do_round(coef, exp, sign, -n, mode, [])
-    context(value, flags)
+    { value, signals } = do_round(coef, exp, sign, -n, mode, [])
+    context(value, signals)
   end
 
   def new(dec() = d),
@@ -347,7 +457,7 @@ defmodule Decimal do
   def new(binary) when is_binary(binary),
     do: parse(binary)
 
-  def to_string(num, type // :normal)
+  def to_string(num, type // :scientific)
 
   def to_string(dec(sign: sign, coef: :qNaN), _type) do
     if sign == 1, do: "NaN", else: "-NaN"
@@ -418,7 +528,7 @@ defmodule Decimal do
     iolist_to_binary(list)
   end
 
-  def to_string(dec(sign: sign, coef: coef, exp: exp), :simple) do
+  def to_string(dec(sign: sign, coef: coef, exp: exp), :raw) do
     str = integer_to_binary(coef)
 
     if sign == -1 do
@@ -445,8 +555,12 @@ defmodule Decimal do
     Process.get(@context_key, Context[])
   end
 
-  def set_context(context) do
+  def set_context(Context[] = context) do
     Process.put(@context_key, context)
+  end
+
+  def update_context(fun) when is_function(fun, 1) do
+    get_context |> fun.() |> set_context
   end
 
   ## ARITHMETIC ##
@@ -488,9 +602,9 @@ defmodule Decimal do
         { coef, adjust, coef1, [] }
 
       coef >= prec10 ->
-        flags = [:rounded]
-        unless base_10?(coef1), do: flags = [:inexact|flags]
-        { coef, adjust, coef1, flags }
+        signals = [:rounded]
+        unless base_10?(coef1), do: signals = [:inexact|signals]
+        { coef, adjust, coef1, signals }
 
       true ->
         div_calc(coef1 * 10, coef2, coef * 10, adjust + 1, prec10)
@@ -552,17 +666,17 @@ defmodule Decimal do
 
   ## ROUNDING ##
 
-  defp do_round(coef, exp, sign, n, rounding, flags) when n > exp do
+  defp do_round(coef, exp, sign, n, rounding, signals) when n > exp do
     significant = Kernel.div(coef, 10)
     remainder = Kernel.rem(coef, 10)
     if increment?(rounding, sign, significant, remainder),
       do: significant = significant + 1
 
-    do_round(significant, exp + 1, sign, n, rounding, flags)
+    do_round(significant, exp + 1, sign, n, rounding, signals)
   end
 
-  defp do_round(coef, exp, sign, _n, _rounding, flags) do
-    { dec(sign: sign, coef: coef, exp: exp), flags }
+  defp do_round(coef, exp, sign, _n, _rounding, signals) do
+    { dec(sign: sign, coef: coef, exp: exp), signals }
   end
 
   defp precision(dec() = d, _precision, _rounding)
@@ -575,25 +689,25 @@ defmodule Decimal do
     do_precision(coef, exp, sign, prec10, rounding, [])
   end
 
-  defp do_precision(coef, exp, sign, prec10, rounding, flags) when coef >= prec10 do
+  defp do_precision(coef, exp, sign, prec10, rounding, signals) when coef >= prec10 do
     significant = Kernel.div(coef, 10)
     remainder = Kernel.rem(coef, 10)
     if increment?(rounding, sign, significant, remainder),
       do: significant = significant + 1
 
-    flags = put_uniq(flags, :rounded)
+    signals = put_uniq(signals, :rounded)
     if remainder != 0 do
-      flags = put_uniq(flags, :inexact)
+      signals = put_uniq(signals, :inexact)
     end
 
-    do_precision(significant, exp + 1, sign, prec10, rounding, flags)
+    do_precision(significant, exp + 1, sign, prec10, rounding, signals)
   end
 
-  defp do_precision(coef, exp, sign, _prec10, _rounding, flags) do
-    { dec(sign: sign, coef: coef, exp: exp), flags }
+  defp do_precision(coef, exp, sign, _prec10, _rounding, signals) do
+    { dec(sign: sign, coef: coef, exp: exp), signals }
   end
 
-  defp increment?(:truncate, _, _, _),
+  defp increment?(:down, _, _, _),
     do: false
 
   defp increment?(:ceiling, sign, _, remain),
@@ -605,18 +719,21 @@ defmodule Decimal do
   defp increment?(:half_up, sign, _, remain),
     do: sign == 1 and remain >= 5
 
-  defp increment?(:half_away_zero, _, _, remain),
-    do: remain >= 5
-
   defp increment?(:half_even, _, signif, remain),
     do: remain > 5 or (remain == 5 and Kernel.rem(signif, 2) == 1)
 
+  defp increment?(:half_down, _, _, remain),
+    do: remain >= 5
+
+  defp increment?(:up, _, _, _),
+    do: true
+
   ## CONTEXT ##
 
-  defp context(num, flags // []) do
+  defp context(num, signals // []) do
     ctxt = Context[] = get_context
-    { result, prec_flags } = precision(num, ctxt.precision, ctxt.rounding)
-    error(put_uniq(flags, prec_flags), nil, result, ctxt)
+    { result, prec_signals } = precision(num, ctxt.precision, ctxt.rounding)
+    error(put_uniq(signals, prec_signals), nil, result, ctxt)
   end
 
   defp put_uniq(list, elems) when is_list(elems) do
@@ -701,23 +818,23 @@ defmodule Decimal do
 
   # Util
 
-  defp handle_error(flags, reason, result, context) do
+  defp handle_error(signals, reason, result, context) do
     context = Context[] = context || get_context
-    flags = List.wrap(flags)
+    signals = List.wrap(signals)
 
-    Enum.reduce(flags, context.flags, &put_uniq(&2, &1))
+    Enum.reduce(signals, context.flags, &put_uniq(&2, &1))
       |> context.flags
       |> set_context
 
-    error_flag = Enum.find(flags, &(&1 in context.traps))
-    nan = if error_flag, do: :sNaN, else: :qNaN
+    error_signal = Enum.find(signals, &(&1 in context.traps))
+    nan = if error_signal, do: :sNaN, else: :qNaN
 
     if match?(dec(coef: :NaN), result) do
       result = dec(result, coef: nan)
     end
 
-    if error_flag do
-      error = [flag: error_flag, reason: reason, result: result]
+    if error_signal do
+      error = [signals: error_signal, reason: reason, result: result]
       { :error, error }
     else
       { :ok, result }
@@ -731,7 +848,7 @@ end
 
 defimpl Inspect, for: Decimal do
   def inspect(dec, _opts) do
-    "#Decimal<" <> Decimal.to_string(dec, :simple) <> ">"
+    "#Decimal<" <> Decimal.to_string(dec) <> ">"
   end
 end
 

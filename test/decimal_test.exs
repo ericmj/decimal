@@ -381,18 +381,18 @@ defmodule DecimalTest do
   end
 
   test "to_string normal" do
-    assert Decimal.to_string(%d"0")       == "0"
-    assert Decimal.to_string(%d"42")      == "42"
-    assert Decimal.to_string(%d"42.42")   == "42.42"
-    assert Decimal.to_string(%d"0.42")    == "0.42"
-    assert Decimal.to_string(%d"0.0042")  == "0.0042"
-    assert Decimal.to_string(%d"-1")      == "-1"
-    assert Decimal.to_string(%d"-0")      == "-0"
-    assert Decimal.to_string(%d"-1.23")   == "-1.23"
-    assert Decimal.to_string(%d"-0.0123") == "-0.0123"
-    assert Decimal.to_string(%d"nan")     == "NaN"
-    assert Decimal.to_string(%d"-nan")    == "-NaN"
-    assert Decimal.to_string(%d"-inf")    == "-Infinity"
+    assert Decimal.to_string(%d"0", :normal)       == "0"
+    assert Decimal.to_string(%d"42", :normal)      == "42"
+    assert Decimal.to_string(%d"42.42", :normal)   == "42.42"
+    assert Decimal.to_string(%d"0.42", :normal)    == "0.42"
+    assert Decimal.to_string(%d"0.0042", :normal)  == "0.0042"
+    assert Decimal.to_string(%d"-1", :normal)      == "-1"
+    assert Decimal.to_string(%d"-0", :normal)      == "-0"
+    assert Decimal.to_string(%d"-1.23", :normal)   == "-1.23"
+    assert Decimal.to_string(%d"-0.0123", :normal) == "-0.0123"
+    assert Decimal.to_string(%d"nan", :normal)     == "NaN"
+    assert Decimal.to_string(%d"-nan", :normal)    == "-NaN"
+    assert Decimal.to_string(%d"-inf", :normal)    == "-Infinity"
   end
 
   test "to_string scientific" do
@@ -418,22 +418,22 @@ defmodule DecimalTest do
     assert Decimal.to_string(%d"-inf", :scientific)     == "-Infinity"
   end
 
-  test "to_string simple" do
-    assert Decimal.to_string(%d"2", :simple)        == "2"
-    assert Decimal.to_string(%d"300", :simple)      == "300"
-    assert Decimal.to_string(%d"4321.768", :simple) == "4321768E-3"
-    assert Decimal.to_string(%d"-53000", :simple)   == "-53000"
-    assert Decimal.to_string(%d"0.0042", :simple)   == "42E-4"
-    assert Decimal.to_string(%d"0.2", :simple)      == "2E-1"
-    assert Decimal.to_string(%d"-0.0003", :simple)  == "-3E-4"
-    assert Decimal.to_string(%d"-0", :simple)       == "-0"
-    assert Decimal.to_string(%d"nan", :simple)      == "NaN"
-    assert Decimal.to_string(%d"-nan", :simple)     == "-NaN"
-    assert Decimal.to_string(%d"-inf", :simple)     == "-Infinity"
+  test "to_string raw" do
+    assert Decimal.to_string(%d"2", :raw)        == "2"
+    assert Decimal.to_string(%d"300", :raw)      == "300"
+    assert Decimal.to_string(%d"4321.768", :raw) == "4321768E-3"
+    assert Decimal.to_string(%d"-53000", :raw)   == "-53000"
+    assert Decimal.to_string(%d"0.0042", :raw)   == "42E-4"
+    assert Decimal.to_string(%d"0.2", :raw)      == "2E-1"
+    assert Decimal.to_string(%d"-0.0003", :raw)  == "-3E-4"
+    assert Decimal.to_string(%d"-0", :raw)       == "-0"
+    assert Decimal.to_string(%d"nan", :raw)      == "NaN"
+    assert Decimal.to_string(%d"-nan", :raw)     == "-NaN"
+    assert Decimal.to_string(%d"-inf", :raw)     == "-Infinity"
   end
 
-  test "precision truncate" do
-    Decimal.with_context(Context[precision: 2, rounding: :truncate], fn ->
+  test "precision down" do
+    Decimal.with_context(Context[precision: 2, rounding: :down], fn ->
       assert Decimal.add(%d"0", %d"1.02") == d(1, 10, -1)
       assert Decimal.add(%d"0", %d"102")  == d(1, 10, 1)
       assert Decimal.add(%d"0", %d"-102") == d(-1, 10, 1)
@@ -455,17 +455,6 @@ defmodule DecimalTest do
       assert Decimal.add(%d"0", %d"1.02") == d(1, 10, -1)
       assert Decimal.add(%d"0", %d"1.10") == d(1, 11, -1)
       assert Decimal.add(%d"0", %d"-123") == d(-1, 13, 1)
-    end)
-  end
-
-  test "precision half away zero" do
-    Decimal.with_context(Context[precision: 2, rounding: :half_away_zero], fn ->
-      assert Decimal.add(%d"0", %d"1.02")  == d(1, 10, -1)
-      assert Decimal.add(%d"0", %d"1.05")  == d(1, 11, -1)
-      assert Decimal.add(%d"0", %d"-1.05") == d(-1, 11, -1)
-      assert Decimal.add(%d"0", %d"123")   == d(1, 12, 1)
-      assert Decimal.add(%d"0", %d"125")   == d(1, 13, 1)
-      assert Decimal.add(%d"0", %d"-125")  == d(-1, 13, 1)
     end)
   end
 
@@ -492,18 +481,38 @@ defmodule DecimalTest do
     end)
   end
 
+  test "precision half down" do
+    Decimal.with_context(Context[precision: 2, rounding: :half_down], fn ->
+      assert Decimal.add(%d"0", %d"1.02")  == d(1, 10, -1)
+      assert Decimal.add(%d"0", %d"1.05")  == d(1, 11, -1)
+      assert Decimal.add(%d"0", %d"-1.05") == d(-1, 11, -1)
+      assert Decimal.add(%d"0", %d"123")   == d(1, 12, 1)
+      assert Decimal.add(%d"0", %d"125")   == d(1, 13, 1)
+      assert Decimal.add(%d"0", %d"-125")  == d(-1, 13, 1)
+    end)
+  end
+
+  test "precision up" do
+    Decimal.with_context(Context[precision: 2, rounding: :up], fn ->
+      assert Decimal.add(%d"0", %d"1.02") == d(1, 11, -1)
+      assert Decimal.add(%d"0", %d"102")  == d(1, 11, 1)
+      assert Decimal.add(%d"0", %d"-102") == d(-1, 11, 1)
+      assert Decimal.add(%d"0", %d"1.1")  == d(1, 11, -1)
+    end)
+  end
+
   test "round special" do
-    assert Decimal.round(%d"inf", 2, :truncate) == d(1, :inf, 0)
-    assert Decimal.round(%d"nan", 2, :truncate) == d(1, :qNaN, 0)
+    assert Decimal.round(%d"inf", 2, :down) == d(1, :inf, 0)
+    assert Decimal.round(%d"nan", 2, :down) == d(1, :qNaN, 0)
 
     assert_raise Error, fn ->
-      Decimal.round(%d"snan", 2, :truncate)
+      Decimal.round(%d"snan", 2, :down)
     end
   end
 
-  test "round truncate" do
-    round = &Decimal.round(&1, 2, :truncate)
-    roundneg = &Decimal.round(&1, -2, :truncate)
+  test "round down" do
+    round = &Decimal.round(&1, 2, :down)
+    roundneg = &Decimal.round(&1, -2, :down)
     assert round.(%d"1.02")    == d(1, 102, -2)
     assert round.(%d"1.029")   == d(1, 102, -2)
     assert round.(%d"-1.029")  == d(-1, 102, -2)
@@ -536,19 +545,6 @@ defmodule DecimalTest do
     assert roundneg.(%d"-123") == d(-1, 2, 2)
   end
 
-  test "round half away zero" do
-    round = &Decimal.round(&1, 2, :half_away_zero)
-    roundneg = &Decimal.round(&1, -2, :half_away_zero)
-    assert round.(%d"1.02")    == d(1, 102, -2)
-    assert round.(%d"1.025")   == d(1, 103, -2)
-    assert round.(%d"-1.02")   == d(-1, 102, -2)
-    assert round.(%d"-1.025")  == d(-1, 103, -2)
-    assert roundneg.(%d"120")  == d(1, 1, 2)
-    assert roundneg.(%d"150")  == d(1, 2, 2)
-    assert roundneg.(%d"-120") == d(-1, 1, 2)
-    assert roundneg.(%d"-150") == d(-1, 2, 2)
-  end
-
   test "round half up" do
     round = &Decimal.round(&1, 2, :half_up)
     roundneg = &Decimal.round(&1, -2, :half_up)
@@ -575,6 +571,33 @@ defmodule DecimalTest do
     assert roundneg.(%d"250")  == d(1, 2, 2)
     assert roundneg.(%d"-150") == d(-1, 2, 2)
     assert roundneg.(%d"-250") == d(-1, 2, 2)
+  end
+
+  test "round half down" do
+    round = &Decimal.round(&1, 2, :half_down)
+    roundneg = &Decimal.round(&1, -2, :half_down)
+    assert round.(%d"1.02")    == d(1, 102, -2)
+    assert round.(%d"1.025")   == d(1, 103, -2)
+    assert round.(%d"-1.02")   == d(-1, 102, -2)
+    assert round.(%d"-1.025")  == d(-1, 103, -2)
+    assert roundneg.(%d"120")  == d(1, 1, 2)
+    assert roundneg.(%d"150")  == d(1, 2, 2)
+    assert roundneg.(%d"-120") == d(-1, 1, 2)
+    assert roundneg.(%d"-150") == d(-1, 2, 2)
+  end
+
+  test "round up" do
+    round = &Decimal.round(&1, 2, :up)
+    roundneg = &Decimal.round(&1, -2, :up)
+    assert round.(%d"1.02")    == d(1, 102, -2)
+    assert round.(%d"1.029")   == d(1, 103, -2)
+    assert round.(%d"-1.029")  == d(-1, 103, -2)
+    assert round.(%d"102")     == d(1, 102, 0)
+    assert round.(%d"0.001")   == d(1, 1, -2)
+    assert round.(%d"-0.001")  == d(-1, 1, -2)
+    assert roundneg.(%d"1.02") == d(1, 1, 2)
+    assert roundneg.(%d"102")  == d(1, 2, 2)
+    assert roundneg.(%d"1099") == d(1, 12, 2)
   end
 
   test "set context flags" do
