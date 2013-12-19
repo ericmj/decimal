@@ -10,7 +10,12 @@ defmodule Decimal do
   significant digits unless explicitly done so.
 
   There are also special values such as NaN and (+-)Infinity. -0 and +0 are two
-  distinct values.
+  distinct values. Some operations results are not defined and will return NaN.
+  This kind of NaN is quiet, any operation returning a number will return
+  NaN when given a quiet NaN (the NaN value will flow through all operations).
+  The other kind of NaN is signalling which is the value that can be reached
+  in `Error.result/1` when the result is NaN. Any operation given a signalling
+  return will signal `:invalid_operation`.
 
   Exceptional conditions are grouped into signals, each signal has a flag and a
   trap enabler in the context. Whenever a signal is triggered it's flag is set
@@ -20,13 +25,25 @@ defmodule Decimal do
   The specifications influencing the API:
   * [IBM's General Decimal Arithmetic Specification](http://speleotrove.com/decimal/decarith.html)
   * [IEEE standard 854-1987](http://754r.ucbtest.org/standards/854.pdf)
+
+  This implementation follows the above standards as closely as possible. But at
+  some places the implementation diverges from the specification. The reasons
+  are different for each case but may be that the specification doesn't map to
+  this environment, ease of implementation or that API will be nicer. Still, the
+  implementation is close enough that the specifications can be seen as
+  additional documentation that can be used when things are unclear.
+
+  The specification models the sign of the number as 1, for a negative number,
+  and 0 for a positive number. Internally this implementation models the sign as
+  1 or -1 such that the complete number will be: `sign * coefficient *
+  10^exponent` and will refer to the sign in documentation as either *positive*
+  or *negative*.
   """
 
-  # TODO:
-  # Explain where we diverge from spec
-  # sNaN vs qNaN (sNaN signals and qNaN "falls through")
-
-  @opaque t :: { Decimal, 1 | -1, non_neg_integer, integer }
+  @opaque t :: { Decimal,
+                 1 | -1,
+                 non_neg_integer | :qNaN | :sNaN | :inf,
+                 integer }
 
   @type signal :: :invalid_operation |
                   :division_by_zero |
@@ -605,12 +622,12 @@ defmodule Decimal do
   end
 
   @doc """
-  Creates a new decimal value from a string representation, an integer or a
+  Creates a new decimal number from a string representation, an integer or a
   floating point number. Floating point numbers will be converted to decimal
   numbers with `:io_lib_format.fwrite_g/1`.
 
-  A decimal number will always be created exactly as specified, it will not be
-  rounded with the context.
+  A decimal number will always be created exactly as specified with all digits
+  kept - it will not be rounded with the context.
 
   ## BNFC
 
@@ -636,9 +653,21 @@ defmodule Decimal do
     do: parse(binary)
 
   @doc """
+  Creates a new decimal number from the sign, coefficient and exponent such that
+  the number will be: `sign * coefficient * 10^exponent`.
+
+  A decimal number will always be created exactly as specified with all digits
+  kept - it will not be rounded with the context.
+  """
+  @spec new(1 | -1, non_neg_integer | :qNaN | :sNaN | :inf, integer) :: t
+  def new(sign, coefficient, exponent) do
+    dec(sign: sign, coef: coefficient, exp: exponent)
+  end
+
+  @doc """
   Converts given number to its string representation.
   """
-  @spec to_string(t, :scientific | :normal | :raw)
+  @spec to_string(t, :scientific | :normal | :raw) :: String.t
   def to_string(num, type // :scientific)
 
   def to_string(dec(sign: sign, coef: :qNaN), _type) do
@@ -727,7 +756,7 @@ defmodule Decimal do
   @doc """
   Runs function with given context.
   """
-  @spec with_context(Context.t, (() -> x) :: x when x: var
+  @spec with_context(Context.t, (() -> x)) :: x when x: var
   def with_context(Context[] = context, fun) when is_function(fun, 0) do
     old = set_context(context)
     try do
