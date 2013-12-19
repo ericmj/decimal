@@ -5,7 +5,7 @@ defmodule Decimal.Mixfile do
     [ app: :decimal,
       version: "0.0.1",
       elixir: "~> 0.12.0",
-      deps: deps ]
+      deps: deps(Mix.env) ]
   end
 
   # Configuration for the OTP application
@@ -18,7 +18,9 @@ defmodule Decimal.Mixfile do
   #
   # To specify particular versions, regardless of the tag, do:
   # { :barbat, "~> 0.1", github: "elixir-lang/barbat.git" }
-  defp deps do
-    []
+  defp deps(:dev) do
+    [ { :ex_doc, github: "elixir-lang/ex_doc" } ]
   end
+
+  defp deps(_), do: []
 end

@@ -15,7 +15,7 @@ defmodule Decimal do
   NaN when given a quiet NaN (the NaN value will flow through all operations).
   The other kind of NaN is signalling which is the value that can be reached
   in `Error.result/1` when the result is NaN. Any operation given a signalling
-  return will signal `:invalid_operation`.
+  NaN return will signal `:invalid_operation`.
 
   Exceptional conditions are grouped into signals, each signal has a flag and a
   trap enabler in the context. Whenever a signal is triggered it's flag is set
@@ -23,6 +23,7 @@ defmodule Decimal do
   enabled `Decimal.Error` will be raised.
 
   The specifications influencing the API:
+
   * [IBM's General Decimal Arithmetic Specification](http://speleotrove.com/decimal/decarith.html)
   * [IEEE standard 854-1987](http://754r.ucbtest.org/standards/854.pdf)
 
@@ -256,7 +257,7 @@ defmodule Decimal do
   * If one number is -Infinity and the other +Infinity `:invalid_operation` will
   be signalled.
   """
-  @spec add(t, t) :: t
+  @spec sub(t, t) :: t
   def sub(num1, dec(sign: sign) = d2) do
     add(num1, dec(d2, sign: -sign))
   end
@@ -348,7 +349,7 @@ defmodule Decimal do
   * If both numbers are (+-)0 `:invalid_operation` is signalled.
   * If second number (denominator) is (+-)0 `:division_by_zero` is signalled.
   """
-  @spec div(t, t) :: t
+  @spec div_int(t, t) :: t
   def div_int(num1, num2) do
     div_rem(num1, num2) |> elem(0)
   end
@@ -362,6 +363,7 @@ defmodule Decimal do
   * If both numbers are (+-)0 `:invalid_operation` is signalled.
   * If second number (denominator) is (+-)0 `:division_by_zero` is signalled.
   """
+  @spec rem(t, t) :: t
   def rem(num1, num2) do
     div_rem(num1, num2) |> elem(1)
   end
@@ -376,6 +378,7 @@ defmodule Decimal do
   * If both numbers are (+-)0 `:invalid_operation` is signalled.
   * If second number (denominator) is (+-)0 `:division_by_zero` is signalled.
   """
+  @spec div_rem(t, t) :: { t, t }
   def div_rem(dec() = d1, dec() = d2) when is_snan(d1) or is_snan(d2) do
     d = first_nan(d1, d2)
     { error(:invalid_operation, "operation on NaN", d),
@@ -883,13 +886,6 @@ defmodule Decimal do
     do: num
   defp int_pow10(num, pow) when pow > 0,
     do: int_pow10(10 * num, pow - 1)
-
-  def calc_frac(_coef, 0, frac, _fexp), do: frac
-
-  def calc_frac(coef, exp, frac, fexp) do
-    frac = frac + fexp * Kernel.rem(coef, 10)
-    calc_frac(Kernel.div(coef, 10), exp + 1, frac, fexp * 10)
-  end
 
   ## ROUNDING ##
 
