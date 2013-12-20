@@ -22,7 +22,7 @@ defmodule Decimal do
   in the context and will be set until explicitly cleared. If the signal is trap
   enabled `Decimal.Error` will be raised.
 
-  The specifications influencing the API:
+  ## Specifications
 
   * [IBM's General Decimal Arithmetic Specification](http://speleotrove.com/decimal/decarith.html)
   * [IEEE standard 854-1987](http://754r.ucbtest.org/standards/854.pdf)
@@ -39,6 +39,12 @@ defmodule Decimal do
   1 or -1 such that the complete number will be: `sign * coefficient *
   10^exponent` and will refer to the sign in documentation as either *positive*
   or *negative*.
+
+  There is currently no maximum or minimum values for the exponent. Because of
+  that all numbers are "normal". This means that when an operation should return
+  a number that "underflow" 0 is returned instead of Etiny. This may happen when
+  dividing a number with infinity. Additionally, overflow, underflow and clamped
+  may never be signalled.
   """
 
   @opaque t :: { Decimal,

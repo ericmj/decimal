@@ -5,7 +5,13 @@ defmodule Decimal.Mixfile do
     [ app: :decimal,
       version: "0.0.1",
       elixir: "~> 0.12.0",
-      deps: deps(Mix.env) ]
+      deps: deps(Mix.env),
+      name: "Decimal",
+      source_url: "https://github.com/ericmj/decimal",
+      docs: fn -> [
+        source_ref: System.cmd("git rev-parse --verify --quiet HEAD"),
+        readme: true ]
+      end ]
   end
 
   # Configuration for the OTP application
