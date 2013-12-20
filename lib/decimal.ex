@@ -669,6 +669,11 @@ defmodule Decimal do
 
   @doc """
   Converts given number to its string representation.
+
+  ## Options
+  * `:scientific` - Number converted to scientific notation.
+  * `:normal` - Number converted without a exponent.
+  * `:raw` - Number converted to it's raw, internal format.
   """
   @spec to_string(t, :scientific | :normal | :raw) :: String.t
   def to_string(num, type // :scientific)
@@ -723,7 +728,7 @@ defmodule Decimal do
           list = :lists.duplicate(diff, ?0) ++ list
           list = List.insert_at(list, 1, ?.)
         else
-          list = List.insert_at(list, abs_exp + 1, ?.)
+          list = List.insert_at(list, exp - 1, ?.)
         end
 
       true ->
