@@ -19,7 +19,7 @@ After you are done, run `mix deps.get` in your shell to fetch and compile Decima
 ```iex
 iex> alias Decimal, as: D
 nil
-iex> D.add(D.new(21), D.new(21))
+iex> D.add(D.new(6), D.new(7))
 #Decimal<42>
 iex> D.div(D.new(1), D.new(3))
 #Decimal<0.333333333>
@@ -30,9 +30,86 @@ iex> D.div(D.new(1), D.new(3))
 
 ### Using the context
 
-### Flags and traps
+The context specifies the maximum precision of the result of all calculations,
+the rounding algorithm if the result has a higher precision than the specified
+maximum. It also holds the list of set of trap enablers and the currently set
+flags.
+
+The context is stored in the process dictionary, this means that you don't have
+to pass the context around explicitly and the flags will be updated
+automatically.
+
+The precision is used to limit the amount of decimal digits in the coefficient:
+
+```iex
+iex> D.set_context(D.get_context.precision(9))
+:ok
+iex> D.div(D.new(1), D.new(3))
+#Decimal<0.333333333>
+iex> D.set_context(D.get_context.precision(2))
+iex> D.div(D.new(1), D.new(3))
+#Decimal<0.33>
+```
+
+The rounding algorithm specifies how the result of an operation shall be rounded
+when it get be represented with the current precision:
+
+```iex
+iex> D.set_context(D.get_context.rounding(:half_up))
+:ok
+iex> D.div(D.new(31), D.new(2))
+#Decimal<16>
+iex> D.set_context(D.get_context.rounding(:floor))
+iex> D.div(D.new(31), D.new(2))
+#Decimal<15>
+```
+
+### Flags and trap enablers
+
+When an exceptional condition is signalled its flag is set in the context and if
+if the trap enabler is set `Decimal.Error` will be raised.
+
+```iex
+iex> D.get_context.traps
+[:invalid_operation, :division_by_zero]
+iex> D.get_context.flags
+[]
+iex> D.div(D.new(31), D.new(2))
+#Decimal<15>
+iex> D.get_context.flags
+[:inexact, :rounded]
+```
+
+`:inexact` and `:rounded` were signalled above because the result of the
+operation was inexact given the context's precision and had to be rounded to fit
+the precision. `Decimal.Error` was not raised because the signals' trap enablers
+weren't set. We can, however, set the trap enabler if we what this condition to
+raise.
+
+```iex
+iex> D.set_context(D.get_context.update_traps((&1 ++ [:inexact]))
+:ok
+iex> D.div(D.new(31), D.new(2))
+** (Decimal.Error)
+```
+
+The default trap enablers, such as `:division_by_zero` can be unset:
+
+iex> D.get_context.traps
+[:invalid_operation, :division_by_zero]
+iex> D.div(D.new(42), D.new(0))
+** (Decimal.Error)
+iex> D.set_context(D.get_context.traps([]).flags([]))
+:ok
+iex> D.div(D.new(42), D.new(0))
+#Decimal<Infinity>
+iex> D.get_context.flags
+[:division_by_zero]
+```
 
 ### Mitigating rounding errors
+
+TODO
 
 ## License
 
