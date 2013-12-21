@@ -186,6 +186,14 @@ defmodule DecimalTest do
       assert Decimal.div(%d"2", %d"-5")      == d(-1, 4, -1)
     end)
 
+    Decimal.with_context(Context[precision: 2, rounding: :half_up], fn ->
+      assert Decimal.div(%d"31", %d"2")      == d(1, 16, 0)
+    end)
+
+    Decimal.with_context(Context[precision: 2, rounding: :floor], fn ->
+      assert Decimal.div(%d"31", %d"2")      == d(1, 15, 0)
+    end)
+
     assert Decimal.div(%d"0", %d"3")         == d(1, 0, 0)
     assert Decimal.div(%d"-0", %d"3")        == d(-1, 0, 0)
     assert Decimal.div(%d"0", %d"-3")        == d(-1, 0, 0)

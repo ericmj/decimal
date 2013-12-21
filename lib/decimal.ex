@@ -337,7 +337,7 @@ defmodule Decimal do
         signals = []
       else
         context = Context[] = get_context
-        prec10 = int_pow10(1, context.precision-1)
+        prec10 = int_pow10(1, context.precision)
 
         { coef1, coef2, adjust } = div_adjust(coef1, coef2, 0)
         { coef, adjust, _rem, signals } = div_calc(coef1, coef2, 0, adjust, prec10)
@@ -442,7 +442,7 @@ defmodule Decimal do
 
           div_coef = int_pow10(coef, exp)
           context = Context[] = get_context
-          prec10 = int_pow10(1, context.precision-1)
+          prec10 = int_pow10(1, context.precision)
 
           if div_coef > prec10 do
             error(:invalid_operation, "integer division impossible, quotient too large", dec(coef: :NaN))
