@@ -30,7 +30,7 @@ iex> D.div(D.new(1), D.new(3))
 
 ### Using the context
 
-The context specifies the maximum precision of the result of all calculations,
+The context specifies the maximum precision of the result of calculations and
 the rounding algorithm if the result has a higher precision than the specified
 maximum. It also holds the list of set of trap enablers and the currently set
 flags.
@@ -38,6 +38,26 @@ flags.
 The context is stored in the process dictionary, this means that you don't have
 to pass the context around explicitly and the flags will be updated
 automatically.
+
+The context is accessed with `Decimal.get_context/0` and set with
+`Decimal.set_context/1`. It can also be temporarily set with
+`Decimal.with_context/2`.
+
+```iex
+iex> D.get_context
+Decimal.Context[precision: 9, rounding: :half_up, flags: [],
+ traps: [:invalid_operation, :division_by_zero]]
+iex> D.with_context Context[precision: 2], fn -> IO.inspect D.get_context end
+Decimal.Context[precision: 2, rounding: :half_up, flags: [],
+ traps: [:invalid_operation, :division_by_zero]]
+:ok
+iex> D.set_context(D.get_context.traps([]))
+:ok
+iex> Decimal.get_context
+Decimal.Context[precision: 9, rounding: :half_up, flags: [], traps: []]
+```
+
+### Precision and rounding
 
 The precision is used to limit the amount of decimal digits in the coefficient:
 
@@ -47,6 +67,7 @@ iex> D.set_context(D.get_context.precision(9))
 iex> D.div(D.new(1), D.new(3))
 #Decimal<0.333333333>
 iex> D.set_context(D.get_context.precision(2))
+:ok
 iex> D.div(D.new(1), D.new(3))
 #Decimal<0.33>
 ```
@@ -60,6 +81,7 @@ iex> D.set_context(D.get_context.rounding(:half_up))
 iex> D.div(D.new(31), D.new(2))
 #Decimal<16>
 iex> D.set_context(D.get_context.rounding(:floor))
+:ok
 iex> D.div(D.new(31), D.new(2))
 #Decimal<15>
 ```
@@ -95,6 +117,7 @@ iex> D.div(D.new(31), D.new(2))
 
 The default trap enablers, such as `:division_by_zero` can be unset:
 
+```iex
 iex> D.get_context.traps
 [:invalid_operation, :division_by_zero]
 iex> D.div(D.new(42), D.new(0))
