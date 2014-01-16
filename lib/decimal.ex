@@ -180,19 +180,19 @@ defmodule Decimal do
   @spec is_nan(Macro.t) :: Macro.t
   defmacro is_nan(num) do
     quote do
-      dec(unquote(num), :coef) in [:sNaN, :qNaN]
+      elem(unquote(num), 2) in [:sNaN, :qNaN]
     end
   end
 
   defmacrop is_qnan(num) do
     quote do
-      dec(unquote(num), :coef) == :qNaN
+      elem(unquote(num), 2) == :qNaN
     end
   end
 
   defmacrop is_snan(num) do
     quote do
-      dec(unquote(num), :coef) == :sNaN
+      elem(unquote(num), 2) == :sNaN
     end
   end
 
@@ -204,8 +204,32 @@ defmodule Decimal do
   @spec is_nan(Macro.t) :: Macro.t
   defmacro is_inf(num) do
     quote do
-      dec(unquote(num), :coef) == :inf
+      elem(unquote(num), 2) == :inf
     end
+  end
+
+  @doc """
+  Returns `true` if argument is a decimal number; otherwise `false`.
+
+  Allowed in guard tests.
+  """
+  @spec is_decimal(Macro.t) :: Macro.t
+  defmacro is_decimal(arg) do
+    if __CALLER__.context == :guard do
+      quote do
+        elem(unquote(arg), 0) == Decimal and tuple_size(unquote(arg)) == 4
+      end
+    else
+      quote do
+        Decimal.sigh(unquote(arg))
+      end
+    end
+  end
+
+  @doc false
+  def sigh(arg) do
+    # Workaround for: http://erlang.org/pipermail/erlang-questions/2009-March/042365.html
+    is_tuple(arg) and elem(arg, 0) == Decimal and tuple_size(arg) == 4
   end
 
   @doc """
@@ -777,7 +801,7 @@ defmodule Decimal do
   """
   @spec with_context(Context.t, (() -> x)) :: x when x: var
   def with_context(Context[] = context, fun) when is_function(fun, 0) do
-    old = set_context(context)
+    old = Process.put(@context_key, context)
     try do
       fun.()
     after

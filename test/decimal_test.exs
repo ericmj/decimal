@@ -3,6 +3,7 @@ defmodule DecimalTest do
 
   alias Decimal.Context
   alias Decimal.Error
+  require Decimal
 
   defrecordp :dec, Decimal, [sign: 1, coef: 0, exp: 0]
 
@@ -16,6 +17,30 @@ defmodule DecimalTest do
     quote do
       Decimal.new(unquote(str))
     end
+  end
+
+  test "macros" do
+    assert Decimal.is_nan(%d"nan")
+    refute Decimal.is_nan(%d"0")
+
+    assert Decimal.is_inf(%d"inf")
+    refute Decimal.is_inf(%d"0")
+
+    assert Decimal.is_decimal(%d"nan")
+    assert Decimal.is_decimal(%d"inf")
+    assert Decimal.is_decimal(%d"0")
+    refute Decimal.is_decimal(42)
+    refute Decimal.is_decimal("42")
+
+    assert(case %d"42" do
+      x when Decimal.is_decimal(x) -> true
+      _ -> false
+    end)
+
+    refute(case "42" do
+      x when Decimal.is_decimal(x) -> true
+      _ -> false
+    end)
   end
 
   test "basic conversion" do
