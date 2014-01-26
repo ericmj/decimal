@@ -20,7 +20,7 @@ After you are done, run `mix deps.get` in your shell to fetch and compile Decima
 iex> alias Decimal, as: D
 nil
 iex> D.add(D.new(6), D.new(7))
-#Decimal<42>
+#Decimal<13>
 iex> D.div(D.new(1), D.new(3))
 #Decimal<0.333333333>
 
