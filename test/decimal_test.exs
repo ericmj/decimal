@@ -37,11 +37,15 @@ defmodule DecimalTest do
       _ -> false
     end)
 
-    refute(case "42" do
+
+    refute(case fortytwo do
       x when Decimal.is_decimal(x) -> true
       _ -> false
     end)
   end
+
+  # squelch warning
+  defp fortytwo, do: "42"
 
   test "basic conversion" do
     assert Decimal.new(d(-1, 3, 2)) == d(-1, 3, 2)

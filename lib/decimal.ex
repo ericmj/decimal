@@ -163,7 +163,7 @@ defmodule Decimal do
                 traps: [Decimal.signal]
   end
 
-  defmacrop error(flags, reason, result, context // nil) do
+  defmacrop error(flags, reason, result, context \\ nil) do
     quote bind_quoted: binding do
       case handle_error(flags, reason, result, context) do
         { :ok, result } -> result
@@ -229,7 +229,7 @@ defmodule Decimal do
   @doc false
   def sigh(arg) do
     # Workaround for: http://erlang.org/pipermail/erlang-questions/2009-March/042365.html
-    is_tuple(arg) and elem(arg, 0) == Decimal and tuple_size(arg) == 4
+    is_tuple(arg) and tuple_size(arg) == 4 and elem(arg, 0) == Decimal
   end
 
   @doc """
@@ -638,7 +638,7 @@ defmodule Decimal do
   many digits to the left of the decimal point will be zero.
   """
   @spec round(t, integer, rounding) :: t
-  def round(num, places // 0, mode // :half_up)
+  def round(num, places \\ 0, mode \\ :half_up)
 
   def round(dec(coef: :sNaN) = num, _, _) do
     error(:invalid_operation, "operation on NaN", num)
@@ -711,7 +711,7 @@ defmodule Decimal do
   * `:raw` - Number converted to it's raw, internal format.
   """
   @spec to_string(t, :scientific | :normal | :raw) :: String.t
-  def to_string(num, type // :scientific)
+  def to_string(num, type \\ :scientific)
 
   def to_string(dec(sign: sign, coef: :qNaN), _type) do
     if sign == 1, do: "NaN", else: "-NaN"
@@ -994,7 +994,7 @@ defmodule Decimal do
 
   ## CONTEXT ##
 
-  defp context(num, signals // []) do
+  defp context(num, signals \\ []) do
     ctxt = Context[] = get_context
     { result, prec_signals } = precision(num, ctxt.precision, ctxt.rounding)
     error(put_uniq(signals, prec_signals), nil, result, ctxt)
