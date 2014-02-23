@@ -4,8 +4,9 @@ defmodule Decimal.Mixfile do
   def project do
     [ app: :decimal,
       version: "0.0.1",
-      elixir: "~> 0.12.3",
+      elixir: "~> 0.12.4 or ~> 0.13.0-dev",
       deps: deps(Mix.env),
+      build_per_environment: false,
       name: "Decimal",
       source_url: "https://github.com/ericmj/decimal",
       docs: fn -> [
