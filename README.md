@@ -1,5 +1,7 @@
 # Decimal
 
+[![Build Status](https://travis-ci.org/ericmj/decimal.svg?branch=master)](https://travis-ci.org/ericmj/decimal)
+
 Arbitrary precision decimal arithmetic for Elixir.
 
 Documentation: http://ericmj.github.io/decimal
