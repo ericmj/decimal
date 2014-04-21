@@ -6,16 +6,16 @@ defmodule Decimal.Mixfile do
   def project do
     [ app: :decimal,
       version: "0.1.2-dev",
-      elixir: "~> 0.13.0",
+      elixir: "~> 0.13.1-dev",
       deps: deps(Mix.env),
       build_per_environment: false,
       name: "Decimal",
       source_url: "https://github.com/ericmj/decimal",
-      description: description,
       docs: fn -> [
         source_ref: System.cmd("git rev-parse --verify --quiet HEAD"),
         readme: true ]
       end,
+      description: description,
       package: package ]
   end
 

@@ -1,7 +1,9 @@
+additional_files = ["README.md"]
+
 System.cmd "git clone --branch gh-pages `git config --get remote.origin.url` docs"
 
 Mix.Task.run "docs"
-# Enum.each(additional_files, &File.cp!(&1, Path.join("docs", &1)))
+Enum.each(additional_files, &File.cp!(&1, Path.join("docs", &1)))
 
 File.cd! "docs", fn ->
   System.cmd "git add -A ."

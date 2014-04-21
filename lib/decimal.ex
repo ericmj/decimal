@@ -686,7 +686,7 @@ defmodule Decimal do
   def new(int) when is_integer(int),
     do: dec(sign: (if int < 0, do: -1, else: 1), coef: Kernel.abs(int))
   def new(float) when is_float(float),
-    do: new(:io_lib_format.fwrite_g(float) |> iolist_to_binary)
+    do: new(:io_lib_format.fwrite_g(float) |> iodata_to_binary)
   def new(binary) when is_binary(binary),
     do: parse(binary)
 
@@ -744,7 +744,7 @@ defmodule Decimal do
       list = [?-|list]
     end
 
-    iolist_to_binary(list)
+    iodata_to_binary(list)
   end
 
   def to_string(dec(sign: sign, coef: coef, exp: exp), :scientific) do
@@ -779,7 +779,7 @@ defmodule Decimal do
       list = [?-|list]
     end
 
-    iolist_to_binary(list)
+    iodata_to_binary(list)
   end
 
   def to_string(dec(sign: sign, coef: coef, exp: exp), :raw) do
@@ -793,7 +793,7 @@ defmodule Decimal do
       str = [str, "E", integer_to_binary(exp)]
     end
 
-    iolist_to_binary(str)
+    iodata_to_binary(str)
   end
 
   @doc """
