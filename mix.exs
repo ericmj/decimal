@@ -1,33 +1,44 @@
+Code.ensure_loaded?(Hex) and Hex.start
+
 defmodule Decimal.Mixfile do
   use Mix.Project
 
   def project do
     [ app: :decimal,
       version: "0.1.1-dev",
-      elixir: "~> 0.12.4 or ~> 0.13.0-dev",
+      elixir: "~> 0.13.0",
       deps: deps(Mix.env),
       build_per_environment: false,
       name: "Decimal",
       source_url: "https://github.com/ericmj/decimal",
+      description: description,
       docs: fn -> [
         source_ref: System.cmd("git rev-parse --verify --quiet HEAD"),
         readme: true ]
-      end ]
+      end,
+      package: package ]
   end
 
-  # Configuration for the OTP application
   def application do
     []
   end
 
-  # Returns the list of dependencies in the format:
-  # { :foobar, git: "https://github.com/elixir-lang/foobar.git", tag: "0.1" }
-  #
-  # To specify particular versions, regardless of the tag, do:
-  # { :barbat, "~> 0.1", github: "elixir-lang/barbat.git" }
   defp deps(:dev) do
     [ { :ex_doc, github: "elixir-lang/ex_doc" } ]
   end
 
   defp deps(_), do: []
+
+  defp description do
+    """
+    Arbitrary precision decimal arithmetic for Elixir.
+    """
+  end
+
+  defp package do
+    [ contributors: ["Eric Meadows-Jönsson"],
+      licenses: ["Apache 2.0"],
+      links: [ { "Github", "https://github.com/ericmj/decimal" },
+               { "Documentation", "http://ericmj.github.io/decimal" } ] ]
+  end
 end
