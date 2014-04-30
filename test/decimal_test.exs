@@ -9,7 +9,7 @@ defmodule DecimalTest do
 
   defmacrop d(sign, coef, exp) do
     quote do
-      dec(sign: unquote(sign), coef: unquote(coef), exp: unquote(exp))
+      %Decimal{sign: unquote(sign), coef: unquote(coef), exp: unquote(exp)}
     end
   end
 
@@ -19,33 +19,19 @@ defmodule DecimalTest do
     end
   end
 
-  test "macros" do
-    assert Decimal.is_nan(~d"nan")
-    refute Decimal.is_nan(~d"0")
+  test "test functions" do
+    assert Decimal.nan?(~d"nan")
+    refute Decimal.nan?(~d"0")
 
-    assert Decimal.is_inf(~d"inf")
-    refute Decimal.is_inf(~d"0")
+    assert Decimal.inf?(~d"inf")
+    refute Decimal.inf?(~d"0")
 
-    assert Decimal.is_decimal(~d"nan")
-    assert Decimal.is_decimal(~d"inf")
-    assert Decimal.is_decimal(~d"0")
-    refute Decimal.is_decimal(42)
-    refute Decimal.is_decimal("42")
-
-    assert(case ~d"42" do
-      x when Decimal.is_decimal(x) -> true
-      _ -> false
-    end)
-
-
-    refute(case fortytwo do
-      x when Decimal.is_decimal(x) -> true
-      _ -> false
-    end)
+    assert Decimal.decimal?(~d"nan")
+    assert Decimal.decimal?(~d"inf")
+    assert Decimal.decimal?(~d"0")
+    refute Decimal.decimal?(42)
+    refute Decimal.decimal?("42")
   end
-
-  # squelch warning
-  defp fortytwo, do: "42"
 
   test "basic conversion" do
     assert Decimal.new(d(-1, 3, 2)) == d(-1, 3, 2)
@@ -151,7 +137,7 @@ defmodule DecimalTest do
     assert Decimal.add(~d"2", ~d"-2")        == d(1, 0, 0)
     assert Decimal.add(~d"5", ~d"nan")       == d(1, :qNaN, 0)
 
-    Decimal.with_context(Context[precision: 5, rounding: :floor], fn ->
+    Decimal.with_context(%Context{precision: 5, rounding: :floor}, fn ->
       Decimal.add(~d"2", ~d"-2") == d(-1, 0, 0)
     end)
 
@@ -176,7 +162,7 @@ defmodule DecimalTest do
     assert Decimal.sub(~d"-0", ~d"-0")       == d(1, 0, 0)
     assert Decimal.add(~d"5", ~d"nan")       == d(1, :qNaN, 0)
 
-    Decimal.with_context(Context[precision: 5, rounding: :floor], fn ->
+    Decimal.with_context(%Context{precision: 5, rounding: :floor}, fn ->
       Decimal.sub(~d"2", ~d"2") == d(-1, 0, 0)
     end)
 
@@ -205,7 +191,7 @@ defmodule DecimalTest do
   end
 
   test "div" do
-    Decimal.with_context(Context[precision: 5, rounding: :half_up], fn ->
+    Decimal.with_context(%Context{precision: 5, rounding: :half_up}, fn ->
       assert Decimal.div(~d"1", ~d"3")       == d(1, 33333, -5)
       assert Decimal.div(~d"42", ~d"2")      == d(1, 21, 0)
       assert Decimal.div(~d"123", ~d"12345") == d(1, 99635, -7)
@@ -215,11 +201,11 @@ defmodule DecimalTest do
       assert Decimal.div(~d"2", ~d"-5")      == d(-1, 4, -1)
     end)
 
-    Decimal.with_context(Context[precision: 2, rounding: :half_up], fn ->
+    Decimal.with_context(%Context{precision: 2, rounding: :half_up}, fn ->
       assert Decimal.div(~d"31", ~d"2")      == d(1, 16, 0)
     end)
 
-    Decimal.with_context(Context[precision: 2, rounding: :floor], fn ->
+    Decimal.with_context(%Context{precision: 2, rounding: :floor}, fn ->
       assert Decimal.div(~d"31", ~d"2")      == d(1, 15, 0)
     end)
 
@@ -364,7 +350,7 @@ defmodule DecimalTest do
   end
 
   test "plus" do
-    Decimal.with_context(Context[precision: 2], fn ->
+    Decimal.with_context(%Context{precision: 2}, fn ->
       assert Decimal.plus(~d"0")    == d(1, 0, 0)
       assert Decimal.plus(~d"5")    == d(1, 5, 0)
       assert Decimal.plus(~d"123")  == d(1, 12, 1)
@@ -479,7 +465,7 @@ defmodule DecimalTest do
   end
 
   test "precision down" do
-    Decimal.with_context(Context[precision: 2, rounding: :down], fn ->
+    Decimal.with_context(%Context{precision: 2, rounding: :down}, fn ->
       assert Decimal.add(~d"0", ~d"1.02") == d(1, 10, -1)
       assert Decimal.add(~d"0", ~d"102")  == d(1, 10, 1)
       assert Decimal.add(~d"0", ~d"-102") == d(-1, 10, 1)
@@ -488,7 +474,7 @@ defmodule DecimalTest do
   end
 
   test "precision ceiling" do
-    Decimal.with_context(Context[precision: 2, rounding: :ceiling], fn ->
+    Decimal.with_context(%Context{precision: 2, rounding: :ceiling}, fn ->
       assert Decimal.add(~d"0", ~d"1.02") == d(1, 11, -1)
       assert Decimal.add(~d"0", ~d"102")  == d(1, 11, 1)
       assert Decimal.add(~d"0", ~d"-102") == d(-1, 10, 1)
@@ -497,7 +483,7 @@ defmodule DecimalTest do
   end
 
   test "precision floor" do
-    Decimal.with_context(Context[precision: 2, rounding: :floor], fn ->
+    Decimal.with_context(%Context{precision: 2, rounding: :floor}, fn ->
       assert Decimal.add(~d"0", ~d"1.02") == d(1, 10, -1)
       assert Decimal.add(~d"0", ~d"1.10") == d(1, 11, -1)
       assert Decimal.add(~d"0", ~d"-123") == d(-1, 13, 1)
@@ -505,7 +491,7 @@ defmodule DecimalTest do
   end
 
   test "precision half up" do
-    Decimal.with_context(Context[precision: 2, rounding: :half_up], fn ->
+    Decimal.with_context(%Context{precision: 2, rounding: :half_up}, fn ->
       assert Decimal.add(~d"0", ~d"1.02")  == d(1, 10, -1)
       assert Decimal.add(~d"0", ~d"1.05")  == d(1, 11, -1)
       assert Decimal.add(~d"0", ~d"-1.05") == d(-1, 10, -1)
@@ -517,7 +503,7 @@ defmodule DecimalTest do
   end
 
   test "precision half even" do
-    Decimal.with_context(Context[precision: 2, rounding: :half_even], fn ->
+    Decimal.with_context(%Context{precision: 2, rounding: :half_even}, fn ->
       assert Decimal.add(~d"0", ~d"1.0")   == d(1, 10, -1)
       assert Decimal.add(~d"0", ~d"123")   == d(1, 12, 1)
       assert Decimal.add(~d"0", ~d"6.66")  == d(1, 67, -1)
@@ -528,7 +514,7 @@ defmodule DecimalTest do
   end
 
   test "precision half down" do
-    Decimal.with_context(Context[precision: 2, rounding: :half_down], fn ->
+    Decimal.with_context(%Context{precision: 2, rounding: :half_down}, fn ->
       assert Decimal.add(~d"0", ~d"1.02")  == d(1, 10, -1)
       assert Decimal.add(~d"0", ~d"1.05")  == d(1, 11, -1)
       assert Decimal.add(~d"0", ~d"-1.05") == d(-1, 11, -1)
@@ -539,7 +525,7 @@ defmodule DecimalTest do
   end
 
   test "precision up" do
-    Decimal.with_context(Context[precision: 2, rounding: :up], fn ->
+    Decimal.with_context(%Context{precision: 2, rounding: :up}, fn ->
       assert Decimal.add(~d"0", ~d"1.02") == d(1, 11, -1)
       assert Decimal.add(~d"0", ~d"102")  == d(1, 11, 1)
       assert Decimal.add(~d"0", ~d"-102") == d(-1, 11, 1)
@@ -647,7 +633,7 @@ defmodule DecimalTest do
   end
 
   test "set context flags" do
-    Decimal.with_context(Context[precision: 2], fn ->
+    Decimal.with_context(%Context{precision: 2}, fn ->
       assert [] = Decimal.get_context.flags
       Decimal.add(~d"2", ~d"2")
       assert [] = Decimal.get_context.flags
@@ -657,7 +643,7 @@ defmodule DecimalTest do
       assert :inexact in Decimal.get_context.flags
     end)
 
-    Decimal.with_context(Context[precision: 2], fn ->
+    Decimal.with_context(%Context{precision: 2}, fn ->
       assert [] = Decimal.get_context.flags
       assert_raise Error, fn ->
         assert Decimal.mult(~d"inf", ~d"0")
@@ -667,7 +653,7 @@ defmodule DecimalTest do
   end
 
   test "traps" do
-    Decimal.with_context(Context[traps: []], fn ->
+    Decimal.with_context(%Context{traps: []}, fn ->
      assert Decimal.mult(~d"inf", ~d"0") == d(1, :qNaN, 0)
      assert Decimal.div(~d"5", ~d"0") == d(1, :inf, 0)
      assert :division_by_zero in Decimal.get_context.flags
