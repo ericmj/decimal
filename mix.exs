@@ -5,7 +5,7 @@ defmodule Decimal.Mixfile do
 
   def project do
     [ app: :decimal,
-      version: "0.2.0-dev",
+      version: "0.2.0",
       elixir: "~> 0.13.1",
       deps: deps,
       build_per_environment: false,
