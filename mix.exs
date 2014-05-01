@@ -7,7 +7,7 @@ defmodule Decimal.Mixfile do
     [ app: :decimal,
       version: "0.2.0-dev",
       elixir: "~> 0.13.1",
-      deps: deps(Mix.env),
+      deps: deps,
       build_per_environment: false,
       name: "Decimal",
       source_url: "https://github.com/ericmj/decimal",
@@ -23,11 +23,9 @@ defmodule Decimal.Mixfile do
     []
   end
 
-  defp deps(:dev) do
-    [ { :ex_doc, github: "elixir-lang/ex_doc" } ]
+  defp deps do
+    [ { :ex_doc, github: "elixir-lang/ex_doc", only: :dev } ]
   end
-
-  defp deps(_), do: []
 
   defp description do
     """
