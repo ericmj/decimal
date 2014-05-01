@@ -5,8 +5,6 @@ defmodule DecimalTest do
   alias Decimal.Error
   require Decimal
 
-  defrecordp :dec, Decimal, [sign: 1, coef: 0, exp: 0]
-
   defmacrop d(sign, coef, exp) do
     quote do
       %Decimal{sign: unquote(sign), coef: unquote(coef), exp: unquote(exp)}

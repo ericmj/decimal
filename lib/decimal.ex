@@ -161,8 +161,8 @@ defmodule Decimal do
   defmacrop error(flags, reason, result, context \\ nil) do
     quote bind_quoted: binding do
       case handle_error(flags, reason, result, context) do
-        { :ok, result } -> result
-        { :error, error } -> raise Error, error
+        {:ok, result} -> result
+        {:error, error} -> raise Error, error
       end
     end
   end
@@ -242,7 +242,7 @@ defmodule Decimal do
   end
 
   def add(%Decimal{sign: sign1, coef: coef1, exp: exp1}, %Decimal{sign: sign2, coef: coef2, exp: exp2}) do
-    { coef1, coef2 } = add_align(coef1, exp1, coef2, exp2)
+    {coef1, coef2} = add_align(coef1, exp1, coef2, exp2)
     coef = sign1 * coef1 + sign2 * coef2
     exp = Kernel.min(exp1, exp2)
     sign = add_sign(sign1, sign2, coef)
@@ -343,8 +343,8 @@ defmodule Decimal do
     else
       prec10 = int_pow10(1, get_context().precision)
 
-      { coef1, coef2, adjust } = div_adjust(coef1, coef2, 0)
-      { coef, adjust, _rem, signals } = div_calc(coef1, coef2, 0, adjust, prec10)
+      {coef1, coef2, adjust} = div_adjust(coef1, coef2, 0)
+      {coef, adjust, _rem, signals} = div_calc(coef1, coef2, 0, adjust, prec10)
     end
 
     %Decimal{sign: sign, coef: coef, exp: exp1 - exp2 - adjust} |> context(signals)
@@ -379,58 +379,58 @@ defmodule Decimal do
 
   @doc """
   Integer division of two numbers and the remainder. Should be used when both
-  `div_int/2` and `rem/2` is needed. Equivalent to: `{ Decimal.div_int(x, y),
-  Decimal.rem(x, y) }`.
+  `div_int/2` and `rem/2` is needed. Equivalent to: `{Decimal.div_int(x, y),
+  Decimal.rem(x, y)}`.
 
   ## Exceptional conditions
   * If both numbers are (+-)Infinity `:invalid_operation` is signalled.
   * If both numbers are (+-)0 `:invalid_operation` is signalled.
   * If second number (denominator) is (+-)0 `:division_by_zero` is signalled.
   """
-  @spec div_rem(t, t) :: { t, t }
+  @spec div_rem(t, t) :: {t, t}
   def div_rem(%Decimal{coef: :sNaN} = num1, %Decimal{}) do
-    { error(:invalid_operation, "operation on NaN", num1),
-      error(:invalid_operation, "operation on NaN", num1) }
+    {error(:invalid_operation, "operation on NaN", num1),
+      error(:invalid_operation, "operation on NaN", num1)}
   end
 
   def div_rem(%Decimal{}, %Decimal{coef: :sNaN} = num2) do
-    { error(:invalid_operation, "operation on NaN", num2),
-      error(:invalid_operation, "operation on NaN", num2) }
+    {error(:invalid_operation, "operation on NaN", num2),
+      error(:invalid_operation, "operation on NaN", num2)}
   end
 
   def div_rem(%Decimal{coef: :qNaN} = num1, %Decimal{}) do
-    { num1, num1 }
+    {num1, num1}
   end
 
   def div_rem(%Decimal{}, %Decimal{coef: :qNaN} = num2) do
-    { num2, num2 }
+    {num2, num2}
   end
 
   def div_rem(%Decimal{coef: :inf}, %Decimal{coef: :inf}) do
-    error(:invalid_operation, "(+-)Infinity / (+-)Infinity", { %Decimal{coef: :NaN}, %Decimal{coef: :NaN} })
+    error(:invalid_operation, "(+-)Infinity / (+-)Infinity", {%Decimal{coef: :NaN}, %Decimal{coef: :NaN}})
   end
 
   def div_rem(%Decimal{sign: sign1, coef: :inf} = num1, %Decimal{sign: sign2}) do
     sign = if sign1 == sign2, do: 1, else: -1
-    { %{num1 | sign: sign}, %Decimal{sign: sign1, coef: 0} }
+    {%{num1 | sign: sign}, %Decimal{sign: sign1, coef: 0}}
   end
 
   def div_rem(%Decimal{sign: sign1, exp: exp1}, %Decimal{sign: sign2, coef: :inf, exp: exp2} = num2) do
     sign = if sign1 == sign2, do: 1, else: -1
     # TODO: Subnormal
     # exponent?
-    { %Decimal{sign: sign, coef: 0, exp: exp1 - exp2}, %{num2 | sign: sign1} }
+    {%Decimal{sign: sign, coef: 0, exp: exp1 - exp2}, %{num2 | sign: sign1}}
   end
 
   def div_rem(%Decimal{coef: 0}, %Decimal{coef: 0}) do
-    { error(:invalid_operation, "0 / 0", %Decimal{coef: :NaN}),
-      error(:invalid_operation, "0 / 0", %Decimal{coef: :NaN}) }
+    {error(:invalid_operation, "0 / 0", %Decimal{coef: :NaN}),
+      error(:invalid_operation, "0 / 0", %Decimal{coef: :NaN})}
   end
 
   def div_rem(%Decimal{sign: sign1}, %Decimal{sign: sign2, coef: 0}) do
     div_sign = if sign1 == sign2, do: 1, else: -1
-    { error(:division_by_zero, nil, %Decimal{sign: div_sign, coef: :inf}),
-      error(:division_by_zero, nil, %Decimal{sign: sign1, coef: 0}) }
+    {error(:division_by_zero, nil, %Decimal{sign: div_sign, coef: :inf}),
+      error(:division_by_zero, nil, %Decimal{sign: sign1, coef: 0})}
   end
 
   def div_rem(%Decimal{sign: sign1, coef: coef1, exp: exp1} = num1, %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2) do
@@ -438,17 +438,17 @@ defmodule Decimal do
 
     cond do
       compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == -1 ->
-        { %Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2},
-          %{num1 | sign: sign1} }
+        {%Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2},
+          %{num1 | sign: sign1}}
       coef1 == 0 ->
-        { %{num1 | sign: div_sign} |> context,
-          %{num2 | sign: sign1} |> context }
+        {%{num1 | sign: div_sign} |> context,
+          %{num2 | sign: sign1} |> context}
       true ->
-        { coef1, coef2, adjust } = div_adjust(coef1, coef2, 0)
+        {coef1, coef2, adjust} = div_adjust(coef1, coef2, 0)
 
         adjust2 = if adjust < 0, do: 0, else: adjust
-        { coef, rem } = div_int_calc(coef1, coef2, 0, adjust)
-        { coef, exp } = truncate(coef, exp1 - exp2 - adjust2)
+        {coef, rem} = div_int_calc(coef1, coef2, 0, adjust)
+        {coef, exp} = truncate(coef, exp1 - exp2 - adjust2)
 
         div_coef = int_pow10(coef, exp)
         prec10 = int_pow10(1, get_context().precision)
@@ -457,8 +457,8 @@ defmodule Decimal do
           error(:invalid_operation, "integer division impossible, quotient too large", %Decimal{coef: :NaN})
         else
           adjust3 = if adjust > 0, do: 0, else: adjust
-          { %Decimal{sign: div_sign, coef: div_coef} |> context,
-            %Decimal{sign: sign1, coef: rem, exp: adjust3} |> context }
+          {%Decimal{sign: div_sign, coef: div_coef} |> context,
+            %Decimal{sign: sign1, coef: rem, exp: adjust3} |> context}
         end
     end
   end
@@ -652,7 +652,7 @@ defmodule Decimal do
 
   def round(num, n, mode) do
     %Decimal{sign: sign, coef: coef, exp: exp} = reduce(num)
-    { value, signals } = do_round(coef, exp, sign, -n, mode, [])
+    {value, signals} = do_round(coef, exp, sign, -n, mode, [])
     context(value, signals)
   end
 
@@ -835,13 +835,13 @@ defmodule Decimal do
   ## ARITHMETIC ##
 
   defp add_align(coef1, exp1, coef2, exp2) when exp1 == exp2,
-    do: { coef1, coef2 }
+    do: {coef1, coef2}
 
   defp add_align(coef1, exp1, coef2, exp2) when exp1 > exp2,
-    do: { coef1 * int_pow10(1, exp1 - exp2), coef2 }
+    do: {coef1 * int_pow10(1, exp1 - exp2), coef2}
 
   defp add_align(coef1, exp1, coef2, exp2) when exp1 < exp2,
-    do: { coef1, coef2 * int_pow10(1, exp2 - exp1) }
+    do: {coef1, coef2 * int_pow10(1, exp2 - exp1)}
 
   defp add_sign(sign1, sign2, coef) do
     cond do
@@ -860,7 +860,7 @@ defmodule Decimal do
     do: div_adjust(coef1, coef2 * 10, adjust - 1)
 
   defp div_adjust(coef1, coef2, adjust),
-    do: { coef1, coef2, adjust }
+    do: {coef1, coef2, adjust}
 
   defp div_calc(coef1, coef2, coef, adjust, prec10) do
     cond do
@@ -868,12 +868,12 @@ defmodule Decimal do
         div_calc(coef1 - coef2, coef2, coef + 1, adjust, prec10)
 
       coef1 == 0 and adjust >= 0 ->
-        { coef, adjust, coef1, [] }
+        {coef, adjust, coef1, []}
 
       coef >= prec10 ->
         signals = [:rounded]
         unless base_10?(coef1), do: signals = [:inexact|signals]
-        { coef, adjust, coef1, signals }
+        {coef, adjust, coef1, signals}
 
       true ->
         div_calc(coef1 * 10, coef2, coef * 10, adjust + 1, prec10)
@@ -887,7 +887,7 @@ defmodule Decimal do
       adjust < 0 ->
         div_int_calc(coef1 * 10, coef2, coef * 10, adjust + 1)
       true ->
-        { coef, coef1 }
+        {coef, coef1}
     end
   end
 
@@ -902,7 +902,7 @@ defmodule Decimal do
   end
 
   defp truncate(coef, exp) when exp >= 0 do
-    { coef, exp }
+    {coef, exp}
   end
 
   defp truncate(coef, exp) when exp < 0 do
@@ -938,19 +938,19 @@ defmodule Decimal do
   end
 
   defp do_round(coef, exp, sign, _n, _rounding, signals) do
-    { %Decimal{sign: sign, coef: coef, exp: exp}, signals }
+    {%Decimal{sign: sign, coef: coef, exp: exp}, signals}
   end
 
   defp precision(%Decimal{coef: :sNaN} = num, _precision, _rounding) do
-    { num, [] }
+    {num, []}
   end
 
   defp precision(%Decimal{coef: :qNaN} = num, _precision, _rounding) do
-    { num, [] }
+    {num, []}
   end
 
   defp precision(%Decimal{coef: :inf} = num, _precision, _rounding) do
-    { num, [] }
+    {num, []}
   end
 
   defp precision(%Decimal{sign: sign, coef: coef, exp: exp}, precision, rounding) do
@@ -973,7 +973,7 @@ defmodule Decimal do
   end
 
   defp do_precision(coef, exp, sign, _prec10, _rounding, signals) do
-    { %Decimal{sign: sign, coef: coef, exp: exp}, signals }
+    {%Decimal{sign: sign, coef: coef, exp: exp}, signals}
   end
 
   defp increment?(:down, _, _, _),
@@ -1001,7 +1001,7 @@ defmodule Decimal do
 
   defp context(num, signals \\ []) do
     ctxt = get_context()
-    { result, prec_signals } = precision(num, ctxt.precision, ctxt.rounding)
+    {result, prec_signals} = precision(num, ctxt.precision, ctxt.rounding)
     error(put_uniq(signals, prec_signals), nil, result, ctxt)
   end
 
@@ -1045,9 +1045,9 @@ defmodule Decimal do
   end
 
   defp parse_unsign(bin) do
-    { int, rest } = parse_digits(bin)
-    { float, rest } = parse_float(rest)
-    { exp, rest } = parse_exp(rest)
+    {int, rest} = parse_digits(bin)
+    {float, rest} = parse_float(rest)
+    {exp, rest} = parse_exp(rest)
 
     if rest != "" or (int == [] and float == []) do
       error(:invalid_operation, "number parsing syntax", %Decimal{coef: :NaN})
@@ -1059,20 +1059,20 @@ defmodule Decimal do
   end
 
   defp parse_float("." <> rest), do: parse_digits(rest)
-  defp parse_float(bin), do: { [], bin }
+  defp parse_float(bin), do: {[], bin}
 
   defp parse_exp(<< ?e, rest :: binary >>) do
     case rest do
       << sign, rest :: binary >> when sign in [?+, ?-] ->
-        { digits, rest } = parse_digits(rest)
-        { [sign|digits], rest }
+        {digits, rest} = parse_digits(rest)
+        {[sign|digits], rest}
       _ ->
         parse_digits(rest)
     end
   end
 
   defp parse_exp(bin) do
-    { [], bin }
+    {[], bin}
   end
 
   defp parse_digits(bin), do: parse_digits(bin, [])
@@ -1082,7 +1082,7 @@ defmodule Decimal do
   end
 
   defp parse_digits(rest, acc) do
-    { :lists.reverse(acc), rest }
+    {:lists.reverse(acc), rest}
   end
 
   # Util
@@ -1103,9 +1103,9 @@ defmodule Decimal do
 
     if error_signal do
       error = [signals: error_signal, reason: reason, result: result]
-      { :error, error }
+      {:error, error}
     else
-      { :ok, result }
+      {:ok, result}
     end
   end
 end
