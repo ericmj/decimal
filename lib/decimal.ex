@@ -69,7 +69,7 @@ defmodule Decimal do
 
   @context_key :"$decimal_context"
 
-  defexception Error, [:signal, :reason, :result] do
+  defmodule Error do
     @moduledoc """
     The exception that all Decimal operations may raise.
 
@@ -86,16 +86,16 @@ defmodule Decimal do
     after the operation if the result needs to be inspected.
     """
 
-    record_type signal: Decimal.signal,
-                reason: String.t,
-                result: Decimal.t
+    defexception [:message, :signal, :reason, :result]
 
-    def message(Error[signal: signal, reason: reason]) do
-      if reason do
-        "#{signal}: #{reason}"
+    def exception(opts) do
+      if opts[:reason] do
+        msg = "#{opts[:signal]}: #{opts[:reason]}"
       else
-        "#{signal}"
+        msg = "#{opts[:signal]}"
       end
+
+      struct(__MODULE__, [message: msg] ++ opts)
     end
   end
 
