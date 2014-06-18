@@ -1,1 +1,3 @@
-%{"ex_doc": {:git, "git://github.com/elixir-lang/ex_doc.git", "4a6391bf2d6dacec8c6b52ef2506fb5607eb894c", []}}
+%{"ex_doc": {:git, "git://github.com/elixir-lang/ex_doc.git", "ca476cd10556b079a7b2ab421c9fdf3425afbe8a", []},
+  "hoedown": {:git, "git://github.com/hoedown/hoedown.git", "0610117f44b173a4e2112afb2f510156a32355b5", []},
+  "markdown": {:git, "git://github.com/devinus/markdown.git", "734db3b3a0c983ea0444dcbfbbcae8256db17019", []}}
