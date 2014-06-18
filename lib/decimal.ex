@@ -684,7 +684,7 @@ defmodule Decimal do
   def new(int) when is_integer(int),
     do: %Decimal{sign: (if int < 0, do: -1, else: 1), coef: Kernel.abs(int)}
   def new(float) when is_float(float),
-    do: new(:io_lib_format.fwrite_g(float) |> iodata_to_binary)
+    do: new(:io_lib_format.fwrite_g(float) |> IO.iodata_to_binary)
   def new(binary) when is_binary(binary),
     do: parse(binary)
 
@@ -724,7 +724,7 @@ defmodule Decimal do
   end
 
   def to_string(%Decimal{sign: sign, coef: coef, exp: exp}, :normal) do
-    list = integer_to_list(coef)
+    list = Integer.to_char_list(coef)
 
     list =
       if exp >= 0 do
@@ -742,11 +742,11 @@ defmodule Decimal do
       list = [?-|list]
     end
 
-    iodata_to_binary(list)
+    IO.iodata_to_binary(list)
   end
 
   def to_string(%Decimal{sign: sign, coef: coef, exp: exp}, :scientific) do
-    list = integer_to_list(coef)
+    list = Integer.to_char_list(coef)
     length = length(list)
     adjusted = exp + length - 1
 
@@ -770,28 +770,28 @@ defmodule Decimal do
         end
         list = list ++ 'E'
         if exp >= 0, do: list = list ++ '+'
-        list = list ++ integer_to_list(adjusted)
+        list = list ++ Integer.to_char_list(adjusted)
     end
 
     if sign == -1 do
       list = [?-|list]
     end
 
-    iodata_to_binary(list)
+    IO.iodata_to_binary(list)
   end
 
   def to_string(%Decimal{sign: sign, coef: coef, exp: exp}, :raw) do
-    str = integer_to_binary(coef)
+    str = Integer.to_string(coef)
 
     if sign == -1 do
       str = [?-|str]
     end
 
     if exp != 0 do
-      str = [str, "E", integer_to_binary(exp)]
+      str = [str, "E", Integer.to_string(exp)]
     end
 
-    iodata_to_binary(str)
+    IO.iodata_to_binary(str)
   end
 
   @doc """
@@ -1054,7 +1054,7 @@ defmodule Decimal do
     else
       if int == [], do: int = '0'
       if exp == [], do: exp = '0'
-      %Decimal{coef: list_to_integer(int ++ float), exp: list_to_integer(exp) - length(float)}
+      %Decimal{coef: List.to_integer(int ++ float), exp: List.to_integer(exp) - length(float)}
     end
   end
 
