@@ -23,7 +23,8 @@ defmodule Decimal.Mixfile do
 
   defp deps do
     [{:ex_doc, github: "elixir-lang/ex_doc", only: :dev},
-     {:markdown, github: "devinus/markdown", only: :dev}]
+     {:markdown, github: "devinus/markdown", only: :dev},
+     {:dialyxir, github: "jeremyjh/dialyxir", only: :dev}]
   end
 
   defp description do

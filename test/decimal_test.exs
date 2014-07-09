@@ -238,6 +238,7 @@ defmodule DecimalTest do
     assert Decimal.div_int(~d"-123", ~d"23")  == d(-1, 5, 0)
     assert Decimal.div_int(~d"-123", ~d"-23") == d(1, 5, 0)
     assert Decimal.div_int(~d"1", ~d"0.3")    == d(1, 3, 0)
+    assert Decimal.div_int(~d"4", ~d"8")      == d(1, 0, 0)
 
     assert Decimal.div_int(~d"0", ~d"3")      == d(1, 0, 0)
     assert Decimal.div_int(~d"-0", ~d"3")     == d(-1, 0, 0)
@@ -269,6 +270,7 @@ defmodule DecimalTest do
     assert Decimal.rem(~d"-123", ~d"23")  == d(-1, 8, 0)
     assert Decimal.rem(~d"-123", ~d"-23") == d(-1, 8, 0)
     assert Decimal.rem(~d"1", ~d"0.3")    == d(1, 1, 0)
+    assert Decimal.rem(~d"4", ~d"8")      == d(1, 4, 0)
 
     assert Decimal.rem(~d"-inf", ~d"-2")  == d(-1, 0, 0)
     assert Decimal.rem(~d"5", ~d"-inf")   == d(1, :inf, 0)

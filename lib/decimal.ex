@@ -270,7 +270,7 @@ defmodule Decimal do
   end
 
   @doc """
-  Compares two numbers numerically. If both first number is greater than second
+  Compares two numbers numerically. If the first number is greater than the second
   `#Decimal<1>` is returned, if less than `Decimal<-1>` is returned. Otherwise,
   if both numbers are equal `Decimal<0>` is returned.
   """
@@ -444,7 +444,7 @@ defmodule Decimal do
     div_sign = if sign1 == sign2, do: 1, else: -1
 
     cond do
-      compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == -1 ->
+      compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == %Decimal{sign: -1, coef: 1} ->
         {%Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2},
           %{num1 | sign: sign1}}
       coef1 == 0 ->
