@@ -47,6 +47,8 @@ defmodule Decimal do
   Additionally, overflow, underflow and clamped may never be signalled.
   """
 
+  import Kernel, except: [abs: 1, div: 2, max: 2, min: 2, rem: 1, round: 1]
+
   @type signal :: :invalid_operation |
                   :division_by_zero |
                   :rounded |
@@ -60,12 +62,12 @@ defmodule Decimal do
                     :half_down |
                     :up
 
-  import Kernel, except: [abs: 1, div: 2, max: 2, min: 2, rem: 1, round: 1]
+  @type t :: %__MODULE__{
+    sign: 1 | -1,
+    coef: non_neg_integer | :qNaN | :sNaN | :inf,
+    exp: integer}
 
-  defstruct [
-    sign: 1 :: 1 | -1,
-    coef: 0 :: non_neg_integer | :qNaN | :sNaN | :inf,
-    exp: 0 :: integer]
+  defstruct [sign: 1, coef: 0, exp: 0]
 
   @context_key :"$decimal_context"
 
@@ -100,12 +102,6 @@ defmodule Decimal do
   end
 
   defmodule Context do
-    defstruct [
-      precision: 9 :: pos_integer,
-      rounding: :half_up :: Decimal.rounding,
-      flags: [] :: [Decimal.signal],
-      traps: [:invalid_operation, :division_by_zero] :: [Decimal.signal] ]
-
     @moduledoc """
     The context is kept in the process dictionary. It can be accessed with
     `Decimal.get_context/0` and `Decimal.set_context/1`.
@@ -156,6 +152,17 @@ defmodule Decimal do
       coefficient is not changed, otherwise it is incremented by one (rounded
       up).
     """
+    @type t :: %__MODULE__{
+      precision: pos_integer,
+      rounding: Decimal.rounding,
+      flags: [Decimal.signal],
+      traps: [Decimal.signal]}
+
+    defstruct [
+      precision: 9,
+      rounding: :half_up,
+      flags: [],
+      traps: [:invalid_operation, :division_by_zero]]
   end
 
   defmacrop error(flags, reason, result, context \\ nil) do
