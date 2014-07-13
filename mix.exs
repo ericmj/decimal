@@ -4,14 +4,14 @@ defmodule Decimal.Mixfile do
   def project do
     [app: :decimal,
      version: "0.2.3-dev",
-     elixir: "== 0.13.3 or ~> 0.14.0",
+     elixir: "~> 0.14.3",
      deps: deps,
      build_per_environment: false,
      name: "Decimal",
      source_url: "https://github.com/ericmj/decimal",
      docs: fn ->
-       [source_ref: System.cmd("git rev-parse --verify --quiet HEAD"),
-       readme: true]
+       {ref, 0} = System.cmd("git", ["rev-parse", "--verify", "--quiet", "HEAD"])
+       [source_ref: ref, readme: true]
      end,
      description: description,
      package: package]
@@ -23,8 +23,7 @@ defmodule Decimal.Mixfile do
 
   defp deps do
     [{:ex_doc, github: "elixir-lang/ex_doc", only: :dev},
-     {:markdown, github: "devinus/markdown", only: :dev},
-     {:dialyxir, github: "jeremyjh/dialyxir", only: :dev}]
+     {:markdown, github: "devinus/markdown", only: :dev}]
   end
 
   defp description do
