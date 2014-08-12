@@ -12,7 +12,7 @@ Add Decimal as a dependency in your `mix.exs` file.
 
 ```elixir
 def deps do
-  [ { :decimal, github: "ericmj/decimal" } ]
+  [ { :decimal, "~> 0.2.4" } ]
 end
 ```
 
