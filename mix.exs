@@ -3,8 +3,8 @@ defmodule Decimal.Mixfile do
 
   def project do
     [app: :decimal,
-     version: "0.2.5-dev",
-     elixir: "~> 0.15.0 or ~> 1.0.0-rc1",
+     version: "0.2.5",
+     elixir: "~> 1.0.0-rc1",
      deps: deps,
      build_per_environment: false,
      name: "Decimal",
@@ -22,8 +22,8 @@ defmodule Decimal.Mixfile do
   end
 
   defp deps do
-    [{:ex_doc, github: "elixir-lang/ex_doc", only: :dev},
-     {:markdown, github: "devinus/markdown", only: :dev}]
+    [{:ex_doc, only: :dev},
+     {:earmark, only: :dev}]
   end
 
   defp description do
