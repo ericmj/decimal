@@ -4,7 +4,7 @@
 
 Arbitrary precision decimal arithmetic for Elixir.
 
-Documentation: http://ericmj.github.io/decimal
+Documentation: http://hexdocs.pm/decimal/
 
 ## Usage
 
