@@ -772,7 +772,7 @@ defmodule Decimal do
         end
 
       true ->
-        if length > 2 do
+        if length > 1 do
           list = List.insert_at(list, 1, ?.)
         end
         list = list ++ 'E'

@@ -448,6 +448,7 @@ defmodule DecimalTest do
     assert Decimal.to_string(~d"-nan", :scientific)     == "-NaN"
     assert Decimal.to_string(~d"-inf", :scientific)     == "-Infinity"
     assert Decimal.to_string(~d"84e-1", :scientific)    == "8.4"
+    assert Decimal.to_string(~d"22E+2", :scientific)    == "2.2E+3"
   end
 
   test "to_string raw" do
