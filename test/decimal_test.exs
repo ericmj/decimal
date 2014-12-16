@@ -500,11 +500,13 @@ defmodule DecimalTest do
       assert Decimal.add(~d"0", ~d"-123")  == d(-1, 12, 1)
       assert Decimal.add(~d"0", ~d"125")   == d(1, 13, 1)
       assert Decimal.add(~d"0", ~d"-125")  == d(-1, 12, 1)
+      assert Decimal.add(~d"0", ~d"243.48") == d(1, 24, 1)
     end)
   end
 
   test "precision half even" do
     Decimal.with_context(%Context{precision: 2, rounding: :half_even}, fn ->
+      assert Decimal.add(~d"0", ~d"9.99")  == d(1, 10, 0)
       assert Decimal.add(~d"0", ~d"1.0")   == d(1, 10, -1)
       assert Decimal.add(~d"0", ~d"123")   == d(1, 12, 1)
       assert Decimal.add(~d"0", ~d"6.66")  == d(1, 67, -1)
@@ -589,6 +591,8 @@ defmodule DecimalTest do
     assert roundneg.(~d"150")  == d(1, 2, 2)
     assert roundneg.(~d"-120") == d(-1, 1, 2)
     assert roundneg.(~d"-150") == d(-1, 1, 2)
+
+    assert Decimal.round(~d"243.48", 0, :half_up) == d(1, 243, 0)
   end
 
   test "round half even" do
@@ -630,7 +634,7 @@ defmodule DecimalTest do
     assert round.(~d"-0.001")  == d(-1, 1, -2)
     assert roundneg.(~d"1.02") == d(1, 1, 2)
     assert roundneg.(~d"102")  == d(1, 2, 2)
-    assert roundneg.(~d"1099") == d(1, 12, 2)
+    assert roundneg.(~d"1099") == d(1, 11, 2)
   end
 
   test "set context flags" do

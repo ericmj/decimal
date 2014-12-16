@@ -659,8 +659,8 @@ defmodule Decimal do
 
   def round(num, n, mode) do
     %Decimal{sign: sign, coef: coef, exp: exp} = reduce(num)
-    {value, signals} = do_round(coef, exp, sign, -n, mode, [])
-    context(value, signals)
+    value = do_round(coef, exp, sign, -n, mode)
+    context(value, [])
   end
 
   @doc """
@@ -935,17 +935,36 @@ defmodule Decimal do
 
   ## ROUNDING ##
 
-  defp do_round(coef, exp, sign, n, rounding, signals) when n > exp do
-    significant = Kernel.div(coef, 10)
-    remainder = Kernel.rem(coef, 10)
-    if increment?(rounding, sign, significant, remainder),
-      do: significant = significant + 1
+  defp split_coef(coef, exp, n),
+    do: split_coef(coef, exp, n, 1, 0)
 
-    do_round(significant, exp + 1, sign, n, rounding, signals)
+  defp split_coef(coef, exp, n, pow10, rem) when n > exp do
+    rem = rem + Kernel.rem(coef, 10)*pow10
+    coef = Kernel.div(coef, 10)
+    split_coef(coef, exp + 1, n, pow10*10, rem)
   end
 
-  defp do_round(coef, exp, sign, _n, _rounding, signals) do
-    {%Decimal{sign: sign, coef: coef, exp: exp}, signals}
+  defp split_coef(coef, exp, _n, _pow10, rem) do
+    {coef, exp, rem}
+  end
+
+  defp msd(num) when num >= 10,
+    do: msd(Kernel.div(num, 10))
+  defp msd(num),
+    do: num
+
+  defp do_round(coef, exp, sign, n, rounding) when n > exp do
+    {significant, exp, remainder} = split_coef(coef, exp, n)
+
+    if increment?(rounding, sign, significant, msd(remainder)) do
+      significant = significant + 1
+    end
+
+    %Decimal{sign: sign, coef: significant, exp: exp}
+  end
+
+  defp do_round(coef, exp, sign, _n, _rounding) do
+    %Decimal{sign: sign, coef: coef, exp: exp}
   end
 
   defp precision(%Decimal{coef: :sNaN} = num, _precision, _rounding) do
@@ -961,26 +980,30 @@ defmodule Decimal do
   end
 
   defp precision(%Decimal{sign: sign, coef: coef, exp: exp}, precision, rounding) do
-    prec10 = int_pow10(1, precision)
-    do_precision(coef, exp, sign, prec10, rounding, [])
+    do_precision(coef, exp, sign, precision, rounding, [])
   end
 
-  defp do_precision(coef, exp, sign, prec10, rounding, signals) when coef >= prec10 do
-    significant = Kernel.div(coef, 10)
-    remainder = Kernel.rem(coef, 10)
-    if increment?(rounding, sign, significant, remainder),
-      do: significant = significant + 1
+  defp do_precision(coef, exp, sign, precision, rounding, signals) do
+    num_digtis = coef |> :erlang.integer_to_list |> length
 
-    signals = put_uniq(signals, :rounded)
-    if remainder != 0 do
-      signals = put_uniq(signals, :inexact)
+    if num_digtis > precision do
+      diff = num_digtis - precision + exp
+
+      {significant, exp, remainder} = split_coef(coef, exp, diff)
+
+      if increment?(rounding, sign, significant, msd(remainder)) do
+        significant = significant + 1
+      end
+
+      signals = put_uniq(signals, :rounded)
+      if remainder != 0 do
+        signals = put_uniq(signals, :inexact)
+      end
+
+      do_precision(significant, exp, sign, precision, rounding, signals)
+    else
+      {%Decimal{sign: sign, coef: coef, exp: exp}, signals}
     end
-
-    do_precision(significant, exp + 1, sign, prec10, rounding, signals)
-  end
-
-  defp do_precision(coef, exp, sign, _prec10, _rounding, signals) do
-    {%Decimal{sign: sign, coef: coef, exp: exp}, signals}
   end
 
   defp increment?(:down, _, _, _),
