@@ -659,7 +659,7 @@ defmodule Decimal do
 
   def round(num, n, mode) do
     %Decimal{sign: sign, coef: coef, exp: exp} = reduce(num)
-    value = do_round(coef, exp, sign, -n, mode)
+    value = do_round(coef, exp, sign, n, mode)
     context(value, [])
   end
 
@@ -935,36 +935,27 @@ defmodule Decimal do
 
   ## ROUNDING ##
 
-  defp split_coef(coef, exp, n),
-    do: split_coef(coef, exp, n, 1, 0)
+  defp do_round(coef, exp, sign, n, rounding) do
+    digits = coef |> :erlang.integer_to_list
+    num_digits = length(digits)
+    precision = num_digits + n + exp
 
-  defp split_coef(coef, exp, n, pow10, rem) when n > exp do
-    rem = rem + Kernel.rem(coef, 10)*pow10
-    coef = Kernel.div(coef, 10)
-    split_coef(coef, exp + 1, n, pow10*10, rem)
-  end
+    if num_digits > precision do
+      precision = Kernel.min(num_digits, precision)
+      fixed_precision = Kernel.max(0, precision)
 
-  defp split_coef(coef, exp, _n, _pow10, rem) do
-    {coef, exp, rem}
-  end
+      {signif, remain} = :lists.split(fixed_precision, digits)
+      significant = if signif == [], do: 0, else: :erlang.list_to_integer(signif)
 
-  defp msd(num) when num >= 10,
-    do: msd(Kernel.div(num, 10))
-  defp msd(num),
-    do: num
+      if increment?(rounding, sign, signif, remain) do
+        significant = significant + 1
+      end
 
-  defp do_round(coef, exp, sign, n, rounding) when n > exp do
-    {significant, exp, remainder} = split_coef(coef, exp, n)
-
-    if increment?(rounding, sign, significant, msd(remainder)) do
-      significant = significant + 1
-    end
-
-    %Decimal{sign: sign, coef: significant, exp: exp}
-  end
-
-  defp do_round(coef, exp, sign, _n, _rounding) do
-    %Decimal{sign: sign, coef: coef, exp: exp}
+      precision = Kernel.min(precision, 0)
+      %Decimal{sign: sign, coef: significant, exp: exp + length(remain) - precision}
+    else
+       %Decimal{sign: sign, coef: coef, exp: exp}
+     end
   end
 
   defp precision(%Decimal{coef: :sNaN} = num, _precision, _rounding) do
@@ -980,52 +971,76 @@ defmodule Decimal do
   end
 
   defp precision(%Decimal{sign: sign, coef: coef, exp: exp}, precision, rounding) do
-    do_precision(coef, exp, sign, precision, rounding, [])
+    digits = :erlang.integer_to_list(coef)
+    do_precision(sign, digits, exp, precision, rounding, [])
   end
 
-  defp do_precision(coef, exp, sign, precision, rounding, signals) do
-    num_digtis = coef |> :erlang.integer_to_list |> length
+  defp do_precision(sign, digits, exp, precision, rounding, signals) do
+    num_digits = length(digits)
 
-    if num_digtis > precision do
-      diff = num_digtis - precision + exp
+    if num_digits > precision do
+      precision = Kernel.min(num_digits, precision)
+      {signif, remain} = :lists.split(precision, digits)
 
-      {significant, exp, remainder} = split_coef(coef, exp, diff)
-
-      if increment?(rounding, sign, significant, msd(remainder)) do
-        significant = significant + 1
+      if increment?(rounding, sign, signif, remain) do
+        signif = digits_increment(signif)
       end
 
       signals = put_uniq(signals, :rounded)
-      if remainder != 0 do
+      if any_nonzero(remain) do
         signals = put_uniq(signals, :inexact)
       end
 
-      do_precision(significant, exp, sign, precision, rounding, signals)
+      exp = exp + length(remain)
+      do_precision(sign, signif, exp, precision, rounding, signals)
     else
-      {%Decimal{sign: sign, coef: coef, exp: exp}, signals}
+      coef = :erlang.list_to_integer(digits)
+      dec = %Decimal{sign: sign, coef: coef, exp: exp}
+      {dec, signals}
     end
   end
+
+  defp increment?(_, _, _, []),
+    do: false
 
   defp increment?(:down, _, _, _),
     do: false
 
-  defp increment?(:ceiling, sign, _, remain),
-    do: sign == 1 and remain != 0
-
-  defp increment?(:floor, sign, _, remain),
-    do: sign == -1 and remain != 0
-
-  defp increment?(:half_up, sign, _, remain),
-    do: sign == 1 and remain >= 5
-
-  defp increment?(:half_even, _, signif, remain),
-    do: remain > 5 or (remain == 5 and Kernel.rem(signif, 2) == 1)
-
-  defp increment?(:half_down, _, _, remain),
-    do: remain >= 5
-
   defp increment?(:up, _, _, _),
     do: true
+
+  defp increment?(:ceiling, sign, _, remain),
+    do: sign == 1 and any_nonzero(remain)
+
+  defp increment?(:floor, sign, _, remain),
+    do: sign == -1 and any_nonzero(remain)
+
+  defp increment?(:half_up, sign, _, [digit|_]),
+    do: sign == 1 and digit >= ?5
+
+  defp increment?(:half_even, _, signif, [?5|rest]),
+    do: any_nonzero(rest) or Kernel.rem(:lists.last(signif), 2) == 1
+
+  defp increment?(:half_even, _, _, [digit|_]),
+    do: digit > ?5
+
+  defp increment?(:half_down, _, _, [digit|_]),
+    do: digit >= ?5
+
+  defp any_nonzero(digits),
+    do: :lists.any(fn digit -> digit != ?0 end, digits)
+
+  defp digits_increment(digits),
+    do: digits_increment(:lists.reverse(digits), [])
+
+  defp digits_increment([?9|rest], acc),
+    do: digits_increment(rest, [?0|acc])
+
+  defp digits_increment([head|rest], acc),
+    do: :lists.reverse(rest, [head+1|acc])
+
+  defp digits_increment([], acc),
+    do: [?1|acc]
 
   ## CONTEXT ##
 

@@ -1,5 +1,5 @@
 defmodule DecimalTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
   alias Decimal.Context
   alias Decimal.Error
@@ -514,6 +514,10 @@ defmodule DecimalTest do
       assert Decimal.add(~d"0", ~d"-6.66") == d(-1, 67, -1)
       assert Decimal.add(~d"0", ~d"-9.99") == d(-1, 10, 0)
     end)
+
+    Decimal.with_context(%Context{precision: 3, rounding: :half_even}, fn ->
+      assert Decimal.add(~d"0", ~d"244.58") == d(1, 245, 0)
+    end)
   end
 
   test "precision half down" do
@@ -608,6 +612,9 @@ defmodule DecimalTest do
     assert roundneg.(~d"250")  == d(1, 2, 2)
     assert roundneg.(~d"-150") == d(-1, 2, 2)
     assert roundneg.(~d"-250") == d(-1, 2, 2)
+
+    assert Decimal.round(~d"9.99", 0, :half_even)   == d(1, 10, 0)
+    assert Decimal.round(~d"244.58", 0, :half_even) == d(1, 245, 0)
   end
 
   test "round half down" do
