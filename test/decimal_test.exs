@@ -188,6 +188,19 @@ defmodule DecimalTest do
     end
   end
 
+  test "equal?" do
+    assert Decimal.equal?(~d"420", ~d"42e1")
+    refute Decimal.equal?(~d"1", ~d"0")
+    refute Decimal.equal?(~d"0", ~d"1")
+    assert Decimal.equal?(~d"0", ~d"-0")
+    refute Decimal.equal?(~d"nan", ~d"1")
+    refute Decimal.equal?(~d"1", ~d"nan")
+
+    assert_raise Error, fn ->
+      Decimal.equal?(~d"snan", ~d"0")
+    end
+  end
+
   test "div" do
     Decimal.with_context(%Context{precision: 5, rounding: :half_up}, fn ->
       assert Decimal.div(~d"1", ~d"3")       == d(1, 33333, -5)
