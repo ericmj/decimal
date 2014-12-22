@@ -290,6 +290,18 @@ defmodule Decimal do
   end
 
   @doc """
+  Compares two numbers numerically and returns `true` if they are equal,
+  otherwise `false`.
+  """
+  @spec equal?(t, t) :: boolean
+  def equal?(num1, num2) do
+    case compare(num1, num2) do
+      %Decimal{sign: 1, coef: 0, exp: 0} -> true
+      _ -> false
+    end
+  end
+
+  @doc """
   Divides two numbers.
 
   ## Exceptional conditions
