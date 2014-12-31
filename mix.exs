@@ -10,7 +10,7 @@ defmodule Decimal.Mixfile do
      source_url: "https://github.com/ericmj/decimal",
      docs: fn ->
        {ref, 0} = System.cmd("git", ["rev-parse", "--verify", "--quiet", "HEAD"])
-       [source_ref: ref, readme: true]
+       [source_ref: ref, readme: "README.md"]
      end,
      description: description,
      package: package]
