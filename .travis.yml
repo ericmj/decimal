@@ -1,6 +1,7 @@
 language: erlang
 otp_release:
   - 17.0
+sudo: false
 before_install:
   - wget http://s3.hex.pm/builds/elixir/master.zip
   - unzip -d elixir master.zip

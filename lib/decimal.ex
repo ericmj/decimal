@@ -129,8 +129,8 @@ defmodule Decimal do
       result is unchanged.
     * `:half_up` - If the discarded digits is greater than or equal to half of
       the value of a one in the next left position then the coefficient will be
-      incremented by one (rounded up). Otherwise, the discarded digits will be
-      ignored.
+      incremented by one (rounded up). Otherwise (the discarded digits are less
+      than half) the discarded digits will be ignored.
     * `:half_even` - Also known as "round to nearest" or "banker's rounding". If
       the discarded digits is greater than half of the value of a one in the
       next left position then the coefficient will be incremented by one
@@ -146,8 +146,8 @@ defmodule Decimal do
       negative and coefficient will be incremented by one.
     * `:half_down` - If the discarded digits is greater than half of the value
       of a one in the next left position then the coefficient will be
-      incremented by one (rounded up). Otherwise the discarded digits are
-      ignored.
+      incremented by one (rounded up). Otherwise (the discarded digits are half
+      or less) the discarded digits are ignored.
     * `:up` - Round away from zero. If all discarded digits are zero the
       coefficient is not changed, otherwise it is incremented by one (rounded
       up).
@@ -966,8 +966,8 @@ defmodule Decimal do
       precision = Kernel.min(precision, 0)
       %Decimal{sign: sign, coef: significant, exp: exp + length(remain) - precision}
     else
-       %Decimal{sign: sign, coef: coef, exp: exp}
-     end
+      %Decimal{sign: sign, coef: coef, exp: exp}
+    end
   end
 
   defp precision(%Decimal{coef: :sNaN} = num, _precision, _rounding) do
@@ -1027,8 +1027,8 @@ defmodule Decimal do
   defp increment?(:floor, sign, _, remain),
     do: sign == -1 and any_nonzero(remain)
 
-  defp increment?(:half_up, sign, _, [digit|_]),
-    do: sign == 1 and digit >= ?5
+  defp increment?(:half_up, _, _, [digit|_]),
+    do: digit >= ?5
 
   defp increment?(:half_even, _, signif, [?5|rest]),
     do: any_nonzero(rest) or Kernel.rem(:lists.last(signif), 2) == 1
@@ -1037,7 +1037,7 @@ defmodule Decimal do
     do: digit > ?5
 
   defp increment?(:half_down, _, _, [digit|_]),
-    do: digit >= ?5
+    do: digit > ?5
 
   defp any_nonzero(digits),
     do: :lists.any(fn digit -> digit != ?0 end, digits)
