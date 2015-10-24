@@ -813,6 +813,21 @@ defmodule Decimal do
     IO.iodata_to_binary(str)
   end
 
+
+  @doc """
+  Returns the decimal represented as an integer. Loss of precision might occur
+  as the number is truncated to an int.
+  """
+  def to_integer(num),
+    do: trunc to_float(num)
+
+  @doc """
+  Returns the decimal represented as a float. Loss of precision might occur as
+  the decimal is converted from arbitrary precision to floating precision.
+  """
+  def to_float(%Decimal{sign: sign, coef: coef, exp: exp}),
+    do: sign * (coef * :math.pow(10, exp))
+
   @doc """
   Runs function with given context.
   """
