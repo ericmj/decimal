@@ -478,6 +478,17 @@ defmodule DecimalTest do
     assert Decimal.to_string(~d"-inf", :raw)     == "-Infinity"
   end
 
+  test "to_integer" do
+    Decimal.with_context(%Context{precision: 36, rounding: :floor}, fn ->
+      assert Decimal.to_integer(~d"0")        == 0
+      assert Decimal.to_integer(~d"300")      == 300
+      assert Decimal.to_integer(~d"-53000")   == -53000
+      assert Decimal.to_integer(~d"-0")       == 0
+      assert Decimal.to_integer(~d"123456789123489123456789") == 123456789123489123456789
+      assert Decimal.to_integer(Decimal.mult(~d"123456789123489123456789", ~d"1000")) == 123456789123489123456789000
+    end)
+  end
+
   test "precision down" do
     Decimal.with_context(%Context{precision: 2, rounding: :down}, fn ->
       assert Decimal.add(~d"0", ~d"1.02") == d(1, 10, -1)
