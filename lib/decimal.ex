@@ -819,6 +819,18 @@ defmodule Decimal do
   """
   def to_integer(%Decimal{sign: sign, coef: coef, exp: 0}), do: sign * coef
 
+  def to_integer(%Decimal{sign: sign, coef: coef, exp: exp}) when (exp > 0) do
+    to_integer(%Decimal{sign: sign, coef: coef * 10, exp: exp - 1})
+  end
+
+  def to_integer(%Decimal{sign: sign, coef: coef, exp: exp}) when (exp < 0) and (Kernel.rem(coef, 10) == 0) do
+    to_integer(%Decimal{sign: sign, coef: trunc(coef / 10), exp: exp + 1})
+  end
+
+  def to_integer(%Decimal{} = num) do
+    error(:invalid_operation, "not an integer", num)
+  end
+
   @doc """
   Runs function with given context.
   """
