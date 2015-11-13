@@ -159,7 +159,7 @@ defmodule Decimal do
       traps: [Decimal.signal]}
 
     defstruct [
-      precision: 9,
+      precision: 28,
       rounding: :half_up,
       flags: [],
       traps: [:invalid_operation, :division_by_zero]]
