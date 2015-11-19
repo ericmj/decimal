@@ -188,6 +188,19 @@ defmodule DecimalTest do
     end
   end
 
+  test "cmp" do
+    assert Decimal.cmp(~d"420", ~d"42e1") == :eq
+    assert Decimal.cmp(~d"1", ~d"0")      == :gt
+    assert Decimal.cmp(~d"0", ~d"1")      == :lt
+    assert Decimal.cmp(~d"0", ~d"-0")     == :eq
+    assert Decimal.cmp(~d"nan", ~d"1")    == :qNaN
+    assert Decimal.cmp(~d"1", ~d"nan")    == :qNaN
+
+    assert_raise Error, fn ->
+      Decimal.compare(~d"snan", ~d"0")
+    end
+  end
+
   test "equal?" do
     assert Decimal.equal?(~d"420", ~d"42e1")
     refute Decimal.equal?(~d"1", ~d"0")
@@ -198,6 +211,47 @@ defmodule DecimalTest do
 
     assert_raise Error, fn ->
       Decimal.equal?(~d"snan", ~d"0")
+    end
+  end
+
+  test "eq" do
+    assert Decimal.eq(~d"420", ~d"42e1")
+    refute Decimal.eq(~d"1", ~d"0")
+    refute Decimal.eq(~d"0", ~d"1")
+    assert Decimal.eq(~d"0", ~d"-0")
+    refute Decimal.eq(~d"nan", ~d"1")
+    refute Decimal.eq(~d"1", ~d"nan")
+
+    assert_raise Error, fn ->
+      Decimal.equal?(~d"snan", ~d"0")
+    end
+  end
+
+  test "gt" do
+    refute Decimal.gt(~d"420", ~d"42e1")
+    assert Decimal.gt(~d"1", ~d"0")     
+    refute Decimal.gt(~d"0", ~d"1")     
+    refute Decimal.gt(~d"0", ~d"-0")    
+    refute Decimal.gt(~d"nan", ~d"1")   
+    refute Decimal.gt(~d"1", ~d"nan")   
+
+
+    assert_raise Error, fn ->
+      Decimal.compare(~d"snan", ~d"0")
+    end
+  end
+
+  test "lt" do
+    refute Decimal.lt(~d"420", ~d"42e1")
+    refute Decimal.lt(~d"1", ~d"0")     
+    assert Decimal.lt(~d"0", ~d"1")     
+    refute Decimal.lt(~d"0", ~d"-0")    
+    refute Decimal.lt(~d"nan", ~d"1")   
+    refute Decimal.lt(~d"1", ~d"nan")   
+
+
+    assert_raise Error, fn ->
+      Decimal.compare(~d"snan", ~d"0")
     end
   end
 

@@ -290,6 +290,21 @@ defmodule Decimal do
   end
 
   @doc """
+  Compares two numbers numerically. If the first number is greater than the second
+  `:gt` is returned, if less than `:lt` is returned, if both numbers are equal
+  `:eq` is returned. Otherwise, if any number is a `NaN`, NaN is returned.
+  """
+  @spec cmp(t, t) :: :lt | :eq | :gt | :qNaN
+  def cmp(num1, num2) do
+    case compare(num1, num2) do
+      %Decimal{coef: 1, sign: -1} -> :lt
+      %Decimal{coef: 0} -> :eq
+      %Decimal{coef: 1, sign: 1} -> :gt
+      %Decimal{coef: :qNaN} -> :qNaN
+    end
+  end
+
+  @doc """
   Compares two numbers numerically and returns `true` if they are equal,
   otherwise `false`.
   """
@@ -297,6 +312,38 @@ defmodule Decimal do
   def equal?(num1, num2) do
     case compare(num1, num2) do
       %Decimal{sign: 1, coef: 0, exp: 0} -> true
+      _ -> false
+    end
+  end
+
+  @doc """
+  Alias for equal?(num1, num2).
+  """
+  @spec eq(t, t) :: boolean
+  def eq(num1, num2) do
+    equal?(num1, num2)
+  end
+
+  @doc """
+  Compares two numbers numerically and returns `true` if the first is greater
+  than the second, otherwise `false`.
+  """
+  @spec gt(t, t) :: boolean
+  def gt(num1, num2) do
+    case  compare(num1, num2) do
+      %Decimal{sign: 1, coef: 1} -> true
+      _ -> false
+    end
+  end
+
+  @doc """
+  Compares two numbers numerically and returns `true` if the second is greater
+  than the first, otherwise `false`.
+  """
+  @spec lt(t, t) :: boolean
+  def lt(num1, num2) do
+    case  compare(num1, num2) do
+      %Decimal{sign: -1, coef: 1} -> true
       _ -> false
     end
   end
