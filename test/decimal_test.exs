@@ -197,6 +197,7 @@ defmodule DecimalTest do
     assert_raise Error, fn ->
       Decimal.compare(~d"snan", ~d"0")
     end
+    
     assert_raise CaseClauseError, fn ->
       Decimal.cmp(~d"nan", ~d"1")
     end
