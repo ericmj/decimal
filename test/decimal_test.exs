@@ -489,7 +489,7 @@ defmodule DecimalTest do
       assert Decimal.to_integer(d(1, 10, 2)) == 1000
       assert Decimal.to_integer(d(1, 1000, -2)) == 10
 
-      assert_raise Error, fn ->
+      assert_raise FunctionClauseError, fn ->
         Decimal.to_integer(d(1, 1001, -2))
       end
     end)

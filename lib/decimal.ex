@@ -827,10 +827,6 @@ defmodule Decimal do
     to_integer(%Decimal{sign: sign, coef: trunc(coef / 10), exp: exp + 1})
   end
 
-  def to_integer(%Decimal{} = num) do
-    error(:invalid_operation, "not an integer", num)
-  end
-
   @doc """
   Runs function with given context.
   """
