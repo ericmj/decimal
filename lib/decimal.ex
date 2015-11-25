@@ -91,11 +91,8 @@ defmodule Decimal do
     defexception [:message, :signal, :reason, :result]
 
     def exception(opts) do
-      if opts[:reason] do
-        msg = "#{opts[:signal]}: #{opts[:reason]}"
-      else
-        msg = "#{opts[:signal]}"
-      end
+      reason = if opts[:reason], do: ": " <> opts[:reason]
+      msg    = "#{opts[:signal]}#{reason}"
 
       struct(__MODULE__, [message: msg] ++ opts)
     end
@@ -159,7 +156,7 @@ defmodule Decimal do
       traps: [Decimal.signal]}
 
     defstruct [
-      precision: 9,
+      precision: 28,
       rounding: :half_up,
       flags: [],
       traps: [:invalid_operation, :division_by_zero]]
@@ -359,14 +356,18 @@ defmodule Decimal do
       coef = 0
       adjust = 0
       signals = []
+
+      %Decimal{sign: sign, coef: 0, exp: exp1 - exp2}
+      |> context([])
     else
       prec10 = int_pow10(1, get_context().precision)
-
       {coef1, coef2, adjust} = div_adjust(coef1, coef2, 0)
       {coef, adjust, _rem, signals} = div_calc(coef1, coef2, 0, adjust, prec10)
+
+      %Decimal{sign: sign, coef: coef, exp: exp1 - exp2 - adjust}
+      |> context(signals)
     end
 
-    %Decimal{sign: sign, coef: coef, exp: exp1 - exp2 - adjust} |> context(signals)
   end
 
   @doc """
