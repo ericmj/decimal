@@ -353,10 +353,6 @@ defmodule Decimal do
     sign = if sign1 == sign2, do: 1, else: -1
 
     if coef1 == 0 do
-      coef = 0
-      adjust = 0
-      signals = []
-
       %Decimal{sign: sign, coef: 0, exp: exp1 - exp2}
       |> context([])
     else
