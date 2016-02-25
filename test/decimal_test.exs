@@ -188,6 +188,21 @@ defmodule DecimalTest do
     end
   end
 
+  test "cmp" do
+    assert Decimal.cmp(~d"420", ~d"42e1") == :eq
+    assert Decimal.cmp(~d"1", ~d"0")      == :gt
+    assert Decimal.cmp(~d"0", ~d"1")      == :lt
+    assert Decimal.cmp(~d"0", ~d"-0")     == :eq
+
+    assert_raise Error, fn ->
+      Decimal.compare(~d"snan", ~d"0")
+    end
+    
+    assert_raise CaseClauseError, fn ->
+      Decimal.cmp(~d"nan", ~d"1")
+    end
+  end
+
   test "equal?" do
     assert Decimal.equal?(~d"420", ~d"42e1")
     refute Decimal.equal?(~d"1", ~d"0")
