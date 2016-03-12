@@ -768,10 +768,7 @@ defmodule Decimal do
         end
       end
 
-    if sign == -1 do
-      list = [?-|list]
-    end
-
+    list = if sign == -1, do: [?-|list], else: list
     IO.iodata_to_binary(list)
   end
 
@@ -780,46 +777,36 @@ defmodule Decimal do
     length = length(list)
     adjusted = exp + length - 1
 
-    cond do
-      exp == 0 ->
-        :ok
+    list =
+      cond do
+        exp == 0 ->
+          list
 
-      exp < 0 and adjusted >= -6 ->
-        abs_exp = Kernel.abs(exp)
-        diff = -length + abs_exp + 1
-        if diff > 0 do
-          list = :lists.duplicate(diff, ?0) ++ list
-          list = List.insert_at(list, 1, ?.)
-        else
-          list = List.insert_at(list, exp - 1, ?.)
-        end
+        exp < 0 and adjusted >= -6 ->
+          abs_exp = Kernel.abs(exp)
+          diff = -length + abs_exp + 1
+          if diff > 0 do
+            list = :lists.duplicate(diff, ?0) ++ list
+            List.insert_at(list, 1, ?.)
+          else
+            List.insert_at(list, exp - 1, ?.)
+          end
 
-      true ->
-        if length > 1 do
-          list = List.insert_at(list, 1, ?.)
-        end
-        list = list ++ 'E'
-        if exp >= 0, do: list = list ++ '+'
-        list = list ++ Integer.to_char_list(adjusted)
-    end
+        true ->
+          list = if length > 1, do: List.insert_at(list, 1, ?.), else: list
+          list = list ++ 'E'
+          list = if exp >= 0, do: list ++ '+', else: list
+          list ++ Integer.to_char_list(adjusted)
+      end
 
-    if sign == -1 do
-      list = [?-|list]
-    end
-
+    list = if sign == -1, do: [?-|list], else: list
     IO.iodata_to_binary(list)
   end
 
   def to_string(%Decimal{sign: sign, coef: coef, exp: exp}, :raw) do
     str = Integer.to_string(coef)
-
-    if sign == -1 do
-      str = [?-|str]
-    end
-
-    if exp != 0 do
-      str = [str, "E", Integer.to_string(exp)]
-    end
+    str = if sign == -1, do: [?-|str], else: str
+    str = if exp != 0, do: [str, "E", Integer.to_string(exp)], else: str
 
     IO.iodata_to_binary(str)
   end
@@ -902,7 +889,7 @@ defmodule Decimal do
 
       coef >= prec10 ->
         signals = [:rounded]
-        unless base_10?(coef1), do: signals = [:inexact|signals]
+        signals = if base_10?(coef1), do: signals, else: [:inexact|signals]
         {coef, adjust, coef1, signals}
 
       true ->
@@ -970,9 +957,9 @@ defmodule Decimal do
       {signif, remain} = :lists.split(fixed_precision, digits)
       significant = if signif == [], do: 0, else: :erlang.list_to_integer(signif)
 
-      if increment?(rounding, sign, signif, remain) do
-        significant = significant + 1
-      end
+      significant = if increment?(rounding, sign, signif, remain),
+                      do: significant + 1,
+                    else: significant
 
       precision = Kernel.min(precision, 0)
       %Decimal{sign: sign, coef: significant, exp: exp + length(remain) - precision}
@@ -1005,14 +992,10 @@ defmodule Decimal do
       precision = Kernel.min(num_digits, precision)
       {signif, remain} = :lists.split(precision, digits)
 
-      if increment?(rounding, sign, signif, remain) do
-        signif = digits_increment(signif)
-      end
+      signif = if increment?(rounding, sign, signif, remain), do: digits_increment(signif), else: signif
 
       signals = put_uniq(signals, :rounded)
-      if any_nonzero(remain) do
-        signals = put_uniq(signals, :inexact)
-      end
+      signals = if any_nonzero(remain), do: put_uniq(signals, :inexact), else: signals
 
       exp = exp + length(remain)
       do_precision(sign, signif, exp, precision, rounding, signals)
@@ -1120,8 +1103,8 @@ defmodule Decimal do
     if rest != "" or (int == [] and float == []) do
       error(:invalid_operation, "number parsing syntax", %Decimal{coef: :NaN})
     else
-      if int == [], do: int = '0'
-      if exp == [], do: exp = '0'
+      int = if int == [], do: '0', else: int
+      exp = if exp == [], do: '0', else: exp
       %Decimal{coef: List.to_integer(int ++ float), exp: List.to_integer(exp) - length(float)}
     end
   end
@@ -1165,9 +1148,7 @@ defmodule Decimal do
     error_signal = Enum.find(signals, &(&1 in context.traps))
     nan = if error_signal, do: :sNaN, else: :qNaN
 
-    if match?(%Decimal{coef: :NaN}, result) do
-      result = %{result | coef: nan}
-    end
+    result = if match?(%Decimal{coef: :NaN}, result), do: %{result | coef: nan}, else: result
 
     if error_signal do
       error = [signals: error_signal, reason: reason, result: result]
