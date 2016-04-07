@@ -812,6 +812,20 @@ defmodule Decimal do
   end
 
   @doc """
+  Returns the decimal represented as an integer. Fails when loss of precision
+  will occur.
+  """
+  def to_integer(%Decimal{sign: sign, coef: coef, exp: 0}), do: sign * coef
+
+  def to_integer(%Decimal{sign: sign, coef: coef, exp: exp}) when (exp > 0) do
+    to_integer(%Decimal{sign: sign, coef: coef * 10, exp: exp - 1})
+  end
+
+  def to_integer(%Decimal{sign: sign, coef: coef, exp: exp}) when (exp < 0) and (Kernel.rem(coef, 10) == 0) do
+    to_integer(%Decimal{sign: sign, coef: trunc(coef / 10), exp: exp + 1})
+  end
+
+  @doc """
   Runs function with given context.
   """
   @spec with_context(Context.t, (() -> x)) :: x when x: var
