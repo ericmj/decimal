@@ -1,17 +1,16 @@
 defmodule Decimal.Mixfile do
   use Mix.Project
 
+  @version "1.1.2"
+
   def project do
     [app: :decimal,
-     version: "1.1.2-dev",
+     version: @version,
      elixir: "~> 1.0",
      deps: deps,
      name: "Decimal",
      source_url: "https://github.com/ericmj/decimal",
-     docs: fn ->
-       {ref, 0} = System.cmd("git", ["rev-parse", "--verify", "--quiet", "HEAD"])
-       [source_ref: ref, readme: "README.md"]
-     end,
+     docs: [source_ref: "v#{@version}", main: "readme", extras: ["README.md"]],
      description: description,
      package: package]
   end
