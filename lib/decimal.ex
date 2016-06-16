@@ -163,7 +163,7 @@ defmodule Decimal do
   end
 
   defmacrop error(flags, reason, result, context \\ nil) do
-    quote bind_quoted: binding do
+    quote bind_quoted: binding() do
       case handle_error(flags, reason, result, context) do
         {:ok, result} -> result
         {:error, error} -> raise Error, error
@@ -889,7 +889,7 @@ defmodule Decimal do
   """
   @spec update_context((Context.t -> Context.t)) :: :ok
   def update_context(fun) when is_function(fun, 1) do
-    get_context |> fun.() |> set_context
+    get_context() |> fun.() |> set_context
   end
 
   ## ARITHMETIC ##

@@ -7,12 +7,12 @@ defmodule Decimal.Mixfile do
     [app: :decimal,
      version: @version,
      elixir: "~> 1.0",
-     deps: deps,
+     deps: deps(),
      name: "Decimal",
      source_url: "https://github.com/ericmj/decimal",
      docs: [source_ref: "v#{@version}", main: "readme", extras: ["README.md"]],
-     description: description,
-     package: package]
+     description: description(),
+     package: package()]
   end
 
   def application do
