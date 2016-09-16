@@ -269,7 +269,8 @@ defmodule Decimal do
   @doc """
   Compares two numbers numerically. If the first number is greater than the second
   `#Decimal<1>` is returned, if less than `Decimal<-1>` is returned. Otherwise,
-  if both numbers are equal `Decimal<0>` is returned.
+  if both numbers are equal `Decimal<0>` is returned.  If either number is a quiet
+  NaN, then that number is returned.
   """
   @spec compare(t, t) :: t
   def compare(%Decimal{coef: coef1} = num1, %Decimal{coef: coef2} = num2) do
@@ -289,7 +290,9 @@ defmodule Decimal do
   @doc """
   Compares two numbers numerically. If the first number is greater than the second
   `:gt` is returned, if less than `:lt` is returned, if both numbers are equal
-  `:eq` is returned. Neither number can be a `NaN`.
+  `:eq` is returned.
+
+  Neither number can be a `NaN`.  If you need to handle quiet NaNs, use `compare/2`.
   """
   @spec cmp(t, t) :: :lt | :eq | :gt
   def cmp(num1, num2) do
