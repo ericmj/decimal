@@ -289,9 +289,9 @@ defmodule Decimal do
   @doc """
   Compares two numbers numerically. If the first number is greater than the second
   `:gt` is returned, if less than `:lt` is returned, if both numbers are equal
-  `:eq` is returned. Otherwise, if any number is a `NaN`, NaN is returned.
+  `:eq` is returned. Neither number can be a `NaN`.
   """
-  @spec cmp(t, t) :: :lt | :eq | :gt | :qNaN
+  @spec cmp(t, t) :: :lt | :eq | :gt
   def cmp(num1, num2) do
     case compare(num1, num2) do
       %Decimal{coef: 1, sign: -1} -> :lt
