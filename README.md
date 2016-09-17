@@ -18,14 +18,13 @@ end
 
 After you are done, run `mix deps.get` in your shell to fetch and compile Decimal. Start an interactive Elixir shell with `iex -S mix`.
 
-```iex
+```elixir
 iex> alias Decimal, as: D
 nil
 iex> D.add(D.new(6), D.new(7))
 #Decimal<13>
 iex> D.div(D.new(1), D.new(3))
 #Decimal<0.333333333>
-
 ```
 
 ## Examples
@@ -45,7 +44,7 @@ The context is accessed with `Decimal.get_context/0` and set with
 `Decimal.set_context/1`. It can also be temporarily set with
 `Decimal.with_context/2`.
 
-```iex
+```elixir
 iex> D.get_context
 %Decimal.Context{flags: [:rounded, :inexact], precision: 9, rounding: :half_up,
  traps: [:invalid_operation, :division_by_zero]}
@@ -65,7 +64,7 @@ iex> Decimal.get_context
 
 The precision is used to limit the amount of decimal digits in the coefficient:
 
-```iex
+```elixir
 iex> D.set_context(%D.Context{D.get_context | precision: 9})
 :ok
 iex> D.div(D.new(1), D.new(3))
@@ -79,7 +78,7 @@ iex> D.div(D.new(1), D.new(3))
 The rounding algorithm specifies how the result of an operation shall be rounded
 when it get be represented with the current precision:
 
-```iex
+```elixir
 iex> D.set_context(%D.Context{D.get_context | rounding: :half_up}) 
 :ok
 iex> D.div(D.new(31), D.new(2))
@@ -95,7 +94,7 @@ iex> D.div(D.new(31), D.new(2))
 When an exceptional condition is signalled its flag is set in the context and if
 if the trap enabler is set `Decimal.Error` will be raised.
 
-```iex
+```elixir
 iex> D.set_context(%D.Context{D.get_context | rounding: :floor, precision: 2}) 
 :ok
 iex> D.get_context.traps
@@ -114,7 +113,7 @@ the precision. `Decimal.Error` was not raised because the signals' trap enablers
 weren't set. We can, however, set the trap enabler if we what this condition to
 raise.
 
-```iex
+```elixir
 iex> D.set_context(%D.Context{D.get_context | traps: D.get_context.traps ++ [:inexact]}) 
 :ok
 iex> D.div(D.new(31), D.new(2))
@@ -123,7 +122,7 @@ iex> D.div(D.new(31), D.new(2))
 
 The default trap enablers, such as `:division_by_zero` can be unset:
 
-```iex
+```elixir
 iex> D.get_context.traps
 [:invalid_operation, :division_by_zero]
 iex> D.div(D.new(42), D.new(0))
