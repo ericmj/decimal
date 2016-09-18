@@ -49,6 +49,29 @@ defmodule Decimal do
 
   import Kernel, except: [abs: 1, div: 2, max: 2, min: 2, rem: 1, round: 1]
 
+  @typedoc """
+  The coefficient of the power of `10`.  Non-negative because the sign is stored separately in `sign`.
+
+    * `non_neg_integer` - when the `t` represents a number, instead of one of the special values below.
+    * `:qNaN` - a quiet NaN was produced by a previous operation.  Quiet NaNs propagate quietly, unlike signaling NaNs
+       that return errors (based on the `Decimal.Context`).
+    * `:sNaN` - signalling NaN that indicated an error occured that should stop the next operation with an error
+       (based on the `Decimal.Context`).
+    * `:inf` - infinity
+  """
+  @type coefficient :: non_neg_integer | :qNaN | :sNaN | :inf
+
+  @typedoc """
+  The exponent to which `10` is raised.
+  """
+  @type exponent :: integer
+
+  @typedoc """
+    * `1` for positive
+    * `-1` for negative
+  """
+  @type sign :: 1 | -1
+
   @type signal :: :invalid_operation |
                   :division_by_zero |
                   :rounded |
@@ -62,10 +85,18 @@ defmodule Decimal do
                     :half_down |
                     :up
 
+  @typedoc """
+  This implementation models the `sign` as `1` or `-1` such that the complete number will be: `sign * coef * 10^exp`.
+
+    * `coef` - The coefficient of the power of `10`.
+    * `exp` - The exponent of the power of `10`.
+    * `sign` - `1` for positive. `-1` for negative.
+  """
   @type t :: %__MODULE__{
-    sign: 1 | -1,
-    coef: non_neg_integer | :qNaN | :sNaN | :inf,
-    exp: integer}
+    sign: sign,
+    coef: coefficient,
+    exp: exponent
+  }
 
   defstruct [sign: 1, coef: 0, exp: 0]
 
