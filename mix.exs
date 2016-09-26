@@ -1,7 +1,7 @@
 defmodule Decimal.Mixfile do
   use Mix.Project
 
-  @version "1.1.3-dev"
+  @version "1.2.0"
 
   def project do
     [app: :decimal,
@@ -25,9 +25,7 @@ defmodule Decimal.Mixfile do
   end
 
   defp description do
-    """
-    Arbitrary precision decimal arithmetic for Elixir.
-    """
+    "Arbitrary precision decimal arithmetic for Elixir."
   end
 
   defp package do
