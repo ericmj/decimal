@@ -199,7 +199,7 @@ defmodule DecimalTest do
     assert_raise Error, fn ->
       Decimal.compare(~d"snan", ~d"0")
     end
-    
+
     assert_raise CaseClauseError, fn ->
       Decimal.cmp(~d"nan", ~d"1")
     end
@@ -602,7 +602,7 @@ defmodule DecimalTest do
     assert round.(~d"1.02")    == d(1, 102, -2)
     assert round.(~d"1.029")   == d(1, 102, -2)
     assert round.(~d"-1.029")  == d(-1, 102, -2)
-    assert round.(~d"102")     == d(1, 102, 0)
+    assert round.(~d"102")     == d(1, 10200, -2)
     assert round.(~d"0.001")   == d(1, 0, -2)
     assert round.(~d"-0.001")  == d(-1, 0, -2)
     assert roundneg.(~d"1.02") == d(1, 0, 2)
@@ -616,7 +616,7 @@ defmodule DecimalTest do
     assert round.(~d"1.02")    == d(1, 102, -2)
     assert round.(~d"1.021")   == d(1, 103, -2)
     assert round.(~d"-1.021")  == d(-1, 102, -2)
-    assert round.(~d"102")     == d(1, 102, 0)
+    assert round.(~d"102")     == d(1, 10200, -2)
     assert roundneg.(~d"1.02") == d(1, 1, 2)
     assert roundneg.(~d"102")  == d(1, 2, 2)
   end
@@ -683,7 +683,7 @@ defmodule DecimalTest do
     assert round.(~d"1.02")    == d(1, 102, -2)
     assert round.(~d"1.029")   == d(1, 103, -2)
     assert round.(~d"-1.029")  == d(-1, 103, -2)
-    assert round.(~d"102")     == d(1, 102, 0)
+    assert round.(~d"102")     == d(1, 10200, -2)
     assert round.(~d"0.001")   == d(1, 1, -2)
     assert round.(~d"-0.001")  == d(-1, 1, -2)
     assert roundneg.(~d"1.02") == d(1, 1, 2)
@@ -692,12 +692,23 @@ defmodule DecimalTest do
   end
 
   test "issue #13" do
-    round_down = &Decimal.round(&1,0, :down)
+    round_down = &Decimal.round(&1, 0, :down)
     round_up = &Decimal.round(&1, 0, :up)
     assert round_down.(~d"-2.5") == d(-1, 2, 0)
     assert round_up.(~d"-2.5")   == d(-1, 3, 0)
     assert round_up.(~d"2.5")    == d(1, 3, 0)
     assert round_down.(~d"2.5")  == d(1, 2, 0)
+  end
+
+  test "issue #35" do
+    Decimal.new(1,5,-4) |> Decimal.round(0)
+    assert Decimal.round(~d"0.0001", 0, :down)      == d(1, 0, 0)
+    assert Decimal.round(~d"0.0001", 0, :ceiling)   == d(1, 1, 0)
+    assert Decimal.round(~d"0.0001", 0, :floor)     == d(1, 0, 0)
+    assert Decimal.round(~d"0.0001", 0, :half_up)   == d(1, 0, 0)
+    assert Decimal.round(~d"0.0001", 0, :half_even) == d(1, 0, 0)
+    assert Decimal.round(~d"0.0001", 0, :half_down) == d(1, 0, 0)
+    assert Decimal.round(~d"0.0001", 0, :up)        == d(1, 1, 0)
   end
 
   test "set context flags" do

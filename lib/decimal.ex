@@ -716,7 +716,9 @@ defmodule Decimal do
 
   def round(num, n, mode) do
     %Decimal{sign: sign, coef: coef, exp: exp} = reduce(num)
-    value = do_round(coef, exp, sign, n, mode)
+    digits = :erlang.integer_to_list(coef)
+    target_exp = -n
+    value = do_round(sign, digits, exp, target_exp, mode)
     context(value, [])
   end
 
@@ -1022,28 +1024,36 @@ defmodule Decimal do
 
   ## ROUNDING ##
 
-  defp do_round(coef, exp, sign, n, rounding) do
-    digits = coef |> :erlang.integer_to_list
+  defp do_round(sign, digits, exp, target_exp, rounding) do
     num_digits = length(digits)
-    precision = num_digits + n + exp
+    precision = num_digits - (target_exp - exp)
 
-    if num_digits > precision do
-      precision = Kernel.min(num_digits, precision)
-      fixed_precision = Kernel.max(0, precision)
+    cond do
+      exp == target_exp ->
+        %Decimal{sign: sign, coef: digits_to_integer(digits), exp: exp}
 
-      {signif, remain} = :lists.split(fixed_precision, digits)
-      significant = if signif == [], do: 0, else: :erlang.list_to_integer(signif)
+      exp < target_exp and precision < 0 ->
+        digits = [?0|digits]
+        {signif, remain} = :lists.split(1, digits)
+        signif = if increment?(rounding, sign, signif, remain), do: digits_increment(signif), else: signif
+        coef = digits_to_integer(signif)
+        %Decimal{sign: sign, coef: coef, exp: target_exp}
 
-      significant = if increment?(rounding, sign, signif, remain),
-                      do: significant + 1,
-                    else: significant
+      exp < target_exp and precision >= 0 ->
+        {signif, remain} = :lists.split(precision, digits)
+        signif = if increment?(rounding, sign, signif, remain), do: digits_increment(signif), else: signif
+        coef = digits_to_integer(signif)
+        %Decimal{sign: sign, coef: coef, exp: target_exp}
 
-      precision = Kernel.min(precision, 0)
-      %Decimal{sign: sign, coef: significant, exp: exp + length(remain) - precision}
-    else
-      %Decimal{sign: sign, coef: coef, exp: exp}
+      exp > target_exp ->
+        digits = digits ++ Enum.map(1..(exp-target_exp), fn _ -> ?0 end)
+        coef = digits_to_integer(digits)
+        %Decimal{sign: sign, coef: coef, exp: target_exp}
     end
   end
+
+  defp digits_to_integer([]), do: 0
+  defp digits_to_integer(digits), do: :erlang.list_to_integer(digits)
 
   defp precision(%Decimal{coef: :sNaN} = num, _precision, _rounding) do
     {num, []}
@@ -1077,7 +1087,7 @@ defmodule Decimal do
       exp = exp + length(remain)
       do_precision(sign, signif, exp, precision, rounding, signals)
     else
-      coef = :erlang.list_to_integer(digits)
+      coef = digits_to_integer(digits)
       dec = %Decimal{sign: sign, coef: coef, exp: exp}
       {dec, signals}
     end
