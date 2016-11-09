@@ -294,13 +294,20 @@ defmodule DecimalTest do
 
   test "rem" do
     assert Decimal.rem(~d"1", ~d"3")      == d(1, 1, 0)
-    assert Decimal.rem(~d"42", ~d"2")     == d(1, 0, -1)
+    assert Decimal.rem(~d"42", ~d"2")     == d(1, 0, 0)
     assert Decimal.rem(~d"123", ~d"23")   == d(1, 8, 0)
     assert Decimal.rem(~d"123", ~d"-23")  == d(1, 8, 0)
     assert Decimal.rem(~d"-123", ~d"23")  == d(-1, 8, 0)
     assert Decimal.rem(~d"-123", ~d"-23") == d(-1, 8, 0)
-    assert Decimal.rem(~d"1", ~d"0.3")    == d(1, 1, 0)
+    assert Decimal.rem(~d"1", ~d"0.3")    == d(1, 1, -1)
     assert Decimal.rem(~d"4", ~d"8")      == d(1, 4, 0)
+
+    assert Decimal.rem(~d"2.1", ~d"3")    == d(1, 21, -1)
+    assert Decimal.rem(~d"10", ~d"3")     == d(1, 1, 0)
+    assert Decimal.rem(~d"-10", ~d"3")    == d(-1, 1, 0)
+    assert Decimal.rem(~d"10.2", ~d"1")   == d(1, 2, -1)
+    assert Decimal.rem(~d"10", ~d"0.3")   == d(1, 1, -1)
+    assert Decimal.rem(~d"3.6", ~d"1.3")  == d(1, 10, -1)
 
     assert Decimal.rem(~d"-inf", ~d"-2")  == d(-1, 0, 0)
     assert Decimal.rem(~d"5", ~d"-inf")   == d(1, :inf, 0)
@@ -709,6 +716,12 @@ defmodule DecimalTest do
     assert Decimal.round(~d"0.0001", 0, :half_even) == d(1, 0, 0)
     assert Decimal.round(~d"0.0001", 0, :half_down) == d(1, 0, 0)
     assert Decimal.round(~d"0.0001", 0, :up)        == d(1, 1, 0)
+  end
+
+  test "issue #29" do
+    assert Decimal.rem(~d"1.234", ~d"1")    == d(1, 234, -3)
+    assert Decimal.rem(~d"1.234", ~d"1.0")  == d(1, 234, -3)
+    assert Decimal.rem(~d"1.234", ~d"1.00") == d(1, 234, -3)
   end
 
   test "set context flags" do

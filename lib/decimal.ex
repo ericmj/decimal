@@ -423,8 +423,63 @@ defmodule Decimal do
   * If second number (denominator) is (+-)0 `:division_by_zero` is signalled.
   """
   @spec div_int(t, t) :: t
-  def div_int(num1, num2) do
-    div_rem(num1, num2) |> elem(0)
+  def div_int(%Decimal{coef: :sNaN} = num1, %Decimal{}) do
+    error(:invalid_operation, "operation on NaN", num1)
+  end
+
+  def div_int(%Decimal{}, %Decimal{coef: :sNaN} = num2) do
+    error(:invalid_operation, "operation on NaN", num2)
+  end
+
+  def div_int(%Decimal{coef: :qNaN} = num1, %Decimal{}) do
+    num1
+  end
+
+  def div_int(%Decimal{}, %Decimal{coef: :qNaN} = num2) do
+    num2
+  end
+
+  def div_int(%Decimal{coef: :inf}, %Decimal{coef: :inf}) do
+    error(:invalid_operation, "(+-)Infinity / (+-)Infinity", %Decimal{coef: :NaN})
+  end
+
+  def div_int(%Decimal{sign: sign1, coef: :inf} = num1, %Decimal{sign: sign2}) do
+    sign = if sign1 == sign2, do: 1, else: -1
+    %{num1 | sign: sign}
+  end
+
+  def div_int(%Decimal{sign: sign1, exp: exp1}, %Decimal{sign: sign2, coef: :inf, exp: exp2}) do
+    sign = if sign1 == sign2, do: 1, else: -1
+    # TODO: Subnormal
+    # exponent?
+    %Decimal{sign: sign, coef: 0, exp: exp1 - exp2}
+  end
+
+  def div_int(%Decimal{coef: 0}, %Decimal{coef: 0}) do
+    error(:invalid_operation, "0 / 0", %Decimal{coef: :NaN})
+  end
+
+  def div_int(%Decimal{sign: sign1}, %Decimal{sign: sign2, coef: 0}) do
+    div_sign = if sign1 == sign2, do: 1, else: -1
+    error(:division_by_zero, nil, %Decimal{sign: div_sign, coef: :inf})
+  end
+
+  def div_int(%Decimal{sign: sign1, coef: coef1, exp: exp1} = num1, %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2) do
+    div_sign = if sign1 == sign2, do: 1, else: -1
+
+    cond do
+      compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == %Decimal{sign: -1, coef: 1} ->
+        %Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2}
+      coef1 == 0 ->
+        context(%{num1 | sign: div_sign})
+      true ->
+        case integer_division(div_sign, coef1, exp1, coef2, exp2) do
+          {:ok, result} ->
+            result
+          {:error, error, reason, num} ->
+            error(error, reason, num)
+        end
+    end
   end
 
   @doc """
@@ -437,8 +492,59 @@ defmodule Decimal do
   * If second number (denominator) is (+-)0 `:division_by_zero` is signalled.
   """
   @spec rem(t, t) :: t
-  def rem(num1, num2) do
-    div_rem(num1, num2) |> elem(1)
+  def rem(%Decimal{coef: :sNaN} = num1, %Decimal{}) do
+    error(:invalid_operation, "operation on NaN", num1)
+  end
+
+  def rem(%Decimal{}, %Decimal{coef: :sNaN} = num2) do
+    error(:invalid_operation, "operation on NaN", num2)
+  end
+
+  def rem(%Decimal{coef: :qNaN} = num1, %Decimal{}) do
+    num1
+  end
+
+  def rem(%Decimal{}, %Decimal{coef: :qNaN} = num2) do
+    num2
+  end
+
+  def rem(%Decimal{coef: :inf}, %Decimal{coef: :inf}) do
+    error(:invalid_operation, "(+-)Infinity / (+-)Infinity", %Decimal{coef: :NaN})
+  end
+
+  def rem(%Decimal{sign: sign1, coef: :inf}, %Decimal{}) do
+    %Decimal{sign: sign1, coef: 0}
+  end
+
+  def rem(%Decimal{sign: sign1}, %Decimal{coef: :inf} = num2) do
+    # TODO: Subnormal
+    # exponent?
+    %{num2 | sign: sign1}
+  end
+
+  def rem(%Decimal{coef: 0}, %Decimal{coef: 0}) do
+    error(:invalid_operation, "0 / 0", %Decimal{coef: :NaN})
+  end
+
+  def rem(%Decimal{sign: sign1}, %Decimal{coef: 0}) do
+    error(:division_by_zero, nil, %Decimal{sign: sign1, coef: 0})
+  end
+
+  def rem(%Decimal{sign: sign1, coef: coef1, exp: exp1} = num1, %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2) do
+    cond do
+      compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == %Decimal{sign: -1, coef: 1} ->
+        %{num1 | sign: sign1}
+      coef1 == 0 ->
+        context(%{num2 | sign: sign1})
+      true ->
+        div_sign = if sign1 == sign2, do: 1, else: -1
+        case integer_division(div_sign, coef1, exp1, coef2, exp2) do
+          {:ok, result} ->
+            sub(num1, mult(num2, result))
+          {:error, error, reason, num} ->
+            error(error, reason, num)
+        end
+    end
   end
 
   @doc """
@@ -502,27 +608,15 @@ defmodule Decimal do
 
     cond do
       compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == %Decimal{sign: -1, coef: 1} ->
-        {%Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2},
-          %{num1 | sign: sign1}}
+        {%Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2}, %{num1 | sign: sign1}}
       coef1 == 0 ->
-        {%{num1 | sign: div_sign} |> context,
-          %{num2 | sign: sign1} |> context}
+        {context(%{num1 | sign: div_sign}), context(%{num2 | sign: sign1})}
       true ->
-        {coef1, coef2, adjust} = div_adjust(coef1, coef2, 0)
-
-        adjust2 = if adjust < 0, do: 0, else: adjust
-        {coef, rem} = div_int_calc(coef1, coef2, 0, adjust)
-        {coef, exp} = truncate(coef, exp1 - exp2 - adjust2)
-
-        div_coef = coef * pow10(exp)
-        prec10 = pow10(get_context().precision)
-
-        if div_coef > prec10 do
-          error(:invalid_operation, "integer division impossible, quotient too large", %Decimal{coef: :NaN})
-        else
-          adjust3 = if adjust > 0, do: 0, else: adjust
-          {%Decimal{sign: div_sign, coef: div_coef} |> context,
-            %Decimal{sign: sign1, coef: rem, exp: adjust3} |> context}
+        case integer_division(div_sign, coef1, exp1, coef2, exp2) do
+          {:ok, result} ->
+            {result, sub(num1, mult(num2, result))}
+          {:error, error, reason, num} ->
+            error(error, reason, {num, num})
         end
     end
   end
@@ -750,7 +844,7 @@ defmodule Decimal do
   def new(int) when is_integer(int),
     do: %Decimal{sign: (if int < 0, do: -1, else: 1), coef: Kernel.abs(int)}
   def new(float) when is_float(float),
-    do: new(:io_lib_format.fwrite_g(float) |> IO.iodata_to_binary)
+    do: float |> :io_lib_format.fwrite_g |> IO.iodata_to_binary |> new
   def new(binary) when is_binary(binary) do
     case do_parse(binary) do
       {:ok, decimal} -> decimal
@@ -968,7 +1062,7 @@ defmodule Decimal do
 
       coef >= prec10 ->
         signals = [:rounded]
-        signals = if base_10?(coef1), do: signals, else: [:inexact|signals]
+        signals = if base10?(coef1), do: signals, else: [:inexact|signals]
         {coef, adjust, coef1, signals}
 
       true ->
@@ -976,33 +1070,30 @@ defmodule Decimal do
     end
   end
 
-  defp div_int_calc(coef1, coef2, coef, adjust) do
+  defp div_int_calc(coef1, coef2, coef, adjust, precision) do
     cond do
       coef1 >= coef2 ->
-        div_int_calc(coef1 - coef2, coef2, coef + 1, adjust)
-      adjust < 0 ->
-        div_int_calc(coef1 * 10, coef2, coef * 10, adjust + 1)
+        div_int_calc(coef1 - coef2, coef2, coef + 1, adjust, precision)
+      adjust != precision ->
+        div_int_calc(coef1 * 10, coef2, coef * 10, adjust + 1, precision)
       true ->
         {coef, coef1}
     end
   end
 
-  defp base_10?(1), do: true
+  defp integer_division(div_sign, coef1, exp1, coef2, exp2) do
+    precision = exp1 - exp2
+    {coef1, coef2, adjust} = div_adjust(coef1, coef2, 0)
 
-  defp base_10?(num) do
-    if Kernel.rem(num, 10) == 0 do
-      base_10?(Kernel.div(num, 10))
+    {coef, _rem} = div_int_calc(coef1, coef2, 0, adjust, precision)
+
+    prec10 = pow10(get_context().precision)
+
+    if coef > prec10 do
+      {:error, :invalid_operation, "integer division impossible, quotient too large", %Decimal{coef: :NaN}}
     else
-      false
+      {:ok, %Decimal{sign: div_sign, coef: coef, exp: 0}}
     end
-  end
-
-  defp truncate(coef, exp) when exp >= 0 do
-    {coef, exp}
-  end
-
-  defp truncate(coef, exp) when exp < 0 do
-    truncate(Kernel.div(coef, 10), exp + 1)
   end
 
   defp do_reduce(0, _exp) do
@@ -1017,12 +1108,22 @@ defmodule Decimal do
     end
   end
 
-  Enum.reduce 0..100, 1, fn x, acc ->
+  pow10_max = Enum.reduce 0..100, 1, fn x, acc ->
     defp pow10(unquote(x)), do: unquote(acc)
+    defp base10?(unquote(acc)), do: true
     acc * 10
   end
 
   defp pow10(num) when num > 100, do: pow10(100) * pow10(num-100)
+
+  defp base10?(num) when num > unquote(pow10_max) do
+    if Kernel.rem(num, unquote(pow10_max)) == 0 do
+      base10?(Kernel.div(num, unquote(pow10_max)))
+    else
+      false
+    end
+  end
+  defp base10?(_num), do: false
 
   ## ROUNDING ##
 
