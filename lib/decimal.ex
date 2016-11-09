@@ -404,7 +404,7 @@ defmodule Decimal do
       %Decimal{sign: sign, coef: 0, exp: exp1 - exp2}
       |> context([])
     else
-      prec10 = int_pow10(1, get_context().precision)
+      prec10 = pow10(get_context().precision)
       {coef1, coef2, adjust} = div_adjust(coef1, coef2, 0)
       {coef, adjust, _rem, signals} = div_calc(coef1, coef2, 0, adjust, prec10)
 
@@ -514,8 +514,8 @@ defmodule Decimal do
         {coef, rem} = div_int_calc(coef1, coef2, 0, adjust)
         {coef, exp} = truncate(coef, exp1 - exp2 - adjust2)
 
-        div_coef = int_pow10(coef, exp)
-        prec10 = int_pow10(1, get_context().precision)
+        div_coef = coef * pow10(exp)
+        prec10 = pow10(get_context().precision)
 
         if div_coef > prec10 do
           error(:invalid_operation, "integer division impossible, quotient too large", %Decimal{coef: :NaN})
@@ -934,10 +934,10 @@ defmodule Decimal do
     do: {coef1, coef2}
 
   defp add_align(coef1, exp1, coef2, exp2) when exp1 > exp2,
-    do: {coef1 * int_pow10(1, exp1 - exp2), coef2}
+    do: {coef1 * pow10(exp1 - exp2), coef2}
 
   defp add_align(coef1, exp1, coef2, exp2) when exp1 < exp2,
-    do: {coef1, coef2 * int_pow10(1, exp2 - exp1)}
+    do: {coef1, coef2 * pow10(exp2 - exp1)}
 
   defp add_sign(sign1, sign2, coef) do
     cond do
@@ -1017,10 +1017,12 @@ defmodule Decimal do
     end
   end
 
-  defp int_pow10(num, 0),
-    do: num
-  defp int_pow10(num, pow) when pow > 0,
-    do: int_pow10(10 * num, pow - 1)
+  Enum.reduce 0..100, 1, fn x, acc ->
+    defp pow10(unquote(x)), do: unquote(acc)
+    acc * 10
+  end
+
+  defp pow10(num) when num > 100, do: pow10(100) * pow10(num-100)
 
   ## ROUNDING ##
 
