@@ -560,13 +560,13 @@ defmodule DecimalTest do
 
   test "precision half even" do
     Decimal.with_context(%Context{precision: 2, rounding: :half_even}, fn ->
-      assert Decimal.add(~d"0", ~d"9.99")  == d(1, 10, 0)
+      assert Decimal.add(~d"0", ~d"9.99")  == d(1, 100, -1)
       assert Decimal.add(~d"0", ~d"1.0")   == d(1, 10, -1)
       assert Decimal.add(~d"0", ~d"123")   == d(1, 12, 1)
       assert Decimal.add(~d"0", ~d"6.66")  == d(1, 67, -1)
-      assert Decimal.add(~d"0", ~d"9.99")  == d(1, 10, 0)
+      assert Decimal.add(~d"0", ~d"9.99")  == d(1, 100, -1)
       assert Decimal.add(~d"0", ~d"-6.66") == d(-1, 67, -1)
-      assert Decimal.add(~d"0", ~d"-9.99") == d(-1, 10, 0)
+      assert Decimal.add(~d"0", ~d"-9.99") == d(-1, 100, -1)
     end)
 
     Decimal.with_context(%Context{precision: 3, rounding: :half_even}, fn ->

@@ -1170,30 +1170,29 @@ defmodule Decimal do
     {num, []}
   end
 
-  defp precision(%Decimal{sign: sign, coef: coef, exp: exp}, precision, rounding) do
+  defp precision(%Decimal{sign: sign, coef: coef, exp: exp} = num, precision, rounding) do
     digits = :erlang.integer_to_list(coef)
-    do_precision(sign, digits, exp, precision, rounding, [])
-  end
-
-  defp do_precision(sign, digits, exp, precision, rounding, signals) do
     num_digits = length(digits)
 
     if num_digits > precision do
-      precision = Kernel.min(num_digits, precision)
-      {signif, remain} = :lists.split(precision, digits)
-
-      signif = if increment?(rounding, sign, signif, remain), do: digits_increment(signif), else: signif
-
-      signals = put_uniq(signals, :rounded)
-      signals = if any_nonzero(remain), do: put_uniq(signals, :inexact), else: signals
-
-      exp = exp + length(remain)
-      do_precision(sign, signif, exp, precision, rounding, signals)
+      do_precision(sign, digits, num_digits, exp, precision, rounding)
     else
-      coef = digits_to_integer(digits)
-      dec = %Decimal{sign: sign, coef: coef, exp: exp}
-      {dec, signals}
+      {num, []}
     end
+  end
+
+  defp do_precision(sign, digits, num_digits, exp, precision, rounding) do
+    precision = Kernel.min(num_digits, precision)
+    {signif, remain} = :lists.split(precision, digits)
+
+    signif = if increment?(rounding, sign, signif, remain), do: digits_increment(signif), else: signif
+
+    signals = if any_nonzero(remain), do: [:inexact, :rounded], else: [:rounded]
+
+    exp = exp + length(remain)
+    coef = digits_to_integer(signif)
+    dec = %Decimal{sign: sign, coef: coef, exp: exp}
+    {dec, signals}
   end
 
   defp increment?(_, _, _, []),
