@@ -504,17 +504,41 @@ defmodule DecimalTest do
 
   test "to_integer" do
     Decimal.with_context(%Context{precision: 36, rounding: :floor}, fn ->
-      assert Decimal.to_integer(~d"0")        == 0
-      assert Decimal.to_integer(~d"300")      == 300
-      assert Decimal.to_integer(~d"-53000")   == -53000
-      assert Decimal.to_integer(~d"-0")       == 0
+      assert Decimal.to_integer(~d"0")          == 0
+      assert Decimal.to_integer(~d"300")        == 300
+      assert Decimal.to_integer(~d"-53000")     == -53000
+      assert Decimal.to_integer(~d"-0")         == 0
+      assert Decimal.to_integer(d(1, 10, 2))    == 1000
+      assert Decimal.to_integer(d(1, 1000, -2)) == 10
       assert Decimal.to_integer(~d"123456789123489123456789") == 123456789123489123456789
       assert Decimal.to_integer(Decimal.mult(~d"123456789123489123456789", ~d"1000")) == 123456789123489123456789000
-      assert Decimal.to_integer(d(1, 10, 2)) == 1000
-      assert Decimal.to_integer(d(1, 1000, -2)) == 10
 
       assert_raise FunctionClauseError, fn ->
         Decimal.to_integer(d(1, 1001, -2))
+      end
+
+      assert_raise FunctionClauseError, fn ->
+        Decimal.to_integer(d(1, :qNaN, 0))
+      end
+    end)
+  end
+
+  test "to_float" do
+    Decimal.with_context(%Context{precision: 36, rounding: :floor}, fn ->
+      assert Decimal.to_float(~d"0")          === 0.0
+      assert Decimal.to_float(~d"-0")         === 0.0
+      assert Decimal.to_float(~d"-0.0")       === 0.0
+      assert Decimal.to_float(~d"3.00")       === 3.00
+      assert Decimal.to_float(~d"-53.000")    === -53.000
+      assert Decimal.to_float(~d"53000")      === 53000.0
+      assert Decimal.to_float(~d"123.456")    === 123.456
+      assert Decimal.to_float(~d"-123.456")   === -123.456
+      assert Decimal.to_float(~d"123.45600")  === 123.456
+      assert Decimal.to_float(~d"123456.789") === 123456.789
+      assert Decimal.to_float(~d"123456789.123456789") === 123456789.12345679
+
+      assert_raise FunctionClauseError, fn ->
+        Decimal.to_float(d(1, :qNaN, 0))
       end
     end)
   end

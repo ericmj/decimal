@@ -47,7 +47,10 @@ defmodule Decimal do
   Additionally, overflow, underflow and clamped may never be signalled.
   """
 
+  import Bitwise
   import Kernel, except: [abs: 1, div: 2, max: 2, min: 2, rem: 1, round: 1]
+
+  @power_of_2_to_52 4503599627370496
 
   @typedoc """
   The coefficient of the power of `10`.  Non-negative because the sign is stored separately in `sign`.
@@ -971,17 +974,69 @@ defmodule Decimal do
   end
 
   @doc """
-  Returns the decimal represented as an integer. Fails when loss of precision
-  will occur.
-  """
-  def to_integer(%Decimal{sign: sign, coef: coef, exp: 0}), do: sign * coef
+  Returns the decimal represented as an integer.
 
-  def to_integer(%Decimal{sign: sign, coef: coef, exp: exp}) when (exp > 0) do
+  Fails when loss of precision will occur.
+  """
+  @spec to_integer(t) :: integer
+  def to_integer(%Decimal{sign: sign, coef: coef, exp: 0})
+  when is_integer(coef) do
+    sign * coef
+  end
+
+  def to_integer(%Decimal{sign: sign, coef: coef, exp: exp})
+  when is_integer(coef) and exp > 0 do
     to_integer(%Decimal{sign: sign, coef: coef * 10, exp: exp - 1})
   end
 
-  def to_integer(%Decimal{sign: sign, coef: coef, exp: exp}) when (exp < 0) and (Kernel.rem(coef, 10) == 0) do
+  def to_integer(%Decimal{sign: sign, coef: coef, exp: exp})
+  when is_integer(coef) and exp < 0 and Kernel.rem(coef, 10) == 0 do
     to_integer(%Decimal{sign: sign, coef: trunc(coef / 10), exp: exp + 1})
+  end
+
+  @doc """
+  Returns the decimal converted to a float.
+
+  The returned float may have lower precision than the Decimal. Fails if
+  the decimal cannot be converted to a float.
+  """
+  @spec to_float(t) :: float
+  def to_float(%Decimal{sign: sign, coef: coef, exp: exp}) when is_integer(coef) do
+    # Convert back to float without loss
+    # http://www.exploringbinary.com/correct-decimal-to-floating-point-using-big-integers/
+    {num, den} = ratio(coef, exp)
+
+    case num / den do
+      0.0 ->
+        0.0
+      val ->
+        # Use floor rounding by subtracting by 1 before truncating for numbers < 0
+        val_log2 = :math.log2(val)
+        exp = if val_log2 < 0, do: trunc(val_log2 - 1), else: trunc(val_log2)
+
+        {num, den} =
+          if exp > 52 do
+            {num, shift_left_until_zero(den, exp - 52)}
+          else
+            {shift_left_until_zero(num, 52 - exp), den}
+          end
+
+        quo = Kernel.div(num, den)
+        rem = num - quo * den
+
+        tmp =
+          case den >>> 1 do
+            den when rem > den -> quo + 1
+            den when rem < den -> quo
+            _ when (quo &&& 1) === 1 -> quo + 1
+            _ -> quo
+          end
+
+        sign = if sign == -1, do: 1, else: 0
+        tmp = tmp - @power_of_2_to_52
+        <<tmp::float>> = <<sign::size(1), (exp + 1023)::size(11), tmp::size(52)>>
+        tmp
+    end
   end
 
   @doc """
@@ -1108,13 +1163,19 @@ defmodule Decimal do
     end
   end
 
-  pow10_max = Enum.reduce 0..100, 1, fn x, acc ->
+  defp ratio(coef, exp) when exp >= 0, do: {coef * pow10(exp), 1}
+  defp ratio(coef, exp) when exp < 0, do: {coef, pow10(-exp)}
+
+  defp shift_left_until_zero(num, 0), do: num
+  defp shift_left_until_zero(num, x), do: shift_left_until_zero(num <<< 1, x - 1)
+
+  pow10_max = Enum.reduce 0..104, 1, fn x, acc ->
     defp pow10(unquote(x)), do: unquote(acc)
     defp base10?(unquote(acc)), do: true
     acc * 10
   end
 
-  defp pow10(num) when num > 100, do: pow10(100) * pow10(num-100)
+  defp pow10(num) when num > 104, do: pow10(104) * pow10(num-104)
 
   defp base10?(num) when num > unquote(pow10_max) do
     if Kernel.rem(num, unquote(pow10_max)) == 0 do
