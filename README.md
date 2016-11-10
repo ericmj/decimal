@@ -12,7 +12,7 @@ Add Decimal as a dependency in your `mix.exs` file.
 
 ```elixir
 def deps do
-  [ { :decimal, "~> 1.1.0" } ]
+  [{:decimal, "~> 1.0"}]
 end
 ```
 
@@ -53,7 +53,7 @@ iex> D.with_context %D.Context{precision: 2}, fn -> IO.inspect D.get_context end
  traps: [:invalid_operation, :division_by_zero]}
 %Decimal.Context{flags: [], precision: 2, rounding: :half_up,
  traps: [:invalid_operation, :division_by_zero]}
-iex> D.set_context(%D.Context{D.get_context | traps: []}) 
+iex> D.set_context(%D.Context{D.get_context | traps: []})
 :ok
 iex> Decimal.get_context
 %Decimal.Context{flags: [:rounded, :inexact], precision: 9, rounding: :half_up,
@@ -79,11 +79,11 @@ The rounding algorithm specifies how the result of an operation shall be rounded
 when it get be represented with the current precision:
 
 ```elixir
-iex> D.set_context(%D.Context{D.get_context | rounding: :half_up}) 
+iex> D.set_context(%D.Context{D.get_context | rounding: :half_up})
 :ok
 iex> D.div(D.new(31), D.new(2))
 #Decimal<16>
-iex> D.set_context(%D.Context{D.get_context | rounding: :floor}) 
+iex> D.set_context(%D.Context{D.get_context | rounding: :floor})
 :ok
 iex> D.div(D.new(31), D.new(2))
 #Decimal<15>
@@ -95,7 +95,7 @@ When an exceptional condition is signalled its flag is set in the context and if
 if the trap enabler is set `Decimal.Error` will be raised.
 
 ```elixir
-iex> D.set_context(%D.Context{D.get_context | rounding: :floor, precision: 2}) 
+iex> D.set_context(%D.Context{D.get_context | rounding: :floor, precision: 2})
 :ok
 iex> D.get_context.traps
 [:invalid_operation, :division_by_zero]
@@ -107,14 +107,14 @@ iex> D.get_context.flags
 [:inexact, :rounded]
 ```
 
-`:inexact` and `:rounded` were signalled above because the result of the
+`:inexact` and `:rounded` were signaled above because the result of the
 operation was inexact given the context's precision and had to be rounded to fit
 the precision. `Decimal.Error` was not raised because the signals' trap enablers
 weren't set. We can, however, set the trap enabler if we what this condition to
 raise.
 
 ```elixir
-iex> D.set_context(%D.Context{D.get_context | traps: D.get_context.traps ++ [:inexact]}) 
+iex> D.set_context(%D.Context{D.get_context | traps: D.get_context.traps ++ [:inexact]})
 :ok
 iex> D.div(D.new(31), D.new(2))
 ** (Decimal.Error)
