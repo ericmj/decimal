@@ -1,7 +1,7 @@
 defmodule Decimal.Mixfile do
   use Mix.Project
 
-  @version "1.3.1"
+  @version "1.3.2-dev"
 
   def project do
     [app: :decimal,
