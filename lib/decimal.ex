@@ -1006,37 +1006,48 @@ defmodule Decimal do
     # http://www.exploringbinary.com/correct-decimal-to-floating-point-using-big-integers/
     {num, den} = ratio(coef, exp)
 
-    case num / den do
-      0.0 ->
+    boundary = den <<< 52
+
+    cond do
+      num == 0 ->
         0.0
-      val ->
-        # Use floor rounding by subtracting by 1 before truncating for numbers < 0
-        val_log2 = :math.log2(val)
-        exp = if val_log2 < 0, do: trunc(val_log2 - 1), else: trunc(val_log2)
-
-        {num, den} =
-          if exp > 52 do
-            {num, shift_left_until_zero(den, exp - 52)}
-          else
-            {shift_left_until_zero(num, 52 - exp), den}
-          end
-
-        quo = Kernel.div(num, den)
-        rem = num - quo * den
-
-        tmp =
-          case den >>> 1 do
-            den when rem > den -> quo + 1
-            den when rem < den -> quo
-            _ when (quo &&& 1) === 1 -> quo + 1
-            _ -> quo
-          end
-
-        sign = if sign == -1, do: 1, else: 0
-        tmp = tmp - @power_of_2_to_52
-        <<tmp::float>> = <<sign::size(1), (exp + 1023)::size(11), tmp::size(52)>>
-        tmp
+      num >= boundary ->
+        {den, exp} = scale_down(num, boundary, 52)
+        decimal_to_float(sign, num, den, exp)
+      true ->
+        {num, exp} = scale_up(num, boundary, 52)
+        decimal_to_float(sign, num, den, exp)
     end
+  end
+
+  defp scale_up(num, den, exp) when num >= den, do: {num, exp}
+  defp scale_up(num, den, exp), do: scale_up(num <<< 1, den, exp - 1)
+
+  defp scale_down(num, den, exp) do
+    new_den = den <<< 1
+    if num < new_den do
+      {den >>> 52, exp}
+    else
+      scale_down(num, new_den, exp + 1)
+    end
+  end
+
+  defp decimal_to_float(sign, num, den, exp) do
+    quo = Kernel.div(num, den)
+    rem = num - quo * den
+
+    tmp =
+      case den >>> 1 do
+        den when rem > den -> quo + 1
+        den when rem < den -> quo
+        _ when (quo &&& 1) === 1 -> quo + 1
+        _ -> quo
+      end
+
+    sign = if sign == -1, do: 1, else: 0
+    tmp = tmp - @power_of_2_to_52
+    <<tmp::float>> = <<sign::size(1), (exp + 1023)::size(11), tmp::size(52)>>
+    tmp
   end
 
   @doc """
@@ -1165,9 +1176,6 @@ defmodule Decimal do
 
   defp ratio(coef, exp) when exp >= 0, do: {coef * pow10(exp), 1}
   defp ratio(coef, exp) when exp < 0, do: {coef, pow10(-exp)}
-
-  defp shift_left_until_zero(num, 0), do: num
-  defp shift_left_until_zero(num, x), do: shift_left_until_zero(num <<< 1, x - 1)
 
   pow10_max = Enum.reduce 0..104, 1, fn x, acc ->
     defp pow10(unquote(x)), do: unquote(acc)

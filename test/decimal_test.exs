@@ -537,6 +537,12 @@ defmodule DecimalTest do
       assert Decimal.to_float(~d"123456.789") === 123456.789
       assert Decimal.to_float(~d"123456789.123456789") === 123456789.12345679
 
+      assert Decimal.to_float(~d"94503599627370496") === 94503599627370496.0
+      assert Decimal.to_float(~d"94503599627370496.376") === 94503599627370496.376
+      assert Decimal.to_float(~d"4503599627370496") === 4503599627370496.0
+      assert Decimal.to_float(~d"2251799813685248") === 2251799813685248.0
+      assert Decimal.to_float(~d"9007199254740992") === 9007199254740992.0
+
       assert_raise FunctionClauseError, fn ->
         Decimal.to_float(d(1, :qNaN, 0))
       end
