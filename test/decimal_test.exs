@@ -512,6 +512,7 @@ defmodule DecimalTest do
       assert Decimal.to_integer(d(1, 1000, -2)) == 10
       assert Decimal.to_integer(~d"123456789123489123456789") == 123456789123489123456789
       assert Decimal.to_integer(Decimal.mult(~d"123456789123489123456789", ~d"1000")) == 123456789123489123456789000
+      assert Decimal.to_integer(d(1, 1365900000000000000000, -2)) == 13659000000000000000
 
       assert_raise FunctionClauseError, fn ->
         Decimal.to_integer(d(1, 1001, -2))
