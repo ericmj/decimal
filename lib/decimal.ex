@@ -991,7 +991,7 @@ defmodule Decimal do
 
   def to_integer(%Decimal{sign: sign, coef: coef, exp: exp})
   when is_integer(coef) and exp < 0 and Kernel.rem(coef, 10) == 0 do
-    to_integer(%Decimal{sign: sign, coef: trunc(coef / 10), exp: exp + 1})
+    to_integer(%Decimal{sign: sign, coef: Kernel.div(coef, 10), exp: exp + 1})
   end
 
   @doc """
