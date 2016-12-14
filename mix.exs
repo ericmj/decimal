@@ -21,7 +21,8 @@ defmodule Decimal.Mixfile do
 
   defp deps do
     [{:ex_doc,  ">= 0.0.0", only: :dev},
-     {:earmark, ">= 0.0.0", only: :dev}]
+     {:earmark, ">= 0.0.0", only: :dev},
+     {:numbers, "~> 2.0", only: :dev}]
   end
 
   defp description do
