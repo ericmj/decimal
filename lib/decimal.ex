@@ -58,7 +58,7 @@ defmodule Decimal do
     * `non_neg_integer` - when the `t` represents a number, instead of one of the special values below.
     * `:qNaN` - a quiet NaN was produced by a previous operation.  Quiet NaNs propagate quietly, unlike signaling NaNs
        that return errors (based on the `Decimal.Context`).
-    * `:sNaN` - signalling NaN that indicated an error occured that should stop the next operation with an error
+    * `:sNaN` - signalling NaN that indicated an error occurred that should stop the next operation with an error
        (based on the `Decimal.Context`).
     * `:inf` - infinity
   """
