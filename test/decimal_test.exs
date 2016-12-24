@@ -739,7 +739,6 @@ defmodule DecimalTest do
   end
 
   test "issue #35" do
-    Decimal.new(1,5,-4) |> Decimal.round(0)
     assert Decimal.round(~d"0.0001", 0, :down)      == d(1, 0, 0)
     assert Decimal.round(~d"0.0001", 0, :ceiling)   == d(1, 1, 0)
     assert Decimal.round(~d"0.0001", 0, :floor)     == d(1, 0, 0)

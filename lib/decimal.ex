@@ -1205,7 +1205,8 @@ defmodule Decimal do
         %Decimal{sign: sign, coef: digits_to_integer(digits), exp: exp}
 
       exp < target_exp and precision < 0 ->
-        digits = [?0|digits]
+        zeros = :lists.duplicate(target_exp - exp, ?0)
+        digits = zeros ++ digits
         {signif, remain} = :lists.split(1, digits)
         signif = if increment?(rounding, sign, signif, remain), do: digits_increment(signif), else: signif
         coef = digits_to_integer(signif)
