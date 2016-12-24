@@ -747,6 +747,14 @@ defmodule DecimalTest do
     assert Decimal.round(~d"0.0001", 0, :half_even) == d(1, 0, 0)
     assert Decimal.round(~d"0.0001", 0, :half_down) == d(1, 0, 0)
     assert Decimal.round(~d"0.0001", 0, :up)        == d(1, 1, 0)
+
+    assert Decimal.round(~d"0.0005", 0, :down)      == d(1, 0, 0)
+    assert Decimal.round(~d"0.0005", 0, :ceiling)   == d(1, 1, 0)
+    assert Decimal.round(~d"0.0005", 0, :floor)     == d(1, 0, 0)
+    assert Decimal.round(~d"0.0005", 0, :half_up)   == d(1, 0, 0)
+    assert Decimal.round(~d"0.0005", 0, :half_even) == d(1, 0, 0)
+    assert Decimal.round(~d"0.0005", 0, :half_down) == d(1, 0, 0)
+    assert Decimal.round(~d"0.0005", 0, :up)        == d(1, 1, 0)
   end
 
   test "issue #29" do
