@@ -185,6 +185,15 @@ defmodule DecimalTest do
     assert Decimal.compare(~d"nan", ~d"1")    == d(1, :qNaN, 0)
     assert Decimal.compare(~d"1", ~d"nan")    == d(1, :qNaN, 0)
 
+    assert Decimal.compare(~d"-inf", ~d"inf") == d(-1, 1, 0)
+    assert Decimal.compare(~d"inf", ~d"-inf") == d(1, 1, 0)
+    assert Decimal.compare(~d"inf", ~d"0")    == d(1, 1, 0)
+    assert Decimal.compare(~d"-inf", ~d"0")   == d(-1, 1, 0)
+    assert Decimal.compare(~d"0", ~d"inf")    == d(-1, 1, 0)
+    assert Decimal.compare(~d"0", ~d"-inf")   == d(1, 1, 0)
+    assert Decimal.compare(~d"nan", ~d"inf")    == d(1, :qNaN, 0)
+    assert Decimal.compare(~d"nan", ~d"-inf")   == d(1, :qNaN, 0)
+
     assert_raise Error, fn ->
       Decimal.compare(~d"snan", ~d"0")
     end
