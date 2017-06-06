@@ -267,8 +267,16 @@ defmodule Decimal do
     num2
   end
 
+  def add(%Decimal{coef: :inf, sign: sign, exp: exp1} = num1, %Decimal{coef: :inf, sign: sign, exp: exp2} = num2) do
+    if exp1 > exp2 do
+      num1
+    else
+      num2
+    end
+  end
+
   def add(%Decimal{coef: :inf}, %Decimal{coef: :inf}) do
-    error(:invalid_operation, "(+-)Infinity + (+-)Infinity", %Decimal{coef: :NaN})
+    error(:invalid_operation, "adding +Infinity and -Infinity", %Decimal{coef: :NaN})
   end
 
   def add(%Decimal{coef: :inf} = num1, %Decimal{}) do
