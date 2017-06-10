@@ -345,6 +345,8 @@ defmodule DecimalTest do
     assert Decimal.max(~d"nan", ~d"1")    == d(1, 1, 0)
     assert Decimal.max(~d"2", ~d"nan")    == d(1, 2, 0)
 
+    assert Decimal.max([~d"-2", ~d"-20", ~d"nan", ~d"50"]) == d(1, 50, 0)
+
     assert_raise Error, fn ->
       Decimal.max(~d"snan", ~d"2")
     end
@@ -367,6 +369,8 @@ defmodule DecimalTest do
 
     assert Decimal.min(~d"nan", ~d"1")    == d(1, 1, 0)
     assert Decimal.min(~d"2", ~d"nan")    == d(1, 2, 0)
+
+    assert Decimal.min([~d"-2", ~d"-20", ~d"nan", ~d"50"]) == d(-1, 20, 0)
 
     assert_raise Error, fn ->
       Decimal.min(~d"snan", ~d"2")
