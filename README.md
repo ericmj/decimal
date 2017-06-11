@@ -67,12 +67,12 @@ The precision is used to limit the amount of decimal digits in the coefficient:
 ```elixir
 iex> D.set_context(%D.Context{D.get_context | precision: 9})
 :ok
-iex> D.div(D.new(1), D.new(3))
-#Decimal<0.333333333>
+iex> D.div(D.new(100), D.new(3))
+#Decimal<33.3333333>
 iex> D.set_context(%D.Context{D.get_context | precision: 2})
 :ok
-iex> D.div(D.new(1), D.new(3))
-#Decimal<0.33>
+iex> D.div(D.new(100), D.new(3))
+#Decimal<33>
 ```
 
 The rounding algorithm specifies how the result of an operation shall be rounded
