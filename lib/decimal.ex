@@ -656,6 +656,22 @@ defmodule Decimal do
     end |> context
   end
 
+  def max([], current_max) do
+    current_max
+  end
+
+  def max([h|t], current_max) do
+    max(t, max(h, current_max))
+  end
+
+  @doc """
+  Compares a list of `Decimal`s and returns the maximum.
+  """
+  @spec max(t) :: [t]
+  def max([h|t]) do
+    max(t, h)
+  end
+
   @doc """
   Compares two values numerically and returns the minimum. Unlike most other
   functions in `Decimal` if a number is NaN the result will be the other number.
@@ -686,6 +702,22 @@ defmodule Decimal do
             if exp1 > exp2, do: num1, else: num2
         end
     end |> context
+  end
+
+  def min([], current_min) do
+    current_min
+  end
+
+  def min([h|t], current_min) do
+    min(t, min(h, current_min))
+  end
+
+  @doc """
+  Compares a list of `Decimal`s and returns the minimum.
+  """
+  @spec min(t) :: [t]
+  def min([h|t]) do
+    min(t, h)
   end
 
   @doc """
