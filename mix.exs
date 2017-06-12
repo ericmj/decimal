@@ -25,7 +25,7 @@ defmodule Decimal.Mixfile do
   end
 
   defp description do
-    "Arbitrary precision decimal arithmetic for Elixir."
+    "Arbitrary precision decimal arithmetic."
   end
 
   defp package do
