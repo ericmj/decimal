@@ -267,8 +267,16 @@ defmodule Decimal do
     num2
   end
 
+  def add(%Decimal{coef: :inf, sign: sign, exp: exp1} = num1, %Decimal{coef: :inf, sign: sign, exp: exp2} = num2) do
+    if exp1 > exp2 do
+      num1
+    else
+      num2
+    end
+  end
+
   def add(%Decimal{coef: :inf}, %Decimal{coef: :inf}) do
-    error(:invalid_operation, "(+-)Infinity + (+-)Infinity", %Decimal{coef: :NaN})
+    error(:invalid_operation, "adding +Infinity and -Infinity", %Decimal{coef: :NaN})
   end
 
   def add(%Decimal{coef: :inf} = num1, %Decimal{}) do
@@ -307,17 +315,34 @@ defmodule Decimal do
   NaN, then that number is returned.
   """
   @spec compare(t, t) :: t
-  def compare(%Decimal{coef: coef1} = num1, %Decimal{coef: coef2} = num2) do
-    cond do
-      coef1 == :qNaN ->
-        num1
-      coef2 == :qNaN ->
-        num2
-      true ->
-        case sub(num1, num2) do
-          %Decimal{coef: 0} -> %Decimal{sign: 1, coef: 0}
-          %Decimal{sign: sign} -> %Decimal{sign: sign, coef: 1}
-        end
+  def compare(%Decimal{coef: :qNaN} = num1, _num2) do
+    num1
+  end
+
+  def compare(_num1, %Decimal{coef: :qNaN} = num2) do
+    num2
+  end
+
+  def compare(%Decimal{coef: :inf} = num1, %Decimal{coef: :inf} = num2) do
+    case {num1.sign, num2.sign} do
+      {sign, sign} -> %Decimal{sign: 1, coef: 0}
+      {sign1, sign2} when sign1 < sign2 -> %Decimal{sign: -1, coef: 1}
+      {sign1, sign2} when sign1 > sign2 -> %Decimal{sign: 1, coef: 1}
+    end
+  end
+
+  def compare(%Decimal{coef: :inf, sign: sign}, _num2) do
+    %Decimal{sign: sign, coef: 1}
+  end
+
+  def compare(_num1, %Decimal{coef: :inf, sign: sign}) do
+    %Decimal{sign: sign * -1, coef: 1}
+  end
+
+  def compare(num1, num2) do
+    case sub(num1, num2) do
+      %Decimal{coef: 0} -> %Decimal{sign: 1, coef: 0}
+      %Decimal{sign: sign} -> %Decimal{sign: sign, coef: 1}
     end
   end
 

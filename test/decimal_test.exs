@@ -136,6 +136,10 @@ defmodule DecimalTest do
     assert Decimal.add(~d"-0", ~d"-0")       == d(-1, 0, 0)
     assert Decimal.add(~d"2", ~d"-2")        == d(1, 0, 0)
     assert Decimal.add(~d"5", ~d"nan")       == d(1, :qNaN, 0)
+    assert Decimal.add(~d"inf", ~d"inf")     == d(1, :inf, 0)
+    assert Decimal.add(~d"-inf", ~d"-inf")   == d(-1, :inf, 0)
+
+    assert Decimal.add(d(1, :inf, 2), d(1, :inf, 5))    == d(1, :inf, 5)
 
     Decimal.with_context(%Context{precision: 5, rounding: :floor}, fn ->
       Decimal.add(~d"2", ~d"-2") == d(-1, 0, 0)
@@ -184,6 +188,15 @@ defmodule DecimalTest do
     assert Decimal.compare(~d"0", ~d"-0")     == d(1, 0, 0)
     assert Decimal.compare(~d"nan", ~d"1")    == d(1, :qNaN, 0)
     assert Decimal.compare(~d"1", ~d"nan")    == d(1, :qNaN, 0)
+
+    assert Decimal.compare(~d"-inf", ~d"inf") == d(-1, 1, 0)
+    assert Decimal.compare(~d"inf", ~d"-inf") == d(1, 1, 0)
+    assert Decimal.compare(~d"inf", ~d"0")    == d(1, 1, 0)
+    assert Decimal.compare(~d"-inf", ~d"0")   == d(-1, 1, 0)
+    assert Decimal.compare(~d"0", ~d"inf")    == d(-1, 1, 0)
+    assert Decimal.compare(~d"0", ~d"-inf")   == d(1, 1, 0)
+    assert Decimal.compare(~d"nan", ~d"inf")    == d(1, :qNaN, 0)
+    assert Decimal.compare(~d"nan", ~d"-inf")   == d(1, :qNaN, 0)
 
     assert_raise Error, fn ->
       Decimal.compare(~d"snan", ~d"0")
