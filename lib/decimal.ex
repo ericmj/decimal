@@ -45,7 +45,14 @@ defmodule Decimal do
   according to the specification, return a number that "underflow" 0 is returned
   instead of Etiny. This may happen when dividing a number with infinity.
   Additionally, overflow, underflow and clamped may never be signalled.
+
+  Decimal follows the arithmetic specification outlined in the `Numeric` behaviour
+  from the [Numbers](https://hex.pm/packages/numbers) package,
+  which means that it can be used with any structures, functions and libraries
+  that expect their contents/arguments/operands to follow this behaviour.
   """
+
+  @behaviour Numeric
 
   import Bitwise
   import Kernel, except: [abs: 1, div: 2, max: 2, min: 2, rem: 1, round: 1]
