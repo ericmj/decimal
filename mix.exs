@@ -1,9 +1,9 @@
 defmodule Decimal.Mixfile do
   use Mix.Project
 
-  @version "1.3.2-dev"
+  @version "1.4.0"
 
-  def project do
+  def project() do
     [app: :decimal,
      version: @version,
      elixir: "~> 1.0",
@@ -15,20 +15,20 @@ defmodule Decimal.Mixfile do
      package: package()]
   end
 
-  def application do
+  def application() do
     []
   end
 
-  defp deps do
+  defp deps() do
     [{:ex_doc,  ">= 0.0.0", only: :dev},
      {:earmark, ">= 0.0.0", only: :dev}]
   end
 
-  defp description do
+  defp description() do
     "Arbitrary precision decimal arithmetic."
   end
 
-  defp package do
+  defp package() do
     [maintainers: ["Eric Meadows-Jönsson"],
      licenses: ["Apache 2.0"],
      links: %{"GitHub" => "https://github.com/ericmj/decimal"}]
