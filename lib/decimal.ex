@@ -783,7 +783,7 @@ defmodule Decimal do
   end
 
   def to_string(%Decimal{sign: sign, coef: coef, exp: exp}, :normal) do
-    list = Integer.to_char_list(coef)
+    list = integer_to_charlist(coef)
 
     list =
       if exp >= 0 do
@@ -802,7 +802,7 @@ defmodule Decimal do
   end
 
   def to_string(%Decimal{sign: sign, coef: coef, exp: exp}, :scientific) do
-    list = Integer.to_char_list(coef)
+    list = integer_to_charlist(coef)
     length = length(list)
     adjusted = exp + length - 1
 
@@ -825,7 +825,7 @@ defmodule Decimal do
           list = if length > 1, do: List.insert_at(list, 1, ?.), else: list
           list = list ++ 'E'
           list = if exp >= 0, do: list ++ '+', else: list
-          list ++ Integer.to_char_list(adjusted)
+          list ++ integer_to_charlist(adjusted)
       end
 
     list = if sign == -1, do: [?-|list], else: list
@@ -1202,7 +1202,14 @@ defmodule Decimal do
       {:ok, result}
     end
   end
+
+  if Version.compare(System.version, "1.3.0") == :lt do
+    defp integer_to_charlist(string), do: Integer.to_char_list(string)
+  else
+    defp integer_to_charlist(string), do: Integer.to_charlist(string)
+  end
 end
+
 
 defimpl Inspect, for: Decimal do
   def inspect(dec, _opts) do
