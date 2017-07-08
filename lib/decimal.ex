@@ -1451,6 +1451,7 @@ defmodule Decimal do
   end
 end
 
+
 defimpl Inspect, for: Decimal do
   def inspect(dec, _opts) do
     "#Decimal<" <> Decimal.to_string(dec) <> ">"
