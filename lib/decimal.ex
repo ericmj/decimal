@@ -3,14 +3,15 @@ defmodule Decimal do
   Decimal arithmetic on arbitrary precision floating-point numbers.
 
   A number is represented by a signed coefficient and exponent such that: `sign
-  * coefficient * 10^exponent`. All numbers are represented and calculated
+  * coefficient * 10 ^ exponent`. All numbers are represented and calculated
   exactly, but the result of an operation may be rounded depending on the
   context the operation is performed with, see: `Decimal.Context`. Trailing
   zeros in the coefficient are never truncated to preserve the number of
   significant digits unless explicitly done so.
 
-  There are also special values such as NaN and (+-)Infinity. -0 and +0 are two
-  distinct values. Some operations results are not defined and will return NaN.
+  There are also special values such as NaN (not a number) and ±Infinity.
+  -0 and +0 are two distinct values.
+  Some operation results are not defined and will return NaN.
   This kind of NaN is quiet, any operation returning a number will return
   NaN when given a quiet NaN (the NaN value will flow through all operations).
   The other kind of NaN is signalling which is the value that can be reached
@@ -24,8 +25,8 @@ defmodule Decimal do
 
   ## Specifications
 
-  * [IBM's General Decimal Arithmetic Specification](http://speleotrove.com/decimal/decarith.html)
-  * [IEEE standard 854-1987](http://754r.ucbtest.org/standards/854.pdf)
+    * [IBM's General Decimal Arithmetic Specification](http://speleotrove.com/decimal/decarith.html)
+    * [IEEE standard 854-1987](http://754r.ucbtest.org/standards/854.pdf)
 
   This implementation follows the above standards as closely as possible. But at
   some places the implementation diverges from the specification. The reasons
@@ -36,8 +37,8 @@ defmodule Decimal do
 
   The specification models the sign of the number as 1, for a negative number,
   and 0 for a positive number. Internally this implementation models the sign as
-  1 or -1 such that the complete number will be: `sign * coefficient *
-  10^exponent` and will refer to the sign in documentation as either *positive*
+  1 or -1 such that the complete number will be `sign * coefficient *
+  10 ^ exponent` and will refer to the sign in documentation as either *positive*
   or *negative*.
 
   There is currently no maximum or minimum values for the exponent. Because of
@@ -53,14 +54,15 @@ defmodule Decimal do
   @power_of_2_to_52 4503599627370496
 
   @typedoc """
-  The coefficient of the power of `10`.  Non-negative because the sign is stored separately in `sign`.
+  The coefficient of the power of `10`. Non-negative because the sign is stored separately in `sign`.
 
     * `non_neg_integer` - when the `t` represents a number, instead of one of the special values below.
-    * `:qNaN` - a quiet NaN was produced by a previous operation.  Quiet NaNs propagate quietly, unlike signaling NaNs
+    * `:qNaN` - a quiet NaN was produced by a previous operation. Quiet NaNs propagate quietly, unlike signaling NaNs
        that return errors (based on the `Decimal.Context`).
     * `:sNaN` - signalling NaN that indicated an error occurred that should stop the next operation with an error
        (based on the `Decimal.Context`).
-    * `:inf` - infinity
+    * `:inf` - Infinity.
+
   """
   @type coefficient :: non_neg_integer | :qNaN | :sNaN | :inf
 
@@ -70,8 +72,10 @@ defmodule Decimal do
   @type exponent :: integer
 
   @typedoc """
+
     * `1` for positive
     * `-1` for negative
+
   """
   @type sign :: 1 | -1
 
@@ -89,16 +93,17 @@ defmodule Decimal do
                     :up
 
   @typedoc """
-  This implementation models the `sign` as `1` or `-1` such that the complete number will be: `sign * coef * 10^exp`.
+  This implementation models the `sign` as `1` or `-1` such that the complete number will be: `sign * coef * 10 ^ exp`.
 
-    * `coef` - The coefficient of the power of `10`.
-    * `exp` - The exponent of the power of `10`.
-    * `sign` - `1` for positive. `-1` for negative.
+    * `coef` - the coefficient of the power of `10`.
+    * `exp` - the exponent of the power of `10`.
+    * `sign` - `1` for positive, `-1` for negative.
+
   """
   @type t :: %__MODULE__{
     sign: sign,
     coef: coefficient,
-    exp: exponent
+    exp: exponent,
   }
 
   defstruct [sign: 1, coef: 0, exp: 0]
@@ -107,14 +112,14 @@ defmodule Decimal do
 
   defmodule Error do
     @moduledoc """
-    The exception that all Decimal operations may raise.
+    The exception that all decimal operations may raise.
 
     ## Fields
 
-    * `signal` - The signalled error, additional signalled errors will be found
-      in the context.
-    * `reason` - The reason for the error.
-    * `result` - The result of the operation signalling the error.
+      * `signal` - the signalled error, additional signalled errors will be found
+        in the context.
+      * `reason` - the reason for the error.
+      * `result` - the result of the operation signalling the error.
 
     Rescuing the error to access the result or the other fields of the error is
     discouraged and should only be done for exceptional conditions. It is more
@@ -126,9 +131,9 @@ defmodule Decimal do
 
     def exception(opts) do
       reason = if opts[:reason], do: ": " <> opts[:reason]
-      msg    = "#{opts[:signal]}#{reason}"
+      message = "#{opts[:signal]}#{reason}"
 
-      struct(__MODULE__, [message: msg] ++ opts)
+      struct(__MODULE__, [message: message] ++ opts)
     end
   end
 
@@ -143,57 +148,60 @@ defmodule Decimal do
 
     ## Fields
 
-    * `precision` - Maximum number of decimal digits in the coefficient. If an
-      operation's result has more digits it will be rounded to `precision`
-      digits with the rounding algorithm in `rounding`.
-    * `rounding` - The rounding algorithm used when the coefficient's number of
-      exceeds `precision`. Strategies explained below.
-    * `flags` - A list of signals that for which the flag is sent. When an
-      exceptional condition is signalled it's flag is set. The flags are sticky
-      and will be set until explicitly cleared.
-    * `traps` - A list of set trap enablers for signals. When a signal's trap
-      enabler is set the condition causes `Decimal.Error` to be raised.
+      * `precision` - maximum number of decimal digits in the coefficient. If an
+        operation result has more digits it will be rounded to `precision`
+        digits with the rounding algorithm in `rounding`.
+      * `rounding` - the rounding algorithm used when the coefficient's number of
+        exceeds `precision`. Strategies explained below.
+      * `flags` - a list of signals that for which the flag is sent. When an
+        exceptional condition is signalled its flag is set. The flags are sticky
+        and will be set until explicitly cleared.
+      * `traps` - a list of set trap enablers for signals. When a signal's trap
+        enabler is set the condition causes `Decimal.Error` to be raised.
 
     ## Rounding algorithms
 
-    * `:down` - Round toward zero (truncate). Discarded digits are ignored,
-      result is unchanged.
-    * `:half_up` - If the discarded digits is greater than or equal to half of
-      the value of a one in the next left position then the coefficient will be
-      incremented by one (rounded up). Otherwise (the discarded digits are less
-      than half) the discarded digits will be ignored.
-    * `:half_even` - Also known as "round to nearest" or "banker's rounding". If
-      the discarded digits is greater than half of the value of a one in the
-      next left position then the coefficient will be incremented by one
-      (rounded up). If they represent less than half discarded digits will be
-      ignored. Otherwise (exactly half), the coefficient is not altered if it's
-      even, or incremented by one (rounded up) if it's odd (to make an even
-      number).
-    * `:ceiling` - Round toward +Infinity. If all of the discarded digits are
-      zero or the sign is negative the result is unchanged. Otherwise, the
-      coefficient will be incremented by one (rounded up).
-    * `:floor` - Round toward -Infinity. If all of the discarded digits are zero
-      or the sign is positive the result is unchanged. Otherwise, the sign is
-      negative and coefficient will be incremented by one.
-    * `:half_down` - If the discarded digits is greater than half of the value
-      of a one in the next left position then the coefficient will be
-      incremented by one (rounded up). Otherwise (the discarded digits are half
-      or less) the discarded digits are ignored.
-    * `:up` - Round away from zero. If all discarded digits are zero the
-      coefficient is not changed, otherwise it is incremented by one (rounded
-      up).
+      * `:down` - round toward zero (truncate). Discarded digits are ignored,
+        result is unchanged.
+      * `:half_up` - if the discarded digits is greater than or equal to half of
+        the value of a one in the next left position then the coefficient will be
+        incremented by one (rounded up). Otherwise (the discarded digits are less
+        than half) the discarded digits will be ignored.
+      * `:half_even` - also known as "round to nearest" or "banker's rounding". If
+        the discarded digits is greater than half of the value of a one in the
+        next left position then the coefficient will be incremented by one
+        (rounded up). If they represent less than half discarded digits will be
+        ignored. Otherwise (exactly half), the coefficient is not altered if it's
+        even, or incremented by one (rounded up) if it's odd (to make an even
+        number).
+      * `:ceiling` - round toward +Infinity. If all of the discarded digits are
+        zero or the sign is negative the result is unchanged. Otherwise, the
+        coefficient will be incremented by one (rounded up).
+      * `:floor` - round toward -Infinity. If all of the discarded digits are zero
+        or the sign is positive the result is unchanged. Otherwise, the sign is
+        negative and coefficient will be incremented by one.
+      * `:half_down` - if the discarded digits is greater than half of the value
+        of a one in the next left position then the coefficient will be
+        incremented by one (rounded up). Otherwise (the discarded digits are half
+        or less) the discarded digits are ignored.
+      * `:up` - round away from zero. If all discarded digits are zero the
+        coefficient is not changed, otherwise it is incremented by one (rounded
+        up).
+
     """
     @type t :: %__MODULE__{
       precision: pos_integer,
       rounding: Decimal.rounding,
       flags: [Decimal.signal],
-      traps: [Decimal.signal]}
+      traps: [Decimal.signal],
+    }
 
     defstruct [
       precision: 28,
       rounding: :half_up,
       flags: [],
-      traps: [:invalid_operation, :division_by_zero]]
+      traps: [:invalid_operation, :division_by_zero],
+    ]
   end
 
   defmacrop error(flags, reason, result, context \\ nil) do
@@ -206,26 +214,26 @@ defmodule Decimal do
   end
 
   @doc """
-  Returns `true` if number is NaN; otherwise `false`.
+  Returns `true` if number is NaN, otherwise `false`.
   """
   @spec nan?(t) :: boolean
   def nan?(%Decimal{coef: :sNaN}), do: true
   def nan?(%Decimal{coef: :qNaN}), do: true
-  def nan?(%Decimal{}),            do: false
+  def nan?(%Decimal{}), do: false
 
   @doc """
-  Returns `true` if number is (+-)Infinity; otherwise `false`.
+  Returns `true` if number is ±Infinity, otherwise `false`.
   """
   @spec inf?(t) :: boolean
   def inf?(%Decimal{coef: :inf}), do: true
-  def inf?(%Decimal{}),           do: false
+  def inf?(%Decimal{}), do: false
 
   @doc """
-  Returns `true` if argument is a decimal number; otherwise `false`.
+  Returns `true` if argument is a decimal number, otherwise `false`.
   """
   @spec decimal?(any) :: boolean
   def decimal?(%Decimal{}), do: true
-  def decimal?(_),          do: false
+  def decimal?(_), do: false
 
   @doc """
   The absolute value of given number. Sets the number's sign to positive.
@@ -240,15 +248,17 @@ defmodule Decimal do
   end
 
   def abs(%Decimal{} = num) do
-    %{num | sign: 1} |> context
+    context(%{num | sign: 1})
   end
 
   @doc """
   Adds two numbers together.
 
   ## Exceptional conditions
-  * If one number is -Infinity and the other +Infinity `:invalid_operation` will
-  be signalled.
+
+    * If one number is -Infinity and the other +Infinity `:invalid_operation` will
+      be signalled.
+
   """
   @spec add(t, t) :: t
   def add(%Decimal{coef: :sNaN} = num1, %Decimal{}) do
@@ -292,7 +302,7 @@ defmodule Decimal do
     coef = sign1 * coef1 + sign2 * coef2
     exp = Kernel.min(exp1, exp2)
     sign = add_sign(sign1, sign2, coef)
-    %Decimal{sign: sign, coef: Kernel.abs(coef), exp: exp} |> context
+    context(%Decimal{sign: sign, coef: Kernel.abs(coef), exp: exp})
   end
 
   @doc """
@@ -300,8 +310,10 @@ defmodule Decimal do
   second number's sign is negated.
 
   ## Exceptional conditions
-  * If one number is -Infinity and the other +Infinity `:invalid_operation` will
-  be signalled.
+
+    * If one number is -Infinity and the other +Infinity `:invalid_operation` will
+      be signalled.
+
   """
   @spec sub(t, t) :: t
   def sub(%Decimal{} = num1, %Decimal{sign: sign} = num2) do
@@ -311,7 +323,7 @@ defmodule Decimal do
   @doc """
   Compares two numbers numerically. If the first number is greater than the second
   `#Decimal<1>` is returned, if less than `Decimal<-1>` is returned. Otherwise,
-  if both numbers are equal `Decimal<0>` is returned.  If either number is a quiet
+  if both numbers are equal `Decimal<0>` is returned. If either number is a quiet
   NaN, then that number is returned.
   """
   @spec compare(t, t) :: t
@@ -351,7 +363,7 @@ defmodule Decimal do
   `:gt` is returned, if less than `:lt` is returned, if both numbers are equal
   `:eq` is returned.
 
-  Neither number can be a `NaN`.  If you need to handle quiet NaNs, use `compare/2`.
+  Neither number can be a NaN. If you need to handle quiet NaNs, use `compare/2`.
   """
   @spec cmp(t, t) :: :lt | :eq | :gt
   def cmp(num1, num2) do
@@ -378,9 +390,11 @@ defmodule Decimal do
   Divides two numbers.
 
   ## Exceptional conditions
-  * If both numbers are (+-)Infinity `:invalid_operation` is signalled.
-  * If both numbers are (+-)0 `:invalid_operation` is signalled.
-  * If second number (denominator) is (+-)0 `:division_by_zero` is signalled.
+
+    * If both numbers are ±Infinity `:invalid_operation` is signalled.
+    * If both numbers are ±0 `:invalid_operation` is signalled.
+    * If second number (denominator) is ±0 `:division_by_zero` is signalled.
+
   """
   @spec div(t, t) :: t
   def div(%Decimal{coef: :sNaN} = num1, %Decimal{}) do
@@ -400,7 +414,7 @@ defmodule Decimal do
   end
 
   def div(%Decimal{coef: :inf}, %Decimal{coef: :inf}) do
-    error(:invalid_operation, "(+-)Infinity / (+-)Infinity", %Decimal{coef: :NaN})
+    error(:invalid_operation, "±Infinity / ±Infinity", %Decimal{coef: :NaN})
   end
 
   def div(%Decimal{sign: sign1, coef: :inf} = num1, %Decimal{sign: sign2}) do
@@ -410,7 +424,6 @@ defmodule Decimal do
 
   def div(%Decimal{sign: sign1, exp: exp1}, %Decimal{sign: sign2, coef: :inf, exp: exp2}) do
     sign = if sign1 == sign2, do: 1, else: -1
-
     # TODO: Subnormal
     # exponent?
     %Decimal{sign: sign, coef: 0, exp: exp1 - exp2}
@@ -429,15 +442,13 @@ defmodule Decimal do
     sign = if sign1 == sign2, do: 1, else: -1
 
     if coef1 == 0 do
-      %Decimal{sign: sign, coef: 0, exp: exp1 - exp2}
-      |> context([])
+      context(%Decimal{sign: sign, coef: 0, exp: exp1 - exp2}, [])
     else
       prec10 = pow10(get_context().precision)
       {coef1, coef2, adjust} = div_adjust(coef1, coef2, 0)
       {coef, adjust, _rem, signals} = div_calc(coef1, coef2, 0, adjust, prec10)
 
-      %Decimal{sign: sign, coef: coef, exp: exp1 - exp2 - adjust}
-      |> context(signals)
+      context(%Decimal{sign: sign, coef: coef, exp: exp1 - exp2 - adjust}, signals)
     end
 
   end
@@ -446,9 +457,11 @@ defmodule Decimal do
   Divides two numbers and returns the integer part.
 
   ## Exceptional conditions
-  * If both numbers are (+-)Infinity `:invalid_operation` is signalled.
-  * If both numbers are (+-)0 `:invalid_operation` is signalled.
-  * If second number (denominator) is (+-)0 `:division_by_zero` is signalled.
+
+    * If both numbers are ±Infinity `:invalid_operation` is signalled.
+    * If both numbers are ±0 `:invalid_operation` is signalled.
+    * If second number (denominator) is ±0 `:division_by_zero` is signalled.
+
   """
   @spec div_int(t, t) :: t
   def div_int(%Decimal{coef: :sNaN} = num1, %Decimal{}) do
@@ -468,7 +481,7 @@ defmodule Decimal do
   end
 
   def div_int(%Decimal{coef: :inf}, %Decimal{coef: :inf}) do
-    error(:invalid_operation, "(+-)Infinity / (+-)Infinity", %Decimal{coef: :NaN})
+    error(:invalid_operation, "±Infinity / ±Infinity", %Decimal{coef: :NaN})
   end
 
   def div_int(%Decimal{sign: sign1, coef: :inf} = num1, %Decimal{sign: sign2}) do
@@ -515,9 +528,11 @@ defmodule Decimal do
   the first number.
 
   ## Exceptional conditions
-  * If both numbers are (+-)Infinity `:invalid_operation` is signalled.
-  * If both numbers are (+-)0 `:invalid_operation` is signalled.
-  * If second number (denominator) is (+-)0 `:division_by_zero` is signalled.
+
+    * If both numbers are ±Infinity `:invalid_operation` is signalled.
+    * If both numbers are ±0 `:invalid_operation` is signalled.
+    * If second number (denominator) is ±0 `:division_by_zero` is signalled.
+
   """
   @spec rem(t, t) :: t
   def rem(%Decimal{coef: :sNaN} = num1, %Decimal{}) do
@@ -537,7 +552,7 @@ defmodule Decimal do
   end
 
   def rem(%Decimal{coef: :inf}, %Decimal{coef: :inf}) do
-    error(:invalid_operation, "(+-)Infinity / (+-)Infinity", %Decimal{coef: :NaN})
+    error(:invalid_operation, "±Infinity / ±Infinity", %Decimal{coef: :NaN})
   end
 
   def rem(%Decimal{sign: sign1, coef: :inf}, %Decimal{}) do
@@ -581,9 +596,11 @@ defmodule Decimal do
   Decimal.rem(x, y)}`.
 
   ## Exceptional conditions
-  * If both numbers are (+-)Infinity `:invalid_operation` is signalled.
-  * If both numbers are (+-)0 `:invalid_operation` is signalled.
-  * If second number (denominator) is (+-)0 `:division_by_zero` is signalled.
+
+    * If both numbers are ±Infinity `:invalid_operation` is signalled.
+    * If both numbers are ±0 `:invalid_operation` is signalled.
+    * If second number (denominator) is ±0 `:division_by_zero` is signalled.
+
   """
   @spec div_rem(t, t) :: {t, t}
   def div_rem(%Decimal{coef: :sNaN} = num1, %Decimal{}) do
@@ -605,7 +622,7 @@ defmodule Decimal do
   end
 
   def div_rem(%Decimal{coef: :inf}, %Decimal{coef: :inf}) do
-    error(:invalid_operation, "(+-)Infinity / (+-)Infinity", {%Decimal{coef: :NaN}, %Decimal{coef: :NaN}})
+    error(:invalid_operation, "±Infinity / ±Infinity", {%Decimal{coef: :NaN}, %Decimal{coef: :NaN}})
   end
 
   def div_rem(%Decimal{sign: sign1, coef: :inf} = num1, %Decimal{sign: sign2}) do
@@ -621,14 +638,15 @@ defmodule Decimal do
   end
 
   def div_rem(%Decimal{coef: 0}, %Decimal{coef: 0}) do
-    {error(:invalid_operation, "0 / 0", %Decimal{coef: :NaN}),
-      error(:invalid_operation, "0 / 0", %Decimal{coef: :NaN})}
+    error = error(:invalid_operation, "0 / 0", %Decimal{coef: :NaN})
+    {error, error}
   end
 
   def div_rem(%Decimal{sign: sign1}, %Decimal{sign: sign2, coef: 0}) do
     div_sign = if sign1 == sign2, do: 1, else: -1
-    {error(:division_by_zero, nil, %Decimal{sign: div_sign, coef: :inf}),
-      error(:division_by_zero, nil, %Decimal{sign: sign1, coef: 0})}
+    div_error = error(:division_by_zero, nil, %Decimal{sign: div_sign, coef: :inf})
+    rem_error = error(:division_by_zero, nil, %Decimal{sign: sign1, coef: 0})
+    {div_error, rem_error}
   end
 
   def div_rem(%Decimal{sign: sign1, coef: coef1, exp: exp1} = num1, %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2) do
@@ -745,8 +763,10 @@ defmodule Decimal do
   Multiplies two numbers.
 
   ## Exceptional conditions
-  * If one number is (+-0) and the other is (+-)Infinity `:invalid_operation` is
-    signalled.
+
+    * If one number is ±0 and the other is ±Infinity `:invalid_operation` is
+      signalled.
+
   """
   @spec mult(t, t) :: t
   def mult(%Decimal{coef: :sNaN} = num1, %Decimal{}) do
@@ -766,11 +786,11 @@ defmodule Decimal do
   end
 
   def mult(%Decimal{coef: 0}, %Decimal{coef: :inf}) do
-    error(:invalid_operation, "0 * (+-)Infinity", %Decimal{coef: :NaN})
+    error(:invalid_operation, "0 * ±Infinity", %Decimal{coef: :NaN})
   end
 
   def mult(%Decimal{coef: :inf}, %Decimal{coef: 0}) do
-    error(:invalid_operation, "0 * (+-)Infinity", %Decimal{coef: :NaN})
+    error(:invalid_operation, "0 * ±Infinity", %Decimal{coef: :NaN})
   end
 
   def mult(%Decimal{sign: sign1, coef: :inf, exp: exp1}, %Decimal{sign: sign2, exp: exp2}) do
@@ -853,26 +873,31 @@ defmodule Decimal do
   A decimal number will always be created exactly as specified with all digits
   kept - it will not be rounded with the context.
 
-  ## BNFC
+  ## Backus–Naur form
 
-      sign           ::=  ’+’ | ’-’
-      digit          ::=  ’0’ | ’1’ | ’2’ | ’3’ | ’4’ | ’5’ | ’6’ | ’7’ | ’8’ | ’9’
-      indicator      ::=  ’e’ | ’E’
+      sign           ::=  "+" | "-"
+      digit          ::=  "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+      indicator      ::=  "e" | "E"
       digits         ::=  digit [digit]...
-      decimal-part   ::=  digits ’.’ [digits] | [’.’] digits
+      decimal-part   ::=  digits "." [digits] | ["."] digits
       exponent-part  ::=  indicator [sign] digits
-      infinity       ::=  ’Infinity’ | ’Inf’
-      nan            ::=  ’NaN’ [digits] | ’sNaN’ [digits]
+      infinity       ::=  "Infinity" | "Inf"
+      nan            ::=  "NaN" [digits] | "sNaN" [digits]
       numeric-value  ::=  decimal-part [exponent-part] | infinity
       numeric-string ::=  [sign] numeric-value | [sign] nan
+
   """
   @spec new(t | integer | float | String.t) :: t
-  def new(%Decimal{} = num),
-    do: num
-  def new(int) when is_integer(int),
-    do: %Decimal{sign: (if int < 0, do: -1, else: 1), coef: Kernel.abs(int)}
-  def new(float) when is_float(float),
-    do: float |> :io_lib_format.fwrite_g |> IO.iodata_to_binary |> new
+  def new(%Decimal{} = num), do: num
+
+  def new(int) when is_integer(int) do
+    %Decimal{sign: (if int < 0, do: -1, else: 1), coef: Kernel.abs(int)}
+  end
+
+  def new(float) when is_float(float) do
+    float |> :io_lib_format.fwrite_g() |> IO.iodata_to_binary() |> new()
+  end
+
   def new(binary) when is_binary(binary) do
     case do_parse(binary) do
       {:ok, decimal} -> decimal
@@ -882,7 +907,7 @@ defmodule Decimal do
 
   @doc """
   Creates a new decimal number from the sign, coefficient and exponent such that
-  the number will be: `sign * coefficient * 10^exponent`.
+  the number will be: `sign * coefficient * 10 ^ exponent`.
 
   A decimal number will always be created exactly as specified with all digits
   kept - it will not be rounded with the context.
@@ -895,8 +920,8 @@ defmodule Decimal do
   @doc """
   Parses a binary into a decimal.
 
-  If successful, returns a tuple in the form of `{:ok, decimal}`.
-  Otherwise `:error`.
+  If successful, returns a tuple in the form of `{:ok, decimal}`,
+  otherwise `:error`.
 
   ## Examples
 
@@ -908,6 +933,7 @@ defmodule Decimal do
 
       iex> Decimal.parse("bad")
       :error
+
   """
   @spec parse(String.t) :: {:ok, t} | :error
   def parse(binary) when is_binary(binary) do
@@ -921,9 +947,11 @@ defmodule Decimal do
   Converts given number to its string representation.
 
   ## Options
-  * `:scientific` - Number converted to scientific notation.
-  * `:normal` - Number converted without a exponent.
-  * `:raw` - Number converted to it's raw, internal format.
+
+    * `:scientific` - number converted to scientific notation.
+    * `:normal` - number converted without a exponent.
+    * `:raw` - number converted to its raw, internal format.
+
   """
   @spec to_string(t, :scientific | :normal | :raw) :: String.t
   def to_string(num, type \\ :scientific)
@@ -1022,7 +1050,7 @@ defmodule Decimal do
   @doc """
   Returns the decimal converted to a float.
 
-  The returned float may have lower precision than the Decimal. Fails if
+  The returned float may have lower precision than the decimal. Fails if
   the decimal cannot be converted to a float.
   """
   @spec to_float(t) :: float
@@ -1153,7 +1181,7 @@ defmodule Decimal do
 
       coef >= prec10 ->
         signals = [:rounded]
-        signals = if base10?(coef1), do: signals, else: [:inexact|signals]
+        signals = if base10?(coef1), do: signals, else: [:inexact | signals]
         {coef, adjust, coef1, signals}
 
       true ->
@@ -1202,13 +1230,13 @@ defmodule Decimal do
   defp ratio(coef, exp) when exp >= 0, do: {coef * pow10(exp), 1}
   defp ratio(coef, exp) when exp < 0, do: {coef, pow10(-exp)}
 
-  pow10_max = Enum.reduce 0..104, 1, fn x, acc ->
-    defp pow10(unquote(x)), do: unquote(acc)
+  pow10_max = Enum.reduce 0..104, 1, fn int, acc ->
+    defp pow10(unquote(int)), do: unquote(acc)
     defp base10?(unquote(acc)), do: true
     acc * 10
   end
 
-  defp pow10(num) when num > 104, do: pow10(104) * pow10(num-104)
+  defp pow10(num) when num > 104, do: pow10(104) * pow10(num - 104)
 
   defp base10?(num) when num > unquote(pow10_max) do
     if Kernel.rem(num, unquote(pow10_max)) == 0 do
@@ -1244,7 +1272,7 @@ defmodule Decimal do
         %Decimal{sign: sign, coef: coef, exp: target_exp}
 
       exp > target_exp ->
-        digits = digits ++ Enum.map(1..(exp-target_exp), fn _ -> ?0 end)
+        digits = digits ++ Enum.map(1..(exp - target_exp), fn _ -> ?0 end)
         coef = digits_to_integer(digits)
         %Decimal{sign: sign, coef: coef, exp: target_exp}
     end
@@ -1305,16 +1333,16 @@ defmodule Decimal do
   defp increment?(:floor, sign, _, remain),
     do: sign == -1 and any_nonzero(remain)
 
-  defp increment?(:half_up, _, _, [digit|_]),
+  defp increment?(:half_up, _, _, [digit | _]),
     do: digit >= ?5
 
-  defp increment?(:half_even, _, signif, [?5|rest]),
+  defp increment?(:half_even, _, signif, [?5 | rest]),
     do: any_nonzero(rest) or Kernel.rem(:lists.last(signif), 2) == 1
 
-  defp increment?(:half_even, _, _, [digit|_]),
+  defp increment?(:half_even, _, _, [digit | _]),
     do: digit > ?5
 
-  defp increment?(:half_down, _, _, [digit|_]),
+  defp increment?(:half_down, _, _, [digit | _]),
     do: digit > ?5
 
   defp any_nonzero(digits),
@@ -1323,21 +1351,21 @@ defmodule Decimal do
   defp digits_increment(digits),
     do: digits_increment(:lists.reverse(digits), [])
 
-  defp digits_increment([?9|rest], acc),
-    do: digits_increment(rest, [?0|acc])
+  defp digits_increment([?9 | rest], acc),
+    do: digits_increment(rest, [?0 | acc])
 
-  defp digits_increment([head|rest], acc),
-    do: :lists.reverse(rest, [head+1|acc])
+  defp digits_increment([head | rest], acc),
+    do: :lists.reverse(rest, [head + 1 | acc])
 
   defp digits_increment([], acc),
-    do: [?1|acc]
+    do: [?1 | acc]
 
   ## CONTEXT ##
 
   defp context(num, signals \\ []) do
-    ctxt = get_context()
-    {result, prec_signals} = precision(num, ctxt.precision, ctxt.rounding)
-    error(put_uniq(signals, prec_signals), nil, result, ctxt)
+    context = get_context()
+    {result, prec_signals} = precision(num, context.precision, context.rounding)
+    error(put_uniq(signals, prec_signals), nil, result, context)
   end
 
   defp put_uniq(list, elems) when is_list(elems) do
@@ -1345,24 +1373,24 @@ defmodule Decimal do
   end
 
   defp put_uniq(list, elem) do
-    if elem in list, do: list, else: [elem|list]
+    if elem in list, do: list, else: [elem | list]
   end
 
   ## PARSING ##
 
-  defp do_parse("+" <> bin) do
-    String.downcase(bin) |> parse_unsign
+  defp do_parse("+" <> rest) do
+    rest |> String.downcase() |> parse_unsign()
   end
 
-  defp do_parse("-" <> bin) do
-    case String.downcase(bin) |> parse_unsign do
+  defp do_parse("-" <> rest) do
+    case rest |> String.downcase() |> parse_unsign() do
       {:ok, num} -> {:ok, %{num | sign: -1}}
       {:error, error} -> {:error, error}
     end
   end
 
   defp do_parse(bin) do
-    String.downcase(bin) |> parse_unsign
+    bin |> String.downcase() |> parse_unsign()
   end
 
   defp parse_unsign("inf") do
@@ -1398,11 +1426,11 @@ defmodule Decimal do
   defp parse_float("." <> rest), do: parse_digits(rest)
   defp parse_float(bin), do: {[], bin}
 
-  defp parse_exp(<< ?e, rest :: binary >>) do
+  defp parse_exp(<<?e, rest::binary>>) do
     case rest do
-      << sign, rest :: binary >> when sign in [?+, ?-] ->
+      <<sign, rest::binary>> when sign in [?+, ?-] ->
         {digits, rest} = parse_digits(rest)
-        {[sign|digits], rest}
+        {[sign | digits], rest}
       _ ->
         parse_digits(rest)
     end
@@ -1414,8 +1442,8 @@ defmodule Decimal do
 
   defp parse_digits(bin), do: parse_digits(bin, [])
 
-  defp parse_digits(<< digit, rest :: binary >>, acc) when digit in ?0..?9 do
-    parse_digits(rest, [digit|acc])
+  defp parse_digits(<<digit, rest::binary>>, acc) when digit in ?0..?9 do
+    parse_digits(rest, [digit | acc])
   end
 
   defp parse_digits(rest, acc) do
@@ -1450,7 +1478,6 @@ defmodule Decimal do
     defp integer_to_charlist(string), do: Integer.to_charlist(string)
   end
 end
-
 
 defimpl Inspect, for: Decimal do
   def inspect(dec, _opts) do
