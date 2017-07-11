@@ -4,15 +4,17 @@ defmodule Decimal.Mixfile do
   @version "1.4.0"
 
   def project() do
-    [app: :decimal,
-     version: @version,
-     elixir: "~> 1.0",
-     deps: deps(),
-     name: "Decimal",
-     source_url: "https://github.com/ericmj/decimal",
-     docs: [source_ref: "v#{@version}", main: "readme", extras: ["README.md"]],
-     description: description(),
-     package: package()]
+    [
+      app: :decimal,
+      version: @version,
+      elixir: "~> 1.0",
+      deps: deps(),
+      name: "Decimal",
+      source_url: "https://github.com/ericmj/decimal",
+      docs: [source_ref: "v#{@version}", main: "readme", extras: ["README.md"]],
+      description: description(),
+      package: package(),
+    ]
   end
 
   def application() do
@@ -20,8 +22,10 @@ defmodule Decimal.Mixfile do
   end
 
   defp deps() do
-    [{:ex_doc,  ">= 0.0.0", only: :dev},
-     {:earmark, ">= 0.0.0", only: :dev}]
+    [
+      {:ex_doc,  ">= 0.0.0", only: :dev},
+      {:earmark, ">= 0.0.0", only: :dev},
+    ]
   end
 
   defp description() do
@@ -29,8 +33,10 @@ defmodule Decimal.Mixfile do
   end
 
   defp package() do
-    [maintainers: ["Eric Meadows-Jönsson"],
-     licenses: ["Apache 2.0"],
-     links: %{"GitHub" => "https://github.com/ericmj/decimal"}]
+    [
+      maintainers: ["Eric Meadows-Jönsson"],
+      licenses: ["Apache 2.0"],
+      links: %{"GitHub" => "https://github.com/ericmj/decimal"},
+    ]
   end
 end
