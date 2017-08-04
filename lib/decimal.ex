@@ -1415,7 +1415,7 @@ defmodule Decimal do
     {exp, rest} = parse_exp(rest)
 
     if rest != "" or (int == [] and float == []) do
-      handle_error(:invalid_operation, "number parsing syntax", %Decimal{coef: :NaN}, nil)
+      handle_error(:invalid_operation, "number parsing syntax: " <> bin, %Decimal{coef: :NaN}, nil)
     else
       int = if int == [], do: '0', else: int
       exp = if exp == [], do: '0', else: exp
