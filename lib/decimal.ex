@@ -1378,44 +1378,44 @@ defmodule Decimal do
 
   ## PARSING ##
 
-  defp do_parse("+" <> rest) do
-    rest |> String.downcase() |> parse_unsign()
+  defp do_parse("+" <> rest = raw) do
+    rest |> String.downcase() |> parse_unsign(raw)
   end
 
-  defp do_parse("-" <> rest) do
-    case rest |> String.downcase() |> parse_unsign() do
+  defp do_parse("-" <> rest = raw) do
+    case rest |> String.downcase() |> parse_unsign(raw) do
       {:ok, num} -> {:ok, %{num | sign: -1}}
       {:error, error} -> {:error, error}
     end
   end
 
   defp do_parse(bin) do
-    bin |> String.downcase() |> parse_unsign()
+    bin |> String.downcase() |> parse_unsign(bin)
   end
 
-  defp parse_unsign("inf") do
+  defp parse_unsign("inf", _) do
     {:ok, %Decimal{coef: :inf}}
   end
 
-  defp parse_unsign("infinity") do
+  defp parse_unsign("infinity", _) do
     {:ok, %Decimal{coef: :inf}}
   end
 
-  defp parse_unsign("snan") do
+  defp parse_unsign("snan", _) do
     {:ok, %Decimal{coef: :sNaN}}
   end
 
-  defp parse_unsign("nan") do
+  defp parse_unsign("nan", _) do
     {:ok, %Decimal{coef: :qNaN}}
   end
 
-  defp parse_unsign(bin) do
+  defp parse_unsign(bin, raw) do
     {int, rest} = parse_digits(bin)
     {float, rest} = parse_float(rest)
     {exp, rest} = parse_exp(rest)
 
     if rest != "" or (int == [] and float == []) do
-      handle_error(:invalid_operation, "number parsing syntax: " <> bin, %Decimal{coef: :NaN}, nil)
+      handle_error(:invalid_operation, "number parsing syntax: " <> raw, %Decimal{coef: :NaN}, nil)
     else
       int = if int == [], do: '0', else: int
       exp = if exp == [], do: '0', else: exp
