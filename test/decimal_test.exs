@@ -776,6 +776,27 @@ defmodule DecimalTest do
     assert Decimal.rem(~d"1.234", ~d"1.00") == d(1, 234, -3)
   end
 
+  test "issue #57" do
+    assert Decimal.round(~d"0.5",        0, :half_even) == d(1, 0, 0)
+    assert Decimal.round(~d"0.05",       1, :half_even) == d(1, 0, -1)
+    assert Decimal.round(~d"0.005",      2, :half_even) == d(1, 0, -2)
+    assert Decimal.round(~d"0.0005",     3, :half_even) == d(1, 0, -3)
+    assert Decimal.round(~d"0.00005",    4, :half_even) == d(1, 0, -4)
+    assert Decimal.round(~d"0.000005",   5, :half_even) == d(1, 0, -5)
+    assert Decimal.round(~d"0.0000005",  6, :half_even) == d(1, 0, -6)
+    assert Decimal.round(~d"-0.5",       0, :half_even) == d(-1, 0, 0)
+    assert Decimal.round(~d"-0.05",      1, :half_even) == d(-1, 0, -1)
+    assert Decimal.round(~d"-0.005",     2, :half_even) == d(-1, 0, -2)
+    assert Decimal.round(~d"-0.0005",    3, :half_even) == d(-1, 0, -3)
+    assert Decimal.round(~d"-0.00005",   4, :half_even) == d(-1, 0, -4)
+    assert Decimal.round(~d"-0.000005",  5, :half_even) == d(-1, 0, -5)
+    assert Decimal.round(~d"-0.0000005", 6, :half_even) == d(-1, 0, -6)
+    assert Decimal.round(~d"0.51",       0, :half_even) == d(1, 1, 0)
+    assert Decimal.round(~d"0.55",       1, :half_even) == d(1, 6, -1)
+    assert Decimal.round(~d"0.6",        0, :half_even) == d(1, 1, 0)
+    assert Decimal.round(~d"0.4",        0, :half_even) == d(1, 0, 0)
+  end
+
   test "set context flags" do
     Decimal.with_context(%Context{precision: 2}, fn ->
       assert [] = Decimal.get_context.flags
