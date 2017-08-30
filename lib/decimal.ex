@@ -1308,11 +1308,11 @@ defmodule Decimal do
   defp increment?(:half_up, _, _, [digit|_]),
     do: digit >= ?5
 
-  defp increment?(:half_even, _, [], [?5|rest]), do:
-    any_nonzero(rest)
+  defp increment?(:half_even, _, [], [?5|rest]),
+    do: any_nonzero(rest)
 
-  defp increment?(:half_even, _, signif, [?5|rest]), do:
-    any_nonzero(rest) or Kernel.rem(:lists.last(signif), 2) == 1
+  defp increment?(:half_even, _, signif, [?5|rest]),
+    do: any_nonzero(rest) or Kernel.rem(:lists.last(signif), 2) == 1
 
   defp increment?(:half_even, _, _, [digit|_]),
     do: digit > ?5
