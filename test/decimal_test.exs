@@ -776,6 +776,12 @@ defmodule DecimalTest do
     assert Decimal.rem(~d"1.234", ~d"1.00") == d(1, 234, -3)
   end
 
+  test "issue #60" do
+    assert_raise(FunctionClauseError, "no function clause matching in Decimal.round/3", fn ->
+      Decimal.round(nil)
+    end)
+  end
+
   test "set context flags" do
     Decimal.with_context(%Context{precision: 2}, fn ->
       assert [] = Decimal.get_context.flags

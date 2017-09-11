@@ -856,7 +856,7 @@ defmodule Decimal do
     num
   end
 
-  def round(num, n, mode) do
+  def round(%Decimal{} = num, n, mode) do
     %Decimal{sign: sign, coef: coef, exp: exp} = reduce(num)
     digits = :erlang.integer_to_list(coef)
     target_exp = -n
