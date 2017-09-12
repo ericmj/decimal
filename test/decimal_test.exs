@@ -796,6 +796,12 @@ defmodule DecimalTest do
     assert Decimal.round(~d"0.6",        0, :half_even) == d(1, 1, 0)
     assert Decimal.round(~d"0.4",        0, :half_even) == d(1, 0, 0)
   end
+  
+  test "issue #60" do
+    assert_raise(FunctionClauseError, "no function clause matching in Decimal.round/3", fn ->
+      Decimal.round(nil)
+    end)
+  end
 
   test "set context flags" do
     Decimal.with_context(%Context{precision: 2}, fn ->
