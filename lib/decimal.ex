@@ -895,7 +895,7 @@ defmodule Decimal do
   end
 
   def new(float) when is_float(float) do
-    float |> :io_lib_format.fwrite_g() |> IO.iodata_to_binary() |> new()
+    float |> :io_lib_format.fwrite_g() |> fix_float_exp() |> IO.iodata_to_binary() |> new()
   end
 
   def new(binary) when is_binary(binary) do
@@ -1474,6 +1474,18 @@ defmodule Decimal do
       {:ok, result}
     end
   end
+
+  defp fix_float_exp(digits) do
+    fix_float_exp(digits, [])
+  end
+
+  defp fix_float_exp([?e | rest], [?0 | [?. | result]]) do
+    fix_float_exp(rest, [?e | result])
+  end
+  defp fix_float_exp([digit | rest], result) do
+    fix_float_exp(rest, [digit | result])
+  end
+  defp fix_float_exp([], result), do: :lists.reverse(result)
 
   if Version.compare(System.version, "1.3.0") == :lt do
     defp integer_to_charlist(string), do: Integer.to_char_list(string)
