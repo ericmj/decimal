@@ -42,6 +42,7 @@ defmodule DecimalTest do
   test "float conversion" do
     assert Decimal.new(123.0) == d(1, 1230, -1)
     assert Decimal.new(0.1) == d(1, 1, -1)
+    assert Decimal.new(0.000015) == d(1, 15, -6)
     assert Decimal.new(-1.5) == d(-1, 15, -1)
   end
 
@@ -808,7 +809,7 @@ defmodule DecimalTest do
     assert Decimal.round(~d"0.6",        0, :half_even) == d(1, 1, 0)
     assert Decimal.round(~d"0.4",        0, :half_even) == d(1, 0, 0)
   end
-  
+
   test "issue #60" do
     assert_raise(FunctionClauseError, "no function clause matching in Decimal.round/3", fn ->
       Decimal.round(nil)
