@@ -41,6 +41,8 @@ defmodule DecimalTest do
 
   test "float conversion" do
     assert Decimal.new(123.0) == d(1, 1230, -1)
+    assert Decimal.new(0.1) == d(1, 1, -1)
+    assert Decimal.new(0.000015) == d(1, 15, -6)
     assert Decimal.new(-1.5) == d(-1, 15, -1)
   end
 
@@ -774,6 +776,17 @@ defmodule DecimalTest do
     assert Decimal.rem(~d"1.234", ~d"1") == d(1, 234, -3)
     assert Decimal.rem(~d"1.234", ~d"1.0") == d(1, 234, -3)
     assert Decimal.rem(~d"1.234", ~d"1.00") == d(1, 234, -3)
+  end
+
+  test "issue #62" do
+    assert Decimal.new(0.0001)     == d(1, 1, -4)
+    assert Decimal.new(0.00001)    == d(1, 1, -5)
+    assert Decimal.new(0.000001)   == d(1, 1, -6)
+    assert Decimal.new(-0.0001)    == d(-1, 1, -4)
+    assert Decimal.new(-0.00001)   == d(-1, 1, -5)
+    assert Decimal.new(-0.000001)  == d(-1, 1, -6)
+    assert Decimal.new(0.00002)    == d(1, 2, -5)
+    assert Decimal.new(0.00009)    == d(1, 9, -5)
   end
 
   test "issue #57" do
