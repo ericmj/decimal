@@ -1345,8 +1345,8 @@ defmodule Decimal do
   defp increment?(:half_even, _, _, [digit | _]),
     do: digit > ?5
 
-  defp increment?(:half_down, _, _, [digit | _]),
-    do: digit > ?5
+  defp increment?(:half_down, _, _, [digit | rest]),
+    do: digit > ?5 or digit == ?5 and any_nonzero(rest)
 
   defp any_nonzero(digits),
     do: :lists.any(fn digit -> digit != ?0 end, digits)
