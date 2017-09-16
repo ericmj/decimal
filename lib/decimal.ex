@@ -142,7 +142,7 @@ defmodule Decimal do
     The context is kept in the process dictionary. It can be accessed with
     `Decimal.get_context/0` and `Decimal.set_context/1`.
 
-    The default context has a precision of 9, the rounding algorithm is
+    The default context has a precision of 28, the rounding algorithm is
     `:half_up`. The set trap enablers are `:invalid_operation` and
     `:division_by_zero`.
 
