@@ -70,10 +70,9 @@ defmodule DecimalTest do
     assert Decimal.new("+1230e+2") == d(1, 1230, 2)
     assert Decimal.new("-1230e-2") == d(-1, 1230, -2)
 
-
-    assert Decimal.new("1230.00e13") == d(1, 123000, 11)
-    assert Decimal.new("+1230.1230e+5") == d(1, 12301230, 1)
-    assert Decimal.new("-1230.01010e-5") == d(-1, 123001010, -10)
+    assert Decimal.new("1230.00e13") == d(1, 123_000, 11)
+    assert Decimal.new("+1230.1230e+5") == d(1, 12_301_230, 1)
+    assert Decimal.new("-1230.01010e-5") == d(-1, 123_001_010, -10)
 
     assert Decimal.new("0e0") == d(1, 0, 0)
     assert Decimal.new("+0e-0") == d(1, 0, 0)
@@ -154,6 +153,7 @@ defmodule DecimalTest do
     assert_raise Error, fn ->
       Decimal.add(~d"inf", ~d"-inf")
     end
+
     assert_raise Error, fn ->
       Decimal.add(~d"snan", ~d"0")
     end
@@ -179,6 +179,7 @@ defmodule DecimalTest do
     assert_raise Error, fn ->
       Decimal.sub(~d"inf", ~d"inf")
     end
+
     assert_raise Error, fn ->
       Decimal.sub(~d"snan", ~d"0")
     end
@@ -264,12 +265,15 @@ defmodule DecimalTest do
     assert_raise Error, fn ->
       Decimal.div(~d"inf", ~d"inf")
     end
+
     assert_raise Error, fn ->
       Decimal.div(~d"snan", ~d"2")
     end
+
     assert_raise Error, fn ->
       Decimal.div(~d"-2", ~d"-snan")
     end
+
     assert_raise Error, fn ->
       Decimal.div(~d"0", ~d"-0")
     end
@@ -297,12 +301,15 @@ defmodule DecimalTest do
     assert_raise Error, fn ->
       Decimal.div_int(~d"inf", ~d"inf")
     end
+
     assert_raise Error, fn ->
       Decimal.div_int(~d"snan", ~d"2")
     end
+
     assert_raise Error, fn ->
       Decimal.div_int(~d"-2", ~d"-snan")
     end
+
     assert_raise Error, fn ->
       Decimal.div_int(~d"0", ~d"-0")
     end
@@ -332,12 +339,15 @@ defmodule DecimalTest do
     assert_raise Error, fn ->
       Decimal.rem(~d"inf", ~d"inf")
     end
+
     assert_raise Error, fn ->
       Decimal.rem(~d"snan", ~d"2")
     end
+
     assert_raise Error, fn ->
       Decimal.rem(~d"-2", ~d"-snan")
     end
+
     assert_raise Error, fn ->
       Decimal.rem(~d"0", ~d"-0")
     end
@@ -437,12 +447,15 @@ defmodule DecimalTest do
     assert_raise Error, fn ->
       Decimal.mult(~d"snan", ~d"2")
     end
+
     assert_raise Error, fn ->
       Decimal.mult(~d"-2", ~d"-snan")
     end
+
     assert_raise Error, fn ->
       Decimal.mult(~d"inf", ~d"0")
     end
+
     assert_raise Error, fn ->
       Decimal.mult(~d"0", ~d"-inf")
     end
@@ -526,9 +539,13 @@ defmodule DecimalTest do
       assert Decimal.to_integer(~d"-0") == 0
       assert Decimal.to_integer(d(1, 10, 2)) == 1000
       assert Decimal.to_integer(d(1, 1000, -2)) == 10
-      assert Decimal.to_integer(~d"123456789123489123456789") == 123456789123489123456789
-      assert Decimal.to_integer(Decimal.mult(~d"123456789123489123456789", ~d"1000")) == 123456789123489123456789000
-      assert Decimal.to_integer(d(1, 1365900000000000000000, -2)) == 13659000000000000000
+      assert Decimal.to_integer(~d"123456789123489123456789") == 123_456_789_123_489_123_456_789
+
+      assert Decimal.to_integer(Decimal.mult(~d"123456789123489123456789", ~d"1000")) ==
+               123_456_789_123_489_123_456_789_000
+
+      assert Decimal.to_integer(d(1, 1_365_900_000_000_000_000_000, -2)) ==
+               13_659_000_000_000_000_000
 
       assert_raise FunctionClauseError, fn ->
         Decimal.to_integer(d(1, 1001, -2))
@@ -551,14 +568,14 @@ defmodule DecimalTest do
       assert Decimal.to_float(~d"123.456") === 123.456
       assert Decimal.to_float(~d"-123.456") === -123.456
       assert Decimal.to_float(~d"123.45600") === 123.456
-      assert Decimal.to_float(~d"123456.789") === 123456.789
-      assert Decimal.to_float(~d"123456789.123456789") === 123456789.12345679
+      assert Decimal.to_float(~d"123456.789") === 123_456.789
+      assert Decimal.to_float(~d"123456789.123456789") === 123_456_789.12345679
 
-      assert Decimal.to_float(~d"94503599627370496") === 94503599627370496.0
-      assert Decimal.to_float(~d"94503599627370496.376") === 94503599627370496.376
-      assert Decimal.to_float(~d"4503599627370496") === 4503599627370496.0
-      assert Decimal.to_float(~d"2251799813685248") === 2251799813685248.0
-      assert Decimal.to_float(~d"9007199254740992") === 9007199254740992.0
+      assert Decimal.to_float(~d"94503599627370496") === 94_503_599_627_370_496.0
+      assert Decimal.to_float(~d"94503599627370496.376") === 94_503_599_627_370_496.376
+      assert Decimal.to_float(~d"4503599627370496") === 4_503_599_627_370_496.0
+      assert Decimal.to_float(~d"2251799813685248") === 2_251_799_813_685_248.0
+      assert Decimal.to_float(~d"9007199254740992") === 9_007_199_254_740_992.0
 
       assert_raise FunctionClauseError, fn ->
         Decimal.to_float(d(1, :qNaN, 0))
@@ -779,35 +796,35 @@ defmodule DecimalTest do
   end
 
   test "issue #62" do
-    assert Decimal.new(0.0001)     == d(1, 1, -4)
-    assert Decimal.new(0.00001)    == d(1, 1, -5)
-    assert Decimal.new(0.000001)   == d(1, 1, -6)
-    assert Decimal.new(-0.0001)    == d(-1, 1, -4)
-    assert Decimal.new(-0.00001)   == d(-1, 1, -5)
-    assert Decimal.new(-0.000001)  == d(-1, 1, -6)
-    assert Decimal.new(0.00002)    == d(1, 2, -5)
-    assert Decimal.new(0.00009)    == d(1, 9, -5)
+    assert Decimal.new(0.0001) == d(1, 1, -4)
+    assert Decimal.new(0.00001) == d(1, 1, -5)
+    assert Decimal.new(0.000001) == d(1, 1, -6)
+    assert Decimal.new(-0.0001) == d(-1, 1, -4)
+    assert Decimal.new(-0.00001) == d(-1, 1, -5)
+    assert Decimal.new(-0.000001) == d(-1, 1, -6)
+    assert Decimal.new(0.00002) == d(1, 2, -5)
+    assert Decimal.new(0.00009) == d(1, 9, -5)
   end
 
   test "issue #57" do
-    assert Decimal.round(~d"0.5",        0, :half_even) == d(1, 0, 0)
-    assert Decimal.round(~d"0.05",       1, :half_even) == d(1, 0, -1)
-    assert Decimal.round(~d"0.005",      2, :half_even) == d(1, 0, -2)
-    assert Decimal.round(~d"0.0005",     3, :half_even) == d(1, 0, -3)
-    assert Decimal.round(~d"0.00005",    4, :half_even) == d(1, 0, -4)
-    assert Decimal.round(~d"0.000005",   5, :half_even) == d(1, 0, -5)
-    assert Decimal.round(~d"0.0000005",  6, :half_even) == d(1, 0, -6)
-    assert Decimal.round(~d"-0.5",       0, :half_even) == d(-1, 0, 0)
-    assert Decimal.round(~d"-0.05",      1, :half_even) == d(-1, 0, -1)
-    assert Decimal.round(~d"-0.005",     2, :half_even) == d(-1, 0, -2)
-    assert Decimal.round(~d"-0.0005",    3, :half_even) == d(-1, 0, -3)
-    assert Decimal.round(~d"-0.00005",   4, :half_even) == d(-1, 0, -4)
-    assert Decimal.round(~d"-0.000005",  5, :half_even) == d(-1, 0, -5)
+    assert Decimal.round(~d"0.5", 0, :half_even) == d(1, 0, 0)
+    assert Decimal.round(~d"0.05", 1, :half_even) == d(1, 0, -1)
+    assert Decimal.round(~d"0.005", 2, :half_even) == d(1, 0, -2)
+    assert Decimal.round(~d"0.0005", 3, :half_even) == d(1, 0, -3)
+    assert Decimal.round(~d"0.00005", 4, :half_even) == d(1, 0, -4)
+    assert Decimal.round(~d"0.000005", 5, :half_even) == d(1, 0, -5)
+    assert Decimal.round(~d"0.0000005", 6, :half_even) == d(1, 0, -6)
+    assert Decimal.round(~d"-0.5", 0, :half_even) == d(-1, 0, 0)
+    assert Decimal.round(~d"-0.05", 1, :half_even) == d(-1, 0, -1)
+    assert Decimal.round(~d"-0.005", 2, :half_even) == d(-1, 0, -2)
+    assert Decimal.round(~d"-0.0005", 3, :half_even) == d(-1, 0, -3)
+    assert Decimal.round(~d"-0.00005", 4, :half_even) == d(-1, 0, -4)
+    assert Decimal.round(~d"-0.000005", 5, :half_even) == d(-1, 0, -5)
     assert Decimal.round(~d"-0.0000005", 6, :half_even) == d(-1, 0, -6)
-    assert Decimal.round(~d"0.51",       0, :half_even) == d(1, 1, 0)
-    assert Decimal.round(~d"0.55",       1, :half_even) == d(1, 6, -1)
-    assert Decimal.round(~d"0.6",        0, :half_even) == d(1, 1, 0)
-    assert Decimal.round(~d"0.4",        0, :half_even) == d(1, 0, 0)
+    assert Decimal.round(~d"0.51", 0, :half_even) == d(1, 1, 0)
+    assert Decimal.round(~d"0.55", 1, :half_even) == d(1, 6, -1)
+    assert Decimal.round(~d"0.6", 0, :half_even) == d(1, 1, 0)
+    assert Decimal.round(~d"0.4", 0, :half_even) == d(1, 0, 0)
   end
 
   test "issue #60" do
@@ -831,37 +848,40 @@ defmodule DecimalTest do
 
   test "set context flags" do
     Decimal.with_context(%Context{precision: 2}, fn ->
-      assert [] = Decimal.get_context.flags
+      assert [] = Decimal.get_context().flags
       Decimal.add(~d"2", ~d"2")
-      assert [] = Decimal.get_context.flags
+      assert [] = Decimal.get_context().flags
       Decimal.add(~d"2.0000", ~d"2")
-      assert [:rounded] = Decimal.get_context.flags
+      assert [:rounded] = Decimal.get_context().flags
       Decimal.add(~d"2.0001", ~d"2")
-      assert :inexact in Decimal.get_context.flags
+      assert :inexact in Decimal.get_context().flags
     end)
 
     Decimal.with_context(%Context{precision: 2}, fn ->
-      assert [] = Decimal.get_context.flags
+      assert [] = Decimal.get_context().flags
+
       assert_raise Error, fn ->
         assert Decimal.mult(~d"inf", ~d"0")
       end
-      assert :invalid_operation in Decimal.get_context.flags
+
+      assert :invalid_operation in Decimal.get_context().flags
     end)
   end
 
   test "traps" do
     Decimal.with_context(%Context{traps: []}, fn ->
-     assert Decimal.mult(~d"inf", ~d"0") == d(1, :qNaN, 0)
-     assert Decimal.div(~d"5", ~d"0") == d(1, :inf, 0)
-     assert :division_by_zero in Decimal.get_context.flags
+      assert Decimal.mult(~d"inf", ~d"0") == d(1, :qNaN, 0)
+      assert Decimal.div(~d"5", ~d"0") == d(1, :inf, 0)
+      assert :division_by_zero in Decimal.get_context().flags
     end)
   end
 
   test "error sets result" do
     try do
       Decimal.mult(~d"inf", ~d"0")
-    rescue ex in [Error] ->
-      assert ex.result == d(1, :sNaN, 0)
+    rescue
+      ex in [Error] ->
+        assert ex.result == d(1, :sNaN, 0)
     end
   end
 end

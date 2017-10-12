@@ -51,7 +51,7 @@ defmodule Decimal do
   import Bitwise
   import Kernel, except: [abs: 1, div: 2, max: 2, min: 2, rem: 1, round: 1]
 
-  @power_of_2_to_52 4503599627370496
+  @power_of_2_to_52 4_503_599_627_370_496
 
   @typedoc """
   The coefficient of the power of `10`. Non-negative because the sign is stored separately in `sign`.
@@ -79,18 +79,20 @@ defmodule Decimal do
   """
   @type sign :: 1 | -1
 
-  @type signal :: :invalid_operation |
-                  :division_by_zero |
-                  :rounded |
-                  :inexact
+  @type signal ::
+          :invalid_operation
+          | :division_by_zero
+          | :rounded
+          | :inexact
 
-  @type rounding :: :down |
-                    :half_up |
-                    :half_even |
-                    :ceiling |
-                    :floor |
-                    :half_down |
-                    :up
+  @type rounding ::
+          :down
+          | :half_up
+          | :half_even
+          | :ceiling
+          | :floor
+          | :half_down
+          | :up
 
   @typedoc """
   This implementation models the `sign` as `1` or `-1` such that the complete number will be: `sign * coef * 10 ^ exp`.
@@ -101,12 +103,12 @@ defmodule Decimal do
 
   """
   @type t :: %__MODULE__{
-    sign: sign,
-    coef: coefficient,
-    exp: exponent,
-  }
+          sign: sign,
+          coef: coefficient,
+          exp: exponent
+        }
 
-  defstruct [sign: 1, coef: 0, exp: 0]
+  defstruct sign: 1, coef: 0, exp: 0
 
   @context_key :"$decimal_context"
 
@@ -190,18 +192,16 @@ defmodule Decimal do
 
     """
     @type t :: %__MODULE__{
-      precision: pos_integer,
-      rounding: Decimal.rounding,
-      flags: [Decimal.signal],
-      traps: [Decimal.signal],
-    }
+            precision: pos_integer,
+            rounding: Decimal.rounding(),
+            flags: [Decimal.signal()],
+            traps: [Decimal.signal()]
+          }
 
-    defstruct [
-      precision: 28,
-      rounding: :half_up,
-      flags: [],
-      traps: [:invalid_operation, :division_by_zero],
-    ]
+    defstruct precision: 28,
+              rounding: :half_up,
+              flags: [],
+              traps: [:invalid_operation, :division_by_zero]
   end
 
   defmacrop error(flags, reason, result, context \\ nil) do
@@ -239,17 +239,9 @@ defmodule Decimal do
   The absolute value of given number. Sets the number's sign to positive.
   """
   @spec abs(t) :: t
-  def abs(%Decimal{coef: :sNaN} = num) do
-    error(:invalid_operation, "operation on NaN", num)
-  end
-
-  def abs(%Decimal{coef: :qNaN} = num) do
-    %{num | sign: 1}
-  end
-
-  def abs(%Decimal{} = num) do
-    context(%{num | sign: 1})
-  end
+  def abs(%Decimal{coef: :sNaN} = num), do: error(:invalid_operation, "operation on NaN", num)
+  def abs(%Decimal{coef: :qNaN} = num), do: %{num | sign: 1}
+  def abs(%Decimal{} = num), do: context(%{num | sign: 1})
 
   @doc """
   Adds two numbers together.
@@ -261,43 +253,35 @@ defmodule Decimal do
 
   """
   @spec add(t, t) :: t
-  def add(%Decimal{coef: :sNaN} = num1, %Decimal{}) do
-    error(:invalid_operation, "operation on NaN", num1)
-  end
+  def add(%Decimal{coef: :sNaN} = num1, %Decimal{}),
+    do: error(:invalid_operation, "operation on NaN", num1)
 
-  def add(%Decimal{}, %Decimal{coef: :sNaN} = num2) do
-    error(:invalid_operation, "operation on NaN", num2)
-  end
+  def add(%Decimal{}, %Decimal{coef: :sNaN} = num2),
+    do: error(:invalid_operation, "operation on NaN", num2)
 
-  def add(%Decimal{coef: :qNaN} = num1, %Decimal{}) do
-    num1
-  end
+  def add(%Decimal{coef: :qNaN} = num1, %Decimal{}), do: num1
 
-  def add(%Decimal{}, %Decimal{coef: :qNaN} = num2) do
-    num2
-  end
+  def add(%Decimal{}, %Decimal{coef: :qNaN} = num2), do: num2
 
-  def add(%Decimal{coef: :inf, sign: sign, exp: exp1} = num1, %Decimal{coef: :inf, sign: sign, exp: exp2} = num2) do
-    if exp1 > exp2 do
+  def add(%Decimal{coef: :inf, sign: sign} = num1, %Decimal{coef: :inf, sign: sign} = num2) do
+    if num1.exp > num2.exp do
       num1
     else
       num2
     end
   end
 
-  def add(%Decimal{coef: :inf}, %Decimal{coef: :inf}) do
-    error(:invalid_operation, "adding +Infinity and -Infinity", %Decimal{coef: :NaN})
-  end
+  def add(%Decimal{coef: :inf}, %Decimal{coef: :inf}),
+    do: error(:invalid_operation, "adding +Infinity and -Infinity", %Decimal{coef: :NaN})
 
-  def add(%Decimal{coef: :inf} = num1, %Decimal{}) do
-    num1
-  end
+  def add(%Decimal{coef: :inf} = num1, %Decimal{}), do: num1
 
-  def add(%Decimal{}, %Decimal{coef: :inf} = num2) do
-    num2
-  end
+  def add(%Decimal{}, %Decimal{coef: :inf} = num2), do: num2
 
-  def add(%Decimal{sign: sign1, coef: coef1, exp: exp1}, %Decimal{sign: sign2, coef: coef2, exp: exp2}) do
+  def add(%Decimal{} = num1, %Decimal{} = num2) do
+    %Decimal{sign: sign1, coef: coef1, exp: exp1} = num1
+    %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2
+
     {coef1, coef2} = add_align(coef1, exp1, coef2, exp2)
     coef = sign1 * coef1 + sign2 * coef2
     exp = Kernel.min(exp1, exp2)
@@ -327,29 +311,24 @@ defmodule Decimal do
   NaN, then that number is returned.
   """
   @spec compare(t, t) :: t
-  def compare(%Decimal{coef: :qNaN} = num1, _num2) do
-    num1
-  end
+  def compare(%Decimal{coef: :qNaN} = num1, _num2), do: num1
 
-  def compare(_num1, %Decimal{coef: :qNaN} = num2) do
-    num2
-  end
+  def compare(_num1, %Decimal{coef: :qNaN} = num2), do: num2
 
-  def compare(%Decimal{coef: :inf} = num1, %Decimal{coef: :inf} = num2) do
-    case {num1.sign, num2.sign} do
-      {sign, sign} -> %Decimal{sign: 1, coef: 0}
-      {sign1, sign2} when sign1 < sign2 -> %Decimal{sign: -1, coef: 1}
-      {sign1, sign2} when sign1 > sign2 -> %Decimal{sign: 1, coef: 1}
-    end
-  end
+  def compare(%Decimal{coef: :inf, sign: sign}, %Decimal{coef: :inf, sign: sign}),
+    do: %Decimal{sign: 1, coef: 0}
 
-  def compare(%Decimal{coef: :inf, sign: sign}, _num2) do
-    %Decimal{sign: sign, coef: 1}
-  end
+  def compare(%Decimal{coef: :inf, sign: sign1}, %Decimal{coef: :inf, sign: sign2})
+      when sign1 < sign2,
+      do: %Decimal{sign: -1, coef: 1}
 
-  def compare(_num1, %Decimal{coef: :inf, sign: sign}) do
-    %Decimal{sign: sign * -1, coef: 1}
-  end
+  def compare(%Decimal{coef: :inf, sign: sign1}, %Decimal{coef: :inf, sign: sign2})
+      when sign1 > sign2,
+      do: %Decimal{sign: 1, coef: 1}
+
+  def compare(%Decimal{coef: :inf, sign: sign}, _num2), do: %Decimal{sign: sign, coef: 1}
+
+  def compare(_num1, %Decimal{coef: :inf, sign: sign}), do: %Decimal{sign: sign * -1, coef: 1}
 
   def compare(num1, num2) do
     case sub(num1, num2) do
@@ -397,25 +376,18 @@ defmodule Decimal do
 
   """
   @spec div(t, t) :: t
-  def div(%Decimal{coef: :sNaN} = num1, %Decimal{}) do
-    error(:invalid_operation, "operation on NaN", num1)
-  end
+  def div(%Decimal{coef: :sNaN} = num1, %Decimal{}),
+    do: error(:invalid_operation, "operation on NaN", num1)
 
-  def div(%Decimal{}, %Decimal{coef: :sNaN} = num2) do
-    error(:invalid_operation, "operation on NaN", num2)
-  end
+  def div(%Decimal{}, %Decimal{coef: :sNaN} = num2),
+    do: error(:invalid_operation, "operation on NaN", num2)
 
-  def div(%Decimal{coef: :qNaN} = num1, %Decimal{}) do
-    num1
-  end
+  def div(%Decimal{coef: :qNaN} = num1, %Decimal{}), do: num1
 
-  def div(%Decimal{}, %Decimal{coef: :qNaN} = num2) do
-    num2
-  end
+  def div(%Decimal{}, %Decimal{coef: :qNaN} = num2), do: num2
 
-  def div(%Decimal{coef: :inf}, %Decimal{coef: :inf}) do
-    error(:invalid_operation, "±Infinity / ±Infinity", %Decimal{coef: :NaN})
-  end
+  def div(%Decimal{coef: :inf}, %Decimal{coef: :inf}),
+    do: error(:invalid_operation, "±Infinity / ±Infinity", %Decimal{coef: :NaN})
 
   def div(%Decimal{sign: sign1, coef: :inf} = num1, %Decimal{sign: sign2}) do
     sign = if sign1 == sign2, do: 1, else: -1
@@ -429,16 +401,17 @@ defmodule Decimal do
     %Decimal{sign: sign, coef: 0, exp: exp1 - exp2}
   end
 
-  def div(%Decimal{coef: 0}, %Decimal{coef: 0}) do
-    error(:invalid_operation, "0 / 0", %Decimal{coef: :NaN})
-  end
+  def div(%Decimal{coef: 0}, %Decimal{coef: 0}),
+    do: error(:invalid_operation, "0 / 0", %Decimal{coef: :NaN})
 
   def div(%Decimal{sign: sign1}, %Decimal{sign: sign2, coef: 0}) do
     sign = if sign1 == sign2, do: 1, else: -1
     error(:division_by_zero, nil, %Decimal{sign: sign, coef: :inf})
   end
 
-  def div(%Decimal{sign: sign1, coef: coef1, exp: exp1}, %Decimal{sign: sign2, coef: coef2, exp: exp2}) do
+  def div(%Decimal{} = num1, %Decimal{} = num2) do
+    %Decimal{sign: sign1, coef: coef1, exp: exp1} = num1
+    %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2
     sign = if sign1 == sign2, do: 1, else: -1
 
     if coef1 == 0 do
@@ -450,7 +423,6 @@ defmodule Decimal do
 
       context(%Decimal{sign: sign, coef: coef, exp: exp1 - exp2 - adjust}, signals)
     end
-
   end
 
   @doc """
@@ -464,25 +436,18 @@ defmodule Decimal do
 
   """
   @spec div_int(t, t) :: t
-  def div_int(%Decimal{coef: :sNaN} = num1, %Decimal{}) do
-    error(:invalid_operation, "operation on NaN", num1)
-  end
+  def div_int(%Decimal{coef: :sNaN} = num1, %Decimal{}),
+    do: error(:invalid_operation, "operation on NaN", num1)
 
-  def div_int(%Decimal{}, %Decimal{coef: :sNaN} = num2) do
-    error(:invalid_operation, "operation on NaN", num2)
-  end
+  def div_int(%Decimal{}, %Decimal{coef: :sNaN} = num2),
+    do: error(:invalid_operation, "operation on NaN", num2)
 
-  def div_int(%Decimal{coef: :qNaN} = num1, %Decimal{}) do
-    num1
-  end
+  def div_int(%Decimal{coef: :qNaN} = num1, %Decimal{}), do: num1
 
-  def div_int(%Decimal{}, %Decimal{coef: :qNaN} = num2) do
-    num2
-  end
+  def div_int(%Decimal{}, %Decimal{coef: :qNaN} = num2), do: num2
 
-  def div_int(%Decimal{coef: :inf}, %Decimal{coef: :inf}) do
-    error(:invalid_operation, "±Infinity / ±Infinity", %Decimal{coef: :NaN})
-  end
+  def div_int(%Decimal{coef: :inf}, %Decimal{coef: :inf}),
+    do: error(:invalid_operation, "±Infinity / ±Infinity", %Decimal{coef: :NaN})
 
   def div_int(%Decimal{sign: sign1, coef: :inf} = num1, %Decimal{sign: sign2}) do
     sign = if sign1 == sign2, do: 1, else: -1
@@ -496,27 +461,31 @@ defmodule Decimal do
     %Decimal{sign: sign, coef: 0, exp: exp1 - exp2}
   end
 
-  def div_int(%Decimal{coef: 0}, %Decimal{coef: 0}) do
-    error(:invalid_operation, "0 / 0", %Decimal{coef: :NaN})
-  end
+  def div_int(%Decimal{coef: 0}, %Decimal{coef: 0}),
+    do: error(:invalid_operation, "0 / 0", %Decimal{coef: :NaN})
 
   def div_int(%Decimal{sign: sign1}, %Decimal{sign: sign2, coef: 0}) do
     div_sign = if sign1 == sign2, do: 1, else: -1
     error(:division_by_zero, nil, %Decimal{sign: div_sign, coef: :inf})
   end
 
-  def div_int(%Decimal{sign: sign1, coef: coef1, exp: exp1} = num1, %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2) do
+  def div_int(%Decimal{} = num1, %Decimal{} = num2) do
+    %Decimal{sign: sign1, coef: coef1, exp: exp1} = num1
+    %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2
     div_sign = if sign1 == sign2, do: 1, else: -1
 
     cond do
       compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == %Decimal{sign: -1, coef: 1} ->
         %Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2}
+
       coef1 == 0 ->
         context(%{num1 | sign: div_sign})
+
       true ->
         case integer_division(div_sign, coef1, exp1, coef2, exp2) do
           {:ok, result} ->
             result
+
           {:error, error, reason, num} ->
             error(error, reason, num)
         end
@@ -535,29 +504,20 @@ defmodule Decimal do
 
   """
   @spec rem(t, t) :: t
-  def rem(%Decimal{coef: :sNaN} = num1, %Decimal{}) do
-    error(:invalid_operation, "operation on NaN", num1)
-  end
+  def rem(%Decimal{coef: :sNaN} = num1, %Decimal{}),
+    do: error(:invalid_operation, "operation on NaN", num1)
 
-  def rem(%Decimal{}, %Decimal{coef: :sNaN} = num2) do
-    error(:invalid_operation, "operation on NaN", num2)
-  end
+  def rem(%Decimal{}, %Decimal{coef: :sNaN} = num2),
+    do: error(:invalid_operation, "operation on NaN", num2)
 
-  def rem(%Decimal{coef: :qNaN} = num1, %Decimal{}) do
-    num1
-  end
+  def rem(%Decimal{coef: :qNaN} = num1, %Decimal{}), do: num1
 
-  def rem(%Decimal{}, %Decimal{coef: :qNaN} = num2) do
-    num2
-  end
+  def rem(%Decimal{}, %Decimal{coef: :qNaN} = num2), do: num2
 
-  def rem(%Decimal{coef: :inf}, %Decimal{coef: :inf}) do
-    error(:invalid_operation, "±Infinity / ±Infinity", %Decimal{coef: :NaN})
-  end
+  def rem(%Decimal{coef: :inf}, %Decimal{coef: :inf}),
+    do: error(:invalid_operation, "±Infinity / ±Infinity", %Decimal{coef: :NaN})
 
-  def rem(%Decimal{sign: sign1, coef: :inf}, %Decimal{}) do
-    %Decimal{sign: sign1, coef: 0}
-  end
+  def rem(%Decimal{sign: sign1, coef: :inf}, %Decimal{}), do: %Decimal{sign: sign1, coef: 0}
 
   def rem(%Decimal{sign: sign1}, %Decimal{coef: :inf} = num2) do
     # TODO: Subnormal
@@ -565,25 +525,30 @@ defmodule Decimal do
     %{num2 | sign: sign1}
   end
 
-  def rem(%Decimal{coef: 0}, %Decimal{coef: 0}) do
-    error(:invalid_operation, "0 / 0", %Decimal{coef: :NaN})
-  end
+  def rem(%Decimal{coef: 0}, %Decimal{coef: 0}),
+    do: error(:invalid_operation, "0 / 0", %Decimal{coef: :NaN})
 
-  def rem(%Decimal{sign: sign1}, %Decimal{coef: 0}) do
-    error(:division_by_zero, nil, %Decimal{sign: sign1, coef: 0})
-  end
+  def rem(%Decimal{sign: sign1}, %Decimal{coef: 0}),
+    do: error(:division_by_zero, nil, %Decimal{sign: sign1, coef: 0})
 
-  def rem(%Decimal{sign: sign1, coef: coef1, exp: exp1} = num1, %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2) do
+  def rem(%Decimal{} = num1, %Decimal{} = num2) do
+    %Decimal{sign: sign1, coef: coef1, exp: exp1} = num1
+    %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2
+
     cond do
       compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == %Decimal{sign: -1, coef: 1} ->
         %{num1 | sign: sign1}
+
       coef1 == 0 ->
         context(%{num2 | sign: sign1})
+
       true ->
         div_sign = if sign1 == sign2, do: 1, else: -1
+
         case integer_division(div_sign, coef1, exp1, coef2, exp2) do
           {:ok, result} ->
             sub(num1, mult(num2, result))
+
           {:error, error, reason, num} ->
             error(error, reason, num)
         end
@@ -604,25 +569,26 @@ defmodule Decimal do
   """
   @spec div_rem(t, t) :: {t, t}
   def div_rem(%Decimal{coef: :sNaN} = num1, %Decimal{}) do
-    {error(:invalid_operation, "operation on NaN", num1),
-      error(:invalid_operation, "operation on NaN", num1)}
+    {
+      error(:invalid_operation, "operation on NaN", num1),
+      error(:invalid_operation, "operation on NaN", num1)
+    }
   end
 
   def div_rem(%Decimal{}, %Decimal{coef: :sNaN} = num2) do
-    {error(:invalid_operation, "operation on NaN", num2),
-      error(:invalid_operation, "operation on NaN", num2)}
+    {
+      error(:invalid_operation, "operation on NaN", num2),
+      error(:invalid_operation, "operation on NaN", num2)
+    }
   end
 
-  def div_rem(%Decimal{coef: :qNaN} = num1, %Decimal{}) do
-    {num1, num1}
-  end
+  def div_rem(%Decimal{coef: :qNaN} = num1, %Decimal{}), do: {num1, num1}
 
-  def div_rem(%Decimal{}, %Decimal{coef: :qNaN} = num2) do
-    {num2, num2}
-  end
+  def div_rem(%Decimal{}, %Decimal{coef: :qNaN} = num2), do: {num2, num2}
 
   def div_rem(%Decimal{coef: :inf}, %Decimal{coef: :inf}) do
-    error(:invalid_operation, "±Infinity / ±Infinity", {%Decimal{coef: :NaN}, %Decimal{coef: :NaN}})
+    numbers = {%Decimal{coef: :NaN}, %Decimal{coef: :NaN}}
+    error(:invalid_operation, "±Infinity / ±Infinity", numbers)
   end
 
   def div_rem(%Decimal{sign: sign1, coef: :inf} = num1, %Decimal{sign: sign2}) do
@@ -630,7 +596,10 @@ defmodule Decimal do
     {%{num1 | sign: sign}, %Decimal{sign: sign1, coef: 0}}
   end
 
-  def div_rem(%Decimal{sign: sign1, exp: exp1}, %Decimal{sign: sign2, coef: :inf, exp: exp2} = num2) do
+  def div_rem(%Decimal{} = num1, %Decimal{coef: :inf} = num2) do
+    %Decimal{sign: sign1, exp: exp1} = num1
+    %Decimal{sign: sign2, exp: exp2} = num2
+
     sign = if sign1 == sign2, do: 1, else: -1
     # TODO: Subnormal
     # exponent?
@@ -649,18 +618,23 @@ defmodule Decimal do
     {div_error, rem_error}
   end
 
-  def div_rem(%Decimal{sign: sign1, coef: coef1, exp: exp1} = num1, %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2) do
+  def div_rem(%Decimal{} = num1, %Decimal{} = num2) do
+    %Decimal{sign: sign1, coef: coef1, exp: exp1} = num1
+    %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2
     div_sign = if sign1 == sign2, do: 1, else: -1
 
     cond do
       compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == %Decimal{sign: -1, coef: 1} ->
         {%Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2}, %{num1 | sign: sign1}}
+
       coef1 == 0 ->
         {context(%{num1 | sign: div_sign}), context(%{num2 | sign: sign1})}
+
       true ->
         case integer_division(div_sign, coef1, exp1, coef2, exp2) do
           {:ok, result} ->
             {result, sub(num1, mult(num2, result))}
+
           {:error, error, reason, num} ->
             error(error, reason, {num, num})
         end
@@ -673,30 +647,31 @@ defmodule Decimal do
   Only if both numbers are NaN will NaN be returned.
   """
   @spec max(t, t) :: t
-  def max(%Decimal{coef: :qNaN}, %Decimal{} = num2) do
-    num2
-  end
+  def max(%Decimal{coef: :qNaN}, %Decimal{} = num2), do: num2
 
-  def max(%Decimal{} = num1, %Decimal{coef: :qNaN}) do
-    num1
-  end
+  def max(%Decimal{} = num1, %Decimal{coef: :qNaN}), do: num1
 
   def max(%Decimal{sign: sign1, exp: exp1} = num1, %Decimal{sign: sign2, exp: exp2} = num2) do
     case compare(num1, num2) do
       %Decimal{sign: -1, coef: 1} ->
         num2
+
       %Decimal{sign: 1, coef: 1} ->
         num1
+
       %Decimal{coef: 0} ->
         cond do
           sign1 != sign2 ->
             if sign1 == 1, do: num1, else: num2
+
           sign1 == 1 ->
             if exp1 > exp2, do: num1, else: num2
+
           sign1 == -1 ->
             if exp1 < exp2, do: num1, else: num2
         end
-    end |> context
+    end
+    |> context()
   end
 
   @doc """
@@ -705,59 +680,47 @@ defmodule Decimal do
   Only if both numbers are NaN will NaN be returned.
   """
   @spec min(t, t) :: t
-  def min(%Decimal{coef: :qNaN}, %Decimal{} = num2) do
-    num2
-  end
+  def min(%Decimal{coef: :qNaN}, %Decimal{} = num2), do: num2
 
-  def min(%Decimal{} = num1, %Decimal{coef: :qNaN}) do
-    num1
-  end
+  def min(%Decimal{} = num1, %Decimal{coef: :qNaN}), do: num1
 
   def min(%Decimal{sign: sign1, exp: exp1} = num1, %Decimal{sign: sign2, exp: exp2} = num2) do
     case compare(num1, num2) do
       %Decimal{sign: -1, coef: 1} ->
         num1
+
       %Decimal{sign: 1, coef: 1} ->
         num2
+
       %Decimal{coef: 0} ->
         cond do
           sign1 != sign2 ->
             if sign1 == -1, do: num1, else: num2
+
           sign1 == 1 ->
             if exp1 < exp2, do: num1, else: num2
+
           sign1 == -1 ->
             if exp1 > exp2, do: num1, else: num2
         end
-    end |> context
+    end
+    |> context()
   end
 
   @doc """
   Negates the given number.
   """
   @spec minus(t) :: t
-  def minus(%Decimal{coef: :sNaN} = num) do
-    error(:invalid_operation, "operation on NaN", num)
-  end
-
-  def minus(%Decimal{coef: :qNaN} = num) do
-    num
-  end
-
-  def minus(%Decimal{sign: sign} = num) do
-    %{num | sign: -sign} |> context
-  end
+  def minus(%Decimal{coef: :sNaN} = num), do: error(:invalid_operation, "operation on NaN", num)
+  def minus(%Decimal{coef: :qNaN} = num), do: num
+  def minus(%Decimal{sign: sign} = num), do: context(%{num | sign: -sign})
 
   @doc """
   Applies the context to the given number rounding it to specified precision.
   """
   @spec plus(t) :: t
-  def plus(%Decimal{coef: :sNaN} = num) do
-    error(:invalid_operation, "operation on NaN", num)
-  end
-
-  def plus(%Decimal{} = num) do
-    context(num)
-  end
+  def plus(%Decimal{coef: :sNaN} = num), do: error(:invalid_operation, "operation on NaN", num)
+  def plus(%Decimal{} = num), do: context(num)
 
   @doc """
   Multiplies two numbers.
@@ -769,29 +732,21 @@ defmodule Decimal do
 
   """
   @spec mult(t, t) :: t
-  def mult(%Decimal{coef: :sNaN} = num1, %Decimal{}) do
-    error(:invalid_operation, "operation on NaN", num1)
-  end
+  def mult(%Decimal{coef: :sNaN} = num1, %Decimal{}),
+    do: error(:invalid_operation, "operation on NaN", num1)
 
-  def mult(%Decimal{}, %Decimal{coef: :sNaN} = num2) do
-    error(:invalid_operation, "operation on NaN", num2)
-  end
+  def mult(%Decimal{}, %Decimal{coef: :sNaN} = num2),
+    do: error(:invalid_operation, "operation on NaN", num2)
 
-  def mult(%Decimal{coef: :qNaN} = num1, %Decimal{}) do
-    num1
-  end
+  def mult(%Decimal{coef: :qNaN} = num1, %Decimal{}), do: num1
 
-  def mult(%Decimal{}, %Decimal{coef: :qNaN} = num2) do
-    num2
-  end
+  def mult(%Decimal{}, %Decimal{coef: :qNaN} = num2), do: num2
 
-  def mult(%Decimal{coef: 0}, %Decimal{coef: :inf}) do
-    error(:invalid_operation, "0 * ±Infinity", %Decimal{coef: :NaN})
-  end
+  def mult(%Decimal{coef: 0}, %Decimal{coef: :inf}),
+    do: error(:invalid_operation, "0 * ±Infinity", %Decimal{coef: :NaN})
 
-  def mult(%Decimal{coef: :inf}, %Decimal{coef: 0}) do
-    error(:invalid_operation, "0 * ±Infinity", %Decimal{coef: :NaN})
-  end
+  def mult(%Decimal{coef: :inf}, %Decimal{coef: 0}),
+    do: error(:invalid_operation, "0 * ±Infinity", %Decimal{coef: :NaN})
 
   def mult(%Decimal{sign: sign1, coef: :inf, exp: exp1}, %Decimal{sign: sign2, exp: exp2}) do
     sign = if sign1 == sign2, do: 1, else: -1
@@ -805,9 +760,11 @@ defmodule Decimal do
     %Decimal{sign: sign, coef: :inf, exp: exp1 + exp2}
   end
 
-  def mult(%Decimal{sign: sign1, coef: coef1, exp: exp1}, %Decimal{sign: sign2, coef: coef2, exp: exp2}) do
+  def mult(%Decimal{} = num1, %Decimal{} = num2) do
+    %Decimal{sign: sign1, coef: coef1, exp: exp1} = num1
+    %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2
     sign = if sign1 == sign2, do: 1, else: -1
-    %Decimal{sign: sign, coef: coef1 * coef2, exp: exp1 + exp2} |> context
+    %Decimal{sign: sign, coef: coef1 * coef2, exp: exp1 + exp2} |> context()
   end
 
   @doc """
@@ -815,13 +772,9 @@ defmodule Decimal do
   keeping the number numerically equivalent by increasing the exponent.
   """
   @spec reduce(t) :: t
-  def reduce(%Decimal{coef: :sNaN} = num) do
-    error(:invalid_operation, "operation on NaN", num)
-  end
+  def reduce(%Decimal{coef: :sNaN} = num), do: error(:invalid_operation, "operation on NaN", num)
 
-  def reduce(%Decimal{coef: :qNaN} = num) do
-    num
-  end
+  def reduce(%Decimal{coef: :qNaN} = num), do: num
 
   def reduce(%Decimal{coef: :inf} = num) do
     # exponent?
@@ -844,17 +797,12 @@ defmodule Decimal do
   @spec round(t, integer, rounding) :: t
   def round(num, places \\ 0, mode \\ :half_up)
 
-  def round(%Decimal{coef: :sNaN} = num, _, _) do
-    error(:invalid_operation, "operation on NaN", num)
-  end
+  def round(%Decimal{coef: :sNaN} = num, _, _),
+    do: error(:invalid_operation, "operation on NaN", num)
 
-  def round(%Decimal{coef: :qNaN} = num, _, _) do
-    num
-  end
+  def round(%Decimal{coef: :qNaN} = num, _, _), do: num
 
-  def round(%Decimal{coef: :inf} = num, _, _) do
-    num
-  end
+  def round(%Decimal{coef: :inf} = num, _, _), do: num
 
   def round(%Decimal{} = num, n, mode) do
     %Decimal{sign: sign, coef: coef, exp: exp} = reduce(num)
@@ -887,15 +835,18 @@ defmodule Decimal do
       numeric-string ::=  [sign] numeric-value | [sign] nan
 
   """
-  @spec new(t | integer | float | String.t) :: t
+  @spec new(t | integer | float | String.t()) :: t
   def new(%Decimal{} = num), do: num
 
-  def new(int) when is_integer(int) do
-    %Decimal{sign: (if int < 0, do: -1, else: 1), coef: Kernel.abs(int)}
-  end
+  def new(int) when is_integer(int),
+    do: %Decimal{sign: if(int < 0, do: -1, else: 1), coef: Kernel.abs(int)}
 
   def new(float) when is_float(float) do
-    float |> :io_lib_format.fwrite_g() |> fix_float_exp() |> IO.iodata_to_binary() |> new()
+    float
+    |> :io_lib_format.fwrite_g()
+    |> fix_float_exp()
+    |> IO.iodata_to_binary()
+    |> new()
   end
 
   def new(binary) when is_binary(binary) do
@@ -913,9 +864,7 @@ defmodule Decimal do
   kept - it will not be rounded with the context.
   """
   @spec new(1 | -1, non_neg_integer | :qNaN | :sNaN | :inf, integer) :: t
-  def new(sign, coefficient, exponent) do
-    %Decimal{sign: sign, coef: coefficient, exp: exponent}
-  end
+  def new(sign, coefficient, exponent), do: %Decimal{sign: sign, coef: coefficient, exp: exponent}
 
   @doc """
   Parses a binary into a decimal.
@@ -935,7 +884,7 @@ defmodule Decimal do
       :error
 
   """
-  @spec parse(String.t) :: {:ok, t} | :error
+  @spec parse(String.t()) :: {:ok, t} | :error
   def parse(binary) when is_binary(binary) do
     case do_parse(binary) do
       {:ok, decimal} -> {:ok, decimal}
@@ -953,7 +902,7 @@ defmodule Decimal do
     * `:raw` - number converted to its raw, internal format.
 
   """
-  @spec to_string(t, :scientific | :normal | :raw) :: String.t
+  @spec to_string(t, :scientific | :normal | :raw) :: String.t()
   def to_string(num, type \\ :scientific)
 
   def to_string(%Decimal{sign: sign, coef: :qNaN}, _type) do
@@ -976,6 +925,7 @@ defmodule Decimal do
         list ++ :lists.duplicate(exp, ?0)
       else
         diff = length(list) + exp
+
         if diff > 0 do
           List.insert_at(list, diff, ?.)
         else
@@ -983,7 +933,7 @@ defmodule Decimal do
         end
       end
 
-    list = if sign == -1, do: [?-|list], else: list
+    list = if sign == -1, do: [?- | list], else: list
     IO.iodata_to_binary(list)
   end
 
@@ -1000,6 +950,7 @@ defmodule Decimal do
         exp < 0 and adjusted >= -6 ->
           abs_exp = Kernel.abs(exp)
           diff = -length + abs_exp + 1
+
           if diff > 0 do
             list = :lists.duplicate(diff, ?0) ++ list
             List.insert_at(list, 1, ?.)
@@ -1014,13 +965,13 @@ defmodule Decimal do
           list ++ integer_to_charlist(adjusted)
       end
 
-    list = if sign == -1, do: [?-|list], else: list
+    list = if sign == -1, do: [?- | list], else: list
     IO.iodata_to_binary(list)
   end
 
   def to_string(%Decimal{sign: sign, coef: coef, exp: exp}, :raw) do
     str = Integer.to_string(coef)
-    str = if sign == -1, do: [?-|str], else: str
+    str = if sign == -1, do: [?- | str], else: str
     str = if exp != 0, do: [str, "E", Integer.to_string(exp)], else: str
 
     IO.iodata_to_binary(str)
@@ -1033,19 +984,16 @@ defmodule Decimal do
   """
   @spec to_integer(t) :: integer
   def to_integer(%Decimal{sign: sign, coef: coef, exp: 0})
-  when is_integer(coef) do
-    sign * coef
-  end
+      when is_integer(coef),
+      do: sign * coef
 
   def to_integer(%Decimal{sign: sign, coef: coef, exp: exp})
-  when is_integer(coef) and exp > 0 do
-    to_integer(%Decimal{sign: sign, coef: coef * 10, exp: exp - 1})
-  end
+      when is_integer(coef) and exp > 0,
+      do: to_integer(%Decimal{sign: sign, coef: coef * 10, exp: exp - 1})
 
   def to_integer(%Decimal{sign: sign, coef: coef, exp: exp})
-  when is_integer(coef) and exp < 0 and Kernel.rem(coef, 10) == 0 do
-    to_integer(%Decimal{sign: sign, coef: Kernel.div(coef, 10), exp: exp + 1})
-  end
+      when is_integer(coef) and exp < 0 and Kernel.rem(coef, 10) == 0,
+      do: to_integer(%Decimal{sign: sign, coef: Kernel.div(coef, 10), exp: exp + 1})
 
   @doc """
   Returns the decimal converted to a float.
@@ -1064,9 +1012,11 @@ defmodule Decimal do
     cond do
       num == 0 ->
         0.0
+
       num >= boundary ->
         {den, exp} = scale_down(num, boundary, 52)
         decimal_to_float(sign, num, den, exp)
+
       true ->
         {num, exp} = scale_up(num, boundary, 52)
         decimal_to_float(sign, num, den, exp)
@@ -1078,6 +1028,7 @@ defmodule Decimal do
 
   defp scale_down(num, den, exp) do
     new_den = den <<< 1
+
     if num < new_den do
       {den >>> 52, exp}
     else
@@ -1099,16 +1050,17 @@ defmodule Decimal do
 
     sign = if sign == -1, do: 1, else: 0
     tmp = tmp - @power_of_2_to_52
-    <<tmp::float>> = <<sign::size(1), (exp + 1023)::size(11), tmp::size(52)>>
+    <<tmp::float>> = <<sign::size(1), exp + 1023::size(11), tmp::size(52)>>
     tmp
   end
 
   @doc """
   Runs function with given context.
   """
-  @spec with_context(Context.t, (() -> x)) :: x when x: var
+  @spec with_context(Context.t(), (() -> x)) :: x when x: var
   def with_context(%Context{} = context, fun) when is_function(fun, 0) do
     old = Process.put(@context_key, context)
+
     try do
       fun.()
     after
@@ -1119,7 +1071,7 @@ defmodule Decimal do
   @doc """
   Gets the process' context.
   """
-  @spec get_context() :: Context.t
+  @spec get_context() :: Context.t()
   def get_context do
     Process.get(@context_key, %Context{})
   end
@@ -1127,7 +1079,7 @@ defmodule Decimal do
   @doc """
   Set the process' context.
   """
-  @spec set_context(Context.t) :: :ok
+  @spec set_context(Context.t()) :: :ok
   def set_context(%Context{} = context) do
     Process.put(@context_key, context)
     :ok
@@ -1136,15 +1088,14 @@ defmodule Decimal do
   @doc """
   Update the process' context.
   """
-  @spec update_context((Context.t -> Context.t)) :: :ok
+  @spec update_context((Context.t() -> Context.t())) :: :ok
   def update_context(fun) when is_function(fun, 1) do
     get_context() |> fun.() |> set_context
   end
 
   ## ARITHMETIC ##
 
-  defp add_align(coef1, exp1, coef2, exp2) when exp1 == exp2,
-    do: {coef1, coef2}
+  defp add_align(coef1, exp1, coef2, exp2) when exp1 == exp2, do: {coef1, coef2}
 
   defp add_align(coef1, exp1, coef2, exp2) when exp1 > exp2,
     do: {coef1 * pow10(exp1 - exp2), coef2}
@@ -1168,8 +1119,7 @@ defmodule Decimal do
   defp div_adjust(coef1, coef2, adjust) when coef1 >= coef2 * 10,
     do: div_adjust(coef1, coef2 * 10, adjust - 1)
 
-  defp div_adjust(coef1, coef2, adjust),
-    do: {coef1, coef2, adjust}
+  defp div_adjust(coef1, coef2, adjust), do: {coef1, coef2, adjust}
 
   defp div_calc(coef1, coef2, coef, adjust, prec10) do
     cond do
@@ -1193,8 +1143,10 @@ defmodule Decimal do
     cond do
       coef1 >= coef2 ->
         div_int_calc(coef1 - coef2, coef2, coef + 1, adjust, precision)
+
       adjust != precision ->
         div_int_calc(coef1 * 10, coef2, coef * 10, adjust + 1, precision)
+
       true ->
         {coef, coef1}
     end
@@ -1209,7 +1161,12 @@ defmodule Decimal do
     prec10 = pow10(get_context().precision)
 
     if coef > prec10 do
-      {:error, :invalid_operation, "integer division impossible, quotient too large", %Decimal{coef: :NaN}}
+      {
+        :error,
+        :invalid_operation,
+        "integer division impossible, quotient too large",
+        %Decimal{coef: :NaN}
+      }
     else
       {:ok, %Decimal{sign: div_sign, coef: coef, exp: 0}}
     end
@@ -1230,11 +1187,12 @@ defmodule Decimal do
   defp ratio(coef, exp) when exp >= 0, do: {coef * pow10(exp), 1}
   defp ratio(coef, exp) when exp < 0, do: {coef, pow10(-exp)}
 
-  pow10_max = Enum.reduce 0..104, 1, fn int, acc ->
-    defp pow10(unquote(int)), do: unquote(acc)
-    defp base10?(unquote(acc)), do: true
-    acc * 10
-  end
+  pow10_max =
+    Enum.reduce(0..104, 1, fn int, acc ->
+      defp pow10(unquote(int)), do: unquote(acc)
+      defp base10?(unquote(acc)), do: true
+      acc * 10
+    end)
 
   defp pow10(num) when num > 104, do: pow10(104) * pow10(num - 104)
 
@@ -1245,6 +1203,7 @@ defmodule Decimal do
       false
     end
   end
+
   defp base10?(_num), do: false
 
   ## ROUNDING ##
@@ -1261,13 +1220,23 @@ defmodule Decimal do
         zeros = :lists.duplicate(target_exp - exp, ?0)
         digits = zeros ++ digits
         {signif, remain} = :lists.split(1, digits)
-        signif = if increment?(rounding, sign, signif, remain), do: digits_increment(signif), else: signif
+
+        signif =
+          if increment?(rounding, sign, signif, remain),
+            do: digits_increment(signif),
+            else: signif
+
         coef = digits_to_integer(signif)
         %Decimal{sign: sign, coef: coef, exp: target_exp}
 
       exp < target_exp and precision >= 0 ->
         {signif, remain} = :lists.split(precision, digits)
-        signif = if increment?(rounding, sign, signif, remain), do: digits_increment(signif), else: signif
+
+        signif =
+          if increment?(rounding, sign, signif, remain),
+            do: digits_increment(signif),
+            else: signif
+
         coef = digits_to_integer(signif)
         %Decimal{sign: sign, coef: coef, exp: target_exp}
 
@@ -1308,7 +1277,8 @@ defmodule Decimal do
     precision = Kernel.min(num_digits, precision)
     {signif, remain} = :lists.split(precision, digits)
 
-    signif = if increment?(rounding, sign, signif, remain), do: digits_increment(signif), else: signif
+    signif =
+      if increment?(rounding, sign, signif, remain), do: digits_increment(signif), else: signif
 
     signals = if any_nonzero(remain), do: [:inexact, :rounded], else: [:rounded]
 
@@ -1318,50 +1288,37 @@ defmodule Decimal do
     {dec, signals}
   end
 
-  defp increment?(_, _, _, []),
-    do: false
+  defp increment?(_, _, _, []), do: false
 
-  defp increment?(:down, _, _, _),
-    do: false
+  defp increment?(:down, _, _, _), do: false
 
-  defp increment?(:up, _, _, _),
-    do: true
+  defp increment?(:up, _, _, _), do: true
 
-  defp increment?(:ceiling, sign, _, remain),
-    do: sign == 1 and any_nonzero(remain)
+  defp increment?(:ceiling, sign, _, remain), do: sign == 1 and any_nonzero(remain)
 
-  defp increment?(:floor, sign, _, remain),
-    do: sign == -1 and any_nonzero(remain)
+  defp increment?(:floor, sign, _, remain), do: sign == -1 and any_nonzero(remain)
 
-  defp increment?(:half_up, _, _, [digit | _]),
-    do: digit >= ?5
+  defp increment?(:half_up, _, _, [digit | _]), do: digit >= ?5
 
-  defp increment?(:half_even, _, [], [?5 | rest]),
-    do: any_nonzero(rest)
+  defp increment?(:half_even, _, [], [?5 | rest]), do: any_nonzero(rest)
 
   defp increment?(:half_even, _, signif, [?5 | rest]),
     do: any_nonzero(rest) or Kernel.rem(:lists.last(signif), 2) == 1
 
-  defp increment?(:half_even, _, _, [digit | _]),
-    do: digit > ?5
+  defp increment?(:half_even, _, _, [digit | _]), do: digit > ?5
 
   defp increment?(:half_down, _, _, [digit | rest]),
-    do: digit > ?5 or digit == ?5 and any_nonzero(rest)
+    do: digit > ?5 or (digit == ?5 and any_nonzero(rest))
 
-  defp any_nonzero(digits),
-    do: :lists.any(fn digit -> digit != ?0 end, digits)
+  defp any_nonzero(digits), do: :lists.any(fn digit -> digit != ?0 end, digits)
 
-  defp digits_increment(digits),
-    do: digits_increment(:lists.reverse(digits), [])
+  defp digits_increment(digits), do: digits_increment(:lists.reverse(digits), [])
 
-  defp digits_increment([?9 | rest], acc),
-    do: digits_increment(rest, [?0 | acc])
+  defp digits_increment([?9 | rest], acc), do: digits_increment(rest, [?0 | acc])
 
-  defp digits_increment([head | rest], acc),
-    do: :lists.reverse(rest, [head + 1 | acc])
+  defp digits_increment([head | rest], acc), do: :lists.reverse(rest, [head + 1 | acc])
 
-  defp digits_increment([], acc),
-    do: [?1 | acc]
+  defp digits_increment([], acc), do: [?1 | acc]
 
   ## CONTEXT ##
 
@@ -1418,11 +1375,22 @@ defmodule Decimal do
     {exp, rest} = parse_exp(rest)
 
     if rest != "" or (int == [] and float == []) do
-      handle_error(:invalid_operation, "number parsing syntax: " <> raw, %Decimal{coef: :NaN}, nil)
+      handle_error(
+        :invalid_operation,
+        "number parsing syntax: " <> raw,
+        %Decimal{coef: :NaN},
+        nil
+      )
     else
       int = if int == [], do: '0', else: int
       exp = if exp == [], do: '0', else: exp
-      {:ok, %Decimal{coef: List.to_integer(int ++ float), exp: List.to_integer(exp) - length(float)}}
+
+      number = %Decimal{
+        coef: List.to_integer(int ++ float),
+        exp: List.to_integer(exp) - length(float)
+      }
+
+      {:ok, number}
     end
   end
 
@@ -1434,6 +1402,7 @@ defmodule Decimal do
       <<sign, rest::binary>> when sign in [?+, ?-] ->
         {digits, rest} = parse_digits(rest)
         {[sign | digits], rest}
+
       _ ->
         parse_digits(rest)
     end
@@ -1482,12 +1451,14 @@ defmodule Decimal do
   defp fix_float_exp([?e | rest], [?0 | [?. | result]]) do
     fix_float_exp(rest, [?e | result])
   end
+
   defp fix_float_exp([digit | rest], result) do
     fix_float_exp(rest, [digit | result])
   end
+
   defp fix_float_exp([], result), do: :lists.reverse(result)
 
-  if Version.compare(System.version, "1.3.0") == :lt do
+  if Version.compare(System.version(), "1.3.0") == :lt do
     defp integer_to_charlist(string), do: Integer.to_char_list(string)
   else
     defp integer_to_charlist(string), do: Integer.to_charlist(string)

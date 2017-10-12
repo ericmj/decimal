@@ -13,7 +13,7 @@ defmodule Decimal.Mixfile do
       source_url: "https://github.com/ericmj/decimal",
       docs: [source_ref: "v#{@version}", main: "readme", extras: ["README.md"]],
       description: description(),
-      package: package(),
+      package: package()
     ]
   end
 
@@ -23,8 +23,8 @@ defmodule Decimal.Mixfile do
 
   defp deps() do
     [
-      {:ex_doc,  ">= 0.0.0", only: :dev},
-      {:earmark, ">= 0.0.0", only: :dev},
+      {:ex_doc, ">= 0.0.0", only: :dev},
+      {:earmark, ">= 0.0.0", only: :dev}
     ]
   end
 
@@ -36,7 +36,7 @@ defmodule Decimal.Mixfile do
     [
       maintainers: ["Eric Meadows-Jönsson"],
       licenses: ["Apache 2.0"],
-      links: %{"GitHub" => "https://github.com/ericmj/decimal"},
+      links: %{"GitHub" => "https://github.com/ericmj/decimal"}
     ]
   end
 end
