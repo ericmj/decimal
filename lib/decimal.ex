@@ -723,6 +723,26 @@ defmodule Decimal do
   def plus(%Decimal{} = num), do: context(num)
 
   @doc """
+  Check if given number is positive
+  """
+  @spec positive?(t) :: t
+  def positive?(%Decimal{coef: :sNaN} = num), do: error(:invalid_operation, "operation on NaN", num)
+  def positive?(%Decimal{coef: :qNaN}), do: false
+  def positive?(%Decimal{coef: 0}), do: false
+  def positive?(%Decimal{sign: -1}), do: false
+  def positive?(%Decimal{sign: 1}), do: true
+
+  @doc """
+  Check if given number is negative
+  """
+  @spec negative?(t) :: t
+  def negative?(%Decimal{coef: :sNaN} = num), do: error(:invalid_operation, "operation on NaN", num)
+  def negative?(%Decimal{coef: :qNaN}), do: false
+  def negative?(%Decimal{coef: 0}), do: false
+  def negative?(%Decimal{sign: 1}), do: false
+  def negative?(%Decimal{sign: -1}), do: true
+
+  @doc """
   Multiplies two numbers.
 
   ## Exceptional conditions

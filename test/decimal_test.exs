@@ -425,6 +425,34 @@ defmodule DecimalTest do
     end
   end
 
+  test "positive?" do
+    Decimal.with_context(%Context{precision: 2}, fn ->
+      refute Decimal.positive?(~d"0")
+      assert Decimal.positive?(~d"5")
+      refute Decimal.positive?(~d"-5")
+      assert Decimal.positive?(~d"123.0")
+      refute Decimal.positive?(~d"nan")
+    end)
+
+    assert_raise Error, fn ->
+      Decimal.positive?(~d"snan")
+    end
+  end
+
+  test "negative?" do
+    Decimal.with_context(%Context{precision: 2}, fn ->
+      refute Decimal.negative?(~d"0")
+      assert Decimal.negative?(~d"-5")
+      refute Decimal.negative?(~d"5")
+      assert Decimal.negative?(~d"-123.0")
+      refute Decimal.negative?(~d"nan")
+    end)
+
+    assert_raise Error, fn ->
+      Decimal.negative?(~d"snan")
+    end
+  end
+
   test "mult" do
     assert Decimal.mult(~d"0", ~d"0") == d(1, 0, 0)
     assert Decimal.mult(~d"42", ~d"0") == d(1, 0, 0)
