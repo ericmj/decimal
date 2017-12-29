@@ -856,7 +856,7 @@ defmodule DecimalTest do
   end
 
   test "issue #60" do
-    assert_raise(FunctionClauseError, "no function clause matching in Decimal.round/3", fn ->
+    assert_raise(ArgumentError, "cannot automatically convert nil to Decimal", fn ->
       Decimal.round(nil)
     end)
   end
