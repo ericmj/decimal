@@ -256,10 +256,10 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.add(1, 1.1)
-      Decimal.new(2.1)
+      #Decimal<2.1>
 
       iex> Decimal.add(1, Decimal.new("Inf"))
-      Decimal.new("Inf")
+      #Decimal<Infinity>
 
   """
   @spec add(decimal, decimal) :: t
@@ -315,10 +315,10 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.sub(1, 1.1)
-      Decimal.new(-0.1)
+      #Decimal<-0.1>
 
       iex> Decimal.sub(1, Decimal.new("Inf"))
-      Decimal.new("-Inf")
+      #Decimal<-Infinity>
 
   """
   @spec sub(decimal, decimal) :: t
@@ -339,10 +339,10 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.compare(1, 1.0)
-      Decimal.new(0)
+      #Decimal<0>
 
       iex> Decimal.compare(Decimal.new("Inf"), -1)
-      Decimal.new(1)
+      #Decimal<1>
 
   """
   @spec compare(decimal, decimal) :: t
@@ -430,10 +430,10 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.div(6, 3.0)
-      Decimal.new(2)
+      #Decimal<2>
 
       iex> Decimal.div(Decimal.new("Inf"), -1)
-      Decimal.new("-Inf")
+      #Decimal<-Infinity>
 
   """
   @spec div(decimal, decimal) :: t
@@ -502,10 +502,10 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.div_int(5, 2)
-      Decimal.new(2)
+      #Decimal<2>
 
       iex> Decimal.div_int(Decimal.new("Inf"), -1)
-      Decimal.new("-Inf")
+      #Decimal<-Infinity>
 
   """
   @spec div_int(decimal, decimal) :: t
@@ -582,7 +582,7 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.rem(5, 2)
-      Decimal.new(1)
+      #Decimal<1>
 
   """
   @spec rem(decimal, decimal) :: t
@@ -744,13 +744,13 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.max(1, 2.0)
-      Decimal.new(2.0)
+      #Decimal<2.0>
 
       iex> Decimal.max(1, Decimal.new("NaN"))
-      Decimal.new(1)
+      #Decimal<1>
 
       iex> Decimal.max(Decimal.new("NaN"), Decimal.new("NaN"))
-      Decimal.new("NaN")
+      #Decimal<NaN>
 
   """
   @spec max(decimal, decimal) :: t
@@ -793,13 +793,13 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.min(1, 2.0)
-      Decimal.new(1)
+      #Decimal<1>
 
       iex> Decimal.min(1, Decimal.new("NaN"))
-      Decimal.new(1)
+      #Decimal<1>
 
       iex> Decimal.min(Decimal.new("NaN"), Decimal.new("NaN"))
-      Decimal.new("NaN")
+      #Decimal<NaN>
 
   """
   @spec min(decimal, decimal) :: t
@@ -840,10 +840,10 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.minus(1)
-      Decimal.new(-1)
+      #Decimal<-1>
 
       iex> Decimal.minus(Decimal.new("-Inf"))
-      Decimal.new("Inf")
+      #Decimal<Infinity>
 
   """
   @spec minus(decimal) :: t
@@ -890,10 +890,10 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.mult(0.5, 3)
-      Decimal.new(1.5)
+      #Decimal<1.5>
 
       iex> Decimal.mult(Decimal.new("Inf"), -1)
-      Decimal.new("-Inf")
+      #Decimal<-Infinity>
 
   """
   @spec mult(decimal, decimal) :: t
@@ -966,10 +966,10 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.round(1.234)
-      Decimal.new(1)
+      #Decimal<1>
 
       iex> Decimal.round(1.234, 1)
-      Decimal.new(1.2)
+      #Decimal<1.2>
 
   """
   @spec round(decimal, integer, rounding) :: t
