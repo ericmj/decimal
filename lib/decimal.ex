@@ -108,7 +108,7 @@ defmodule Decimal do
           exp: exponent
         }
 
-  @type decimal :: t | integer | String.t
+  @type decimal :: t | integer | String.t()
 
   defstruct sign: 1, coef: 0, exp: 0
 
@@ -861,7 +861,9 @@ defmodule Decimal do
   Check if given number is positive
   """
   @spec positive?(t) :: t
-  def positive?(%Decimal{coef: :sNaN} = num), do: error(:invalid_operation, "operation on NaN", num)
+  def positive?(%Decimal{coef: :sNaN} = num),
+    do: error(:invalid_operation, "operation on NaN", num)
+
   def positive?(%Decimal{coef: :qNaN}), do: false
   def positive?(%Decimal{coef: 0}), do: false
   def positive?(%Decimal{sign: -1}), do: false
@@ -871,7 +873,9 @@ defmodule Decimal do
   Check if given number is negative
   """
   @spec negative?(t) :: t
-  def negative?(%Decimal{coef: :sNaN} = num), do: error(:invalid_operation, "operation on NaN", num)
+  def negative?(%Decimal{coef: :sNaN} = num),
+    do: error(:invalid_operation, "operation on NaN", num)
+
   def negative?(%Decimal{coef: :qNaN}), do: false
   def negative?(%Decimal{coef: 0}), do: false
   def negative?(%Decimal{sign: 1}), do: false
@@ -1607,6 +1611,7 @@ defmodule Decimal do
   defp decimal(%Decimal{} = num), do: num
   defp decimal(num) when is_integer(num), do: new(num)
   defp decimal(num) when is_binary(num), do: new(num)
+
   defp decimal(other) do
     raise ArgumentError, "cannot automatically convert #{inspect(other)} to Decimal"
   end
