@@ -1,6 +1,7 @@
 # Decimal
 
 [![Build Status](https://travis-ci.org/ericmj/decimal.svg?branch=master)](https://travis-ci.org/ericmj/decimal)
+[![Open Source Helpers](https://www.codetriage.com/ericmj/decimal/badges/users.svg)](https://www.codetriage.com/ericmj/decimal)
 
 Arbitrary precision decimal arithmetic.
 
