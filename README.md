@@ -89,6 +89,25 @@ iex> D.div(D.new(31), D.new(2))
 #Decimal<15>
 ```
 
+### Comparisons
+
+Using compare operators (`<`, `=`, `>`) directly in two decimals may not return
+the correct result. Instead use comparison functions.
+
+```elixir
+iex> D.cmp(D.new(-1), D.new(0))
+:lt
+iex> D.cmp(D.new(0), D.new(-1))
+:gt
+iex> D.cmp(D.new(0), D.new(0))
+:eq
+
+iex> D.equal?(D.new(-1), D.new(0))
+false
+iex> D.equal?(D.new(0), D.new(0))
+true
+```
+
 ### Flags and trap enablers
 
 When an exceptional condition is signalled its flag is set in the context and if
