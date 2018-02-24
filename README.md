@@ -20,11 +20,12 @@ After you are done, run `mix deps.get` in your shell to fetch and compile Decima
 
 ```elixir
 iex> alias Decimal, as: D
-nil
-iex> D.add(D.new(6), D.new(7))
+iex> D.add(6, 7)
 #Decimal<13>
-iex> D.div(D.new(1), D.new(3))
+iex> D.div(1, 3)
 #Decimal<0.333333333>
+iex> D.new("0.33")
+#Decimal<0.33>
 ```
 
 ## Examples
@@ -67,11 +68,11 @@ The precision is used to limit the amount of decimal digits in the coefficient:
 ```elixir
 iex> D.set_context(%D.Context{D.get_context | precision: 9})
 :ok
-iex> D.div(D.new(100), D.new(3))
+iex> D.div(100, 3)
 #Decimal<33.3333333>
 iex> D.set_context(%D.Context{D.get_context | precision: 2})
 :ok
-iex> D.div(D.new(100), D.new(3))
+iex> D.div(100, 3)
 #Decimal<33>
 ```
 
@@ -81,11 +82,11 @@ when it get be represented with the current precision:
 ```elixir
 iex> D.set_context(%D.Context{D.get_context | rounding: :half_up})
 :ok
-iex> D.div(D.new(31), D.new(2))
+iex> D.div(31, 2)
 #Decimal<16>
 iex> D.set_context(%D.Context{D.get_context | rounding: :floor})
 :ok
-iex> D.div(D.new(31), D.new(2))
+iex> D.div(31, 2)
 #Decimal<15>
 ```
 
@@ -95,16 +96,16 @@ Using compare operators (`<`, `=`, `>`) directly in two decimals may not return
 the correct result. Instead use comparison functions.
 
 ```elixir
-iex> D.cmp(D.new(-1), D.new(0))
+iex> D.cmp(-1, 0)
 :lt
-iex> D.cmp(D.new(0), D.new(-1))
+iex> D.cmp(0, -1)
 :gt
-iex> D.cmp(D.new(0), D.new(0))
+iex> D.cmp(0, 0)
 :eq
 
-iex> D.equal?(D.new(-1), D.new(0))
+iex> D.equal?(-1, 0)
 false
-iex> D.equal?(D.new(0), D.new(0))
+iex> D.equal?(0, "0.0")
 true
 ```
 
@@ -120,7 +121,7 @@ iex> D.get_context.traps
 [:invalid_operation, :division_by_zero]
 iex> D.get_context.flags
 []
-iex> D.div(D.new(31), D.new(2))
+iex> D.div(31, 2)
 #Decimal<15>
 iex> D.get_context.flags
 [:inexact, :rounded]
@@ -135,7 +136,7 @@ raise.
 ```elixir
 iex> D.set_context(%D.Context{D.get_context | traps: D.get_context.traps ++ [:inexact]})
 :ok
-iex> D.div(D.new(31), D.new(2))
+iex> D.div(31, 2)
 ** (Decimal.Error)
 ```
 
@@ -144,11 +145,11 @@ The default trap enablers, such as `:division_by_zero` can be unset:
 ```elixir
 iex> D.get_context.traps
 [:invalid_operation, :division_by_zero]
-iex> D.div(D.new(42), D.new(0))
+iex> D.div(42, 0)
 ** (Decimal.Error)
 iex>  D.set_context(%D.Context{D.get_context | traps: [], flags: []})
 :ok
-iex> D.div(D.new(42), D.new(0))
+iex> D.div(42, 0)
 #Decimal<Infinity>
 iex> D.get_context.flags
 [:division_by_zero]
