@@ -92,7 +92,7 @@ iex> D.div(31, 2)
 
 ### Comparisons
 
-Using compare operators (`<`, `=`, `>`) directly in two decimals may not return
+Using compare operators (`<`, `=`, `>`) directly with two decimals may not return
 the correct result. Instead use comparison functions.
 
 ```elixir
