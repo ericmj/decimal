@@ -15,8 +15,8 @@ defmodule Decimal do
   This kind of NaN is quiet, any operation returning a number will return
   NaN when given a quiet NaN (the NaN value will flow through all operations).
   The other kind of NaN is signalling which is the value that can be reached
-  in `Error.result/1` when the result is NaN. Any operation given a signalling
-  NaN return will signal `:invalid_operation`.
+  in `result` field on `Decimal.Error` when the result is NaN. Any operation
+  given a signalling NaN return will signal `:invalid_operation`.
 
   Exceptional conditions are grouped into signals, each signal has a flag and a
   trap enabler in the context. Whenever a signal is triggered it's flag is set
@@ -330,8 +330,8 @@ defmodule Decimal do
 
   @doc """
   Compares two numbers numerically. If the first number is greater than the second
-  `#Decimal<1>` is returned, if less than `Decimal<-1>` is returned. Otherwise,
-  if both numbers are equal `Decimal<0>` is returned. If either number is a quiet
+  `#Decimal<1>` is returned, if less than `#Decimal<-1>` is returned. Otherwise,
+  if both numbers are equal `#Decimal<0>` is returned. If either number is a quiet
   NaN, then that number is returned.
 
   ## Examples
