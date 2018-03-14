@@ -215,20 +215,6 @@ defmodule Decimal do
     end
   end
 
-  if Version.compare(System.version(), "1.3.0") == :lt do
-    defmacrop warn(message) do
-      quote do
-        IO.puts(:stderr, "warning: " <> unquote(message))
-      end
-    end
-  else
-    defmacrop warn(message) do
-      quote do
-        IO.warn(unquote(message))
-      end
-    end
-  end
-
   @doc """
   Returns `true` if number is NaN, otherwise `false`.
   """
@@ -1045,7 +1031,6 @@ defmodule Decimal do
     do: %Decimal{sign: if(int < 0, do: -1, else: 1), coef: Kernel.abs(int)}
 
   def new(float) when is_float(float) do
-    warn("passing floats to new/1 is deprecated, use from_float/1 instead")
     from_float(float)
   end
 
