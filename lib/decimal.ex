@@ -997,10 +997,7 @@ defmodule Decimal do
   end
 
   @doc """
-  Creates a new decimal number from a string representation, an integer or a
-  floating point number. Floating point numbers will be converted to decimal
-  numbers with `:io_lib_format.fwrite_g/1`, since this conversion is not exact
-  it is recommended to give an integer or a string when possible.
+  Creates a new decimal number from an integer or a string representation.
 
   A decimal number will always be created exactly as specified with all digits
   kept - it will not be rounded with the context.
@@ -1018,19 +1015,23 @@ defmodule Decimal do
       numeric-value  ::=  decimal-part [exponent-part] | infinity
       numeric-string ::=  [sign] numeric-value | [sign] nan
 
+  ## Examples
+
+      iex> Decimal.new(1)
+      #Decimal<1>
+
+      iex> Decimal.new("3.14")
+      #Decimal<3.14>
+
   """
-  @spec new(t | integer | float | String.t()) :: t
+  @spec new(t | integer | String.t()) :: t
   def new(%Decimal{} = num), do: num
 
   def new(int) when is_integer(int),
     do: %Decimal{sign: if(int < 0, do: -1, else: 1), coef: Kernel.abs(int)}
 
   def new(float) when is_float(float) do
-    float
-    |> :io_lib_format.fwrite_g()
-    |> fix_float_exp()
-    |> IO.iodata_to_binary()
-    |> new()
+    from_float(float)
   end
 
   def new(binary) when is_binary(binary) do
@@ -1051,6 +1052,28 @@ defmodule Decimal do
   def new(sign, coefficient, exponent), do: %Decimal{sign: sign, coef: coefficient, exp: exponent}
 
   @doc """
+  Creates a new decimal number from a floating point number.
+
+  Floating point numbers will be converted to decimal numbers with
+  `:io_lib_format.fwrite_g/1`. Since this conversion is not exact it is
+  recommended to give an integer or a string via `new/1` instead.
+
+  ## Examples
+
+      iex> Decimal.from_float(3.14)
+      #Decimal<3.14>
+
+  """
+  @spec from_float(float) :: t
+  def from_float(float) when is_float(float) do
+    float
+    |> :io_lib_format.fwrite_g()
+    |> fix_float_exp()
+    |> IO.iodata_to_binary()
+    |> new()
+  end
+
+  @doc """
   Parses a binary into a decimal.
 
   If successful, returns a tuple in the form of `{:ok, decimal}`,
@@ -1059,10 +1082,10 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.parse("3.14")
-      {:ok, Decimal.new(3.14)}
+      {:ok, %Decimal{coef: 314, exp: -2, sign: 1}}
 
       iex> Decimal.parse("-1.1e3")
-      {:ok, Decimal.new(-1.1e3)}
+      {:ok, %Decimal{coef: 11, exp: 2, sign: -1}}
 
       iex> Decimal.parse("bad")
       :error
