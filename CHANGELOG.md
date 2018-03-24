@@ -1,10 +1,16 @@
 # CHANGELOG
 
-## v1.5.0-dev
+## v1.5.0 (2018-03-24)
 
 ### Enhancements
 
 * Add `Decimal.positive?/1` and `Decimal.negative?/1`
+* Accept integers and strings in arithmetic functions, e.g.: `Decimal.add(1, "2.0")`
+* Add `Decimal.from_float/1`
+
+### Soft deprecations (no warnings emitted)
+
+* Soft deprecate passing float to `new/1` in favor of `from_float/1`
 
 ## v1.4.1 (2017-10-12)
 
