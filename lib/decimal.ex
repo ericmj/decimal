@@ -1259,6 +1259,7 @@ defmodule Decimal do
 
     sign = if sign == -1, do: 1, else: 0
     tmp = tmp - @power_of_2_to_52
+    exp = if tmp < @power_of_2_to_52, do: exp, else: exp + 1
     <<tmp::float>> = <<sign::size(1), exp + 1023::size(11), tmp::size(52)>>
     tmp
   end

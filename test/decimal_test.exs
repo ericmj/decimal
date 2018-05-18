@@ -912,4 +912,11 @@ defmodule DecimalTest do
         assert ex.result == d(1, :sNaN, 0)
     end
   end
+
+  test "issue #82" do
+    to_float = fn binary -> Decimal.new(binary) |> Decimal.to_float end
+    assert to_float.("0.8888888888888888888888") == 0.8888888888888888888888
+    assert to_float.("0.9999999999999999") == 0.9999999999999999
+    assert to_float.("0.99999999999999999") == 0.99999999999999999
+  end
 end
