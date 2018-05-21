@@ -1024,7 +1024,7 @@ defmodule Decimal do
       #Decimal<3.14>
 
   """
-  @spec new(t | integer | String.t()) :: t
+  @spec new(t | integer | float | String.t()) :: t
   def new(%Decimal{} = num), do: num
 
   def new(int) when is_integer(int),
