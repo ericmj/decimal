@@ -860,7 +860,7 @@ defmodule Decimal do
   @doc """
   Check if given number is positive
   """
-  @spec positive?(t) :: t
+  @spec positive?(t) :: boolean
   def positive?(%Decimal{coef: :sNaN} = num),
     do: error(:invalid_operation, "operation on NaN", num)
 
