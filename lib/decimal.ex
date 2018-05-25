@@ -85,6 +85,11 @@ defmodule Decimal do
           | :rounded
           | :inexact
 
+  @typedoc """
+  Rounding algorithm.
+
+  See `Decimal.Context` for more information.
+  """
   @type rounding ::
           :down
           | :half_up
@@ -191,6 +196,19 @@ defmodule Decimal do
       * `:up` - round away from zero. If all discarded digits are zero the
         coefficient is not changed, otherwise it is incremented by one (rounded
         up).
+
+    This table shows the results of rounding operations for all the rounding
+    algorithms:
+
+    Rounding algorithm | 5.5 | 2.5 | 1.6 | 1.1 | 1.0 | -1.0 | -1.1 | -1.6 | -2.5 | -5.5
+    :----------------- | :-- | :-- | :-- | :-- | :-- | :--- | :--- | :--- | :--- | :---
+    `:up`              |   6 |   3 |   2 |   2 |   1 |   -1 |   -2 |   -2 |   -3 |   -6
+    `:down`            |   5 |   2 |   1 |   1 |   1 |   -1 |   -1 |   -1 |   -2 |   -5
+    `:ceiling`         |   6 |   3 |   2 |   2 |   1 |   -1 |   -1 |   -1 |   -2 |   -5
+    `:floor`           |   5 |   2 |   1 |   1 |   1 |   -1 |   -2 |   -2 |   -3 |   -6
+    `:half_up`         |   6 |   3 |   2 |   1 |   1 |   -1 |   -1 |   -2 |   -3 |   -6
+    `:half_down`       |   5 |   2 |   2 |   1 |   1 |   -1 |   -1 |   -2 |   -2 |   -5
+    `:half_even`       |   6 |   2 |   2 |   1 |   1 |   -1 |   -1 |   -2 |   -2 |   -6
 
     """
     @type t :: %__MODULE__{
@@ -964,6 +982,8 @@ defmodule Decimal do
   Rounds the given number to specified decimal places with the given strategy
   (default is to round to nearest one). If places is negative, at least that
   many digits to the left of the decimal point will be zero.
+
+  See `Decimal.Context` for more information about rounding algorithms.
 
   ## Examples
 
