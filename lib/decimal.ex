@@ -85,6 +85,22 @@ defmodule Decimal do
           | :rounded
           | :inexact
 
+  @typedoc """
+  Rounding modes:
+
+    * `:up` - round away from zero
+    * `:down` - round towards zero
+    * `:ceiling` - round towards positive infinity
+    * `:floor` - round towards negative infinity
+    * `:half_up` - round towards "nearest neighbor" unless both neighbors
+      are equidistant, in which case round up
+    * `:half_down` - round towards "nearest neighbor" unless both neighbors
+      are equidistant, in which case round down
+    * `:half_even` - round towards the "nearest neighbor" unless both
+      neighbors are equidistant, in which case, round towards the even
+      neighbor
+
+  """
   @type rounding ::
           :down
           | :half_up
@@ -964,6 +980,43 @@ defmodule Decimal do
   Rounds the given number to specified decimal places with the given strategy
   (default is to round to nearest one). If places is negative, at least that
   many digits to the left of the decimal point will be zero.
+  
+  ## Rounding
+
+  There are different rounding modes. Each rounding mode indicates how the
+  least significant returned digit of a rounded result is to be calculated.
+  If fewer digits are returned than the digits needed to represent the exact
+  numerical result, the discarded digits will be referred to as the discarded
+  fraction regardless the digits' contribution to the value of the number.
+  In other words, considered as a numerical value, the discarded fraction
+  could have an absolute value greater than one.
+
+  Rounding modes:
+
+    * `:up` - round away from zero
+    * `:down` - round towards zero
+    * `:ceiling` - round towards positive infinity
+    * `:floor` - round towards negative infinity
+    * `:half_up` - round towards "nearest neighbor" unless both neighbors
+      are equidistant, in which case round up
+    * `:half_down` - round towards "nearest neighbor" unless both neighbors
+      are equidistant, in which case round down
+    * `:half_even` - round towards the "nearest neighbor" unless both
+      neighbors are equidistant, in which case, round towards the even
+      neighbor
+
+  This table shows the results of rounding operations for all the rounding
+  modes:
+
+  Rounding mode | 5.5 | 2.5 | 1.6 | 1.1 | 1.0 | -1.0 | -1.1 | -1.6 | -2.5 | -5.5
+  :------------ | :-- | :-- | :-- | :-- | :-- | :--- | :--- | :--- | :--- | :---
+  `:up`         |   6 |   3 |   2 |   2 |   1 |   -1 |   -2 |   -2 |   -3 |   -6
+  `:down`       |   5 |   2 |   1 |   1 |   1 |   -1 |   -1 |   -1 |   -2 |   -5
+  `:ceiling`    |   6 |   3 |   2 |   2 |   1 |   -1 |   -1 |   -1 |   -2 |   -5
+  `:floor`      |   5 |   2 |   1 |   1 |   1 |   -1 |   -2 |   -2 |   -3 |   -6
+  `:half_up`    |   6 |   3 |   2 |   1 |   1 |   -1 |   -1 |   -2 |   -3 |   -6
+  `:half_down`  |   5 |   2 |   2 |   1 |   1 |   -1 |   -1 |   -2 |   -2 |   -5
+  `:half_even`  |   6 |   2 |   2 |   1 |   1 |   -1 |   -1 |   -2 |   -2 |   -6
 
   ## Examples
 
