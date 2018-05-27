@@ -1402,10 +1402,6 @@ defmodule Decimal do
     end
   end
 
-  defp do_reduce(0, _exp) do
-    %Decimal{coef: 0, exp: 0}
-  end
-
   defp do_reduce(coef, exp) do
     if Kernel.rem(coef, 10) == 0 do
       do_reduce(Kernel.div(coef, 10), exp + 1)
