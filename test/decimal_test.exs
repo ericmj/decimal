@@ -157,6 +157,10 @@ defmodule DecimalTest do
     assert_raise Error, fn ->
       Decimal.add(~d"snan", ~d"0")
     end
+
+    assert_raise ArgumentError, ~r/implicit convertion of 2.0 to Decimal is not allowed/, fn ->
+      Decimal.add(1, 2.0)
+    end
   end
 
   test "sub" do
@@ -856,7 +860,7 @@ defmodule DecimalTest do
   end
 
   test "issue #60" do
-    assert_raise(ArgumentError, "cannot automatically convert nil to Decimal", fn ->
+    assert_raise(FunctionClauseError, "no function clause matching in Decimal.decimal/1", fn ->
       Decimal.round(nil)
     end)
   end
@@ -914,7 +918,7 @@ defmodule DecimalTest do
   end
 
   test "issue #82" do
-    to_float = fn binary -> Decimal.new(binary) |> Decimal.to_float end
+    to_float = fn binary -> Decimal.new(binary) |> Decimal.to_float() end
     assert to_float.("0.8888888888888888888888") == 0.8888888888888888888888
     assert to_float.("0.9999999999999999") == 0.9999999999999999
     assert to_float.("0.99999999999999999") == 0.99999999999999999
