@@ -574,6 +574,7 @@ defmodule DecimalTest do
     assert Decimal.to_string(~d"42.42", :xsd) == "42.42"
     assert Decimal.to_string(~d"0.42", :xsd) == "0.42"
     assert Decimal.to_string(~d"0.0042", :xsd) == "0.0042"
+    assert Decimal.to_string(~d"010.020", :xsd) == "10.02"
     assert Decimal.to_string(~d"-1.23", :xsd) == "-1.23"
     assert Decimal.to_string(~d"-0.0123", :xsd) == "-0.0123"
     assert Decimal.to_string(~d"1E+2", :xsd) == "100.0"

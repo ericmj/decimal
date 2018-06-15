@@ -1221,7 +1221,7 @@ defmodule Decimal do
        do: canonical_xsd(%{decimal | coef: coef * 10, exp: exp - 1})
 
   defp canonical_xsd(%Decimal{coef: coef} = decimal)
-       when Kernel.rem(coef, 100) != 0,
+       when Kernel.rem(coef, 10) != 0,
        do: decimal
 
   defp canonical_xsd(%Decimal{coef: coef, exp: exp} = decimal),
