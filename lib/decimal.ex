@@ -1128,6 +1128,7 @@ defmodule Decimal do
 
     * `:scientific` - number converted to scientific notation.
     * `:normal` - number converted without a exponent.
+    * `:xsd` - number converted to the [canonical XSD representation](https://www.w3.org/TR/xmlschema-2/#decimal).
     * `:raw` - number converted to its raw, internal format.
 
   """
@@ -1205,6 +1206,26 @@ defmodule Decimal do
 
     IO.iodata_to_binary(str)
   end
+
+  def to_string(%Decimal{} = decimal, :xsd) do
+    decimal |> canonical_xsd() |> to_string(:normal)
+  end
+
+  defp canonical_xsd(%Decimal{coef: 0} = decimal), do: %{decimal | exp: -1}
+
+  defp canonical_xsd(%Decimal{coef: coef, exp: 0} = decimal),
+    do: %{decimal | coef: coef * 10, exp: -1}
+
+  defp canonical_xsd(%Decimal{coef: coef, exp: exp} = decimal)
+       when exp > 0,
+       do: canonical_xsd(%{decimal | coef: coef * 10, exp: exp - 1})
+
+  defp canonical_xsd(%Decimal{coef: coef} = decimal)
+       when Kernel.rem(coef, 100) != 0,
+       do: decimal
+
+  defp canonical_xsd(%Decimal{coef: coef, exp: exp} = decimal),
+    do: canonical_xsd(%{decimal | coef: Kernel.div(coef, 10), exp: exp + 1})
 
   @doc """
   Returns the decimal represented as an integer.
