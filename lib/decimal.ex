@@ -1654,8 +1654,9 @@ defmodule Decimal do
   defp decimal(num) when is_integer(num), do: new(num)
   defp decimal(num) when is_binary(num), do: new(num)
 
-  defp decimal(other) do
-    raise ArgumentError, "cannot automatically convert #{inspect(other)} to Decimal"
+  defp decimal(other) when is_float(other) do
+    raise ArgumentError,
+          "implicit convertion of #{inspect(other)} to Decimal is not allowed. Use Decimal.from_float/1"
   end
 
   defp handle_error(signals, reason, result, context) do
