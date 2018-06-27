@@ -981,7 +981,8 @@ defmodule Decimal do
 
   def reduce(%Decimal{sign: sign, coef: coef, exp: exp}) do
     if coef == 0 do
-      %Decimal{sign: sign, coef: 0, exp: 0}
+      # always keep sign positive for zeroes
+      %Decimal{sign: 1, coef: 0, exp: 0}
     else
       %{do_reduce(coef, exp) | sign: sign} |> context
     end

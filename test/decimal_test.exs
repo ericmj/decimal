@@ -500,7 +500,7 @@ defmodule DecimalTest do
     assert Decimal.reduce(~d"-2.00") == d(-1, 2, 0)
     assert Decimal.reduce(~d"200") == d(1, 2, 2)
     assert Decimal.reduce(~d"0") == d(1, 0, 0)
-    assert Decimal.reduce(~d"-0") == d(-1, 0, 0)
+    assert Decimal.reduce(~d"-0") == d(1, 0, 0)
     assert Decimal.reduce(~d"-inf") == d(-1, :inf, 0)
     assert Decimal.reduce(~d"nan") == d(1, :qNaN, 0)
 
