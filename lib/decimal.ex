@@ -959,6 +959,15 @@ defmodule Decimal do
   @doc """
   Reduces the given number. Removes trailing zeros from coefficient while
   keeping the number numerically equivalent by increasing the exponent.
+
+  ## Examples
+
+      iex> Decimal.reduce(Decimal.new("1.00"))
+      #Decimal<1>
+
+      iex> Decimal.reduce(Decimal.new("1.01"))
+      #Decimal<1.01>
+
   """
   @spec reduce(t) :: t
   def reduce(%Decimal{coef: :sNaN} = num), do: error(:invalid_operation, "operation on NaN", num)
