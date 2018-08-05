@@ -563,6 +563,31 @@ defmodule DecimalTest do
     assert Decimal.to_string(~d"-inf", :raw) == "-Infinity"
   end
 
+  test "to_string xsd" do
+    assert Decimal.to_string(~d"0", :xsd) == "0.0"
+    assert Decimal.to_string(~d"0.0", :xsd) == "0.0"
+    assert Decimal.to_string(~d"0.001", :xsd) == "0.001"
+    assert Decimal.to_string(~d"-0", :xsd) == "-0.0"
+    assert Decimal.to_string(~d"-1", :xsd) == "-1.0"
+    assert Decimal.to_string(~d"-0.00", :xsd) == "-0.0"
+    assert Decimal.to_string(~d"1.00", :xsd) == "1.0"
+    assert Decimal.to_string(~d"1000", :xsd) == "1000.0"
+    assert Decimal.to_string(~d"1000.000000", :xsd) == "1000.0"
+    assert Decimal.to_string(~d"12345.000", :xsd) == "12345.0"
+    assert Decimal.to_string(~d"42", :xsd) == "42.0"
+    assert Decimal.to_string(~d"42.42", :xsd) == "42.42"
+    assert Decimal.to_string(~d"0.42", :xsd) == "0.42"
+    assert Decimal.to_string(~d"0.0042", :xsd) == "0.0042"
+    assert Decimal.to_string(~d"010.020", :xsd) == "10.02"
+    assert Decimal.to_string(~d"-1.23", :xsd) == "-1.23"
+    assert Decimal.to_string(~d"-0.0123", :xsd) == "-0.0123"
+    assert Decimal.to_string(~d"1E+2", :xsd) == "100.0"
+    assert Decimal.to_string(~d"-42E+3", :xsd) == "-42000.0"
+    assert Decimal.to_string(~d"nan", :xsd) == "NaN"
+    assert Decimal.to_string(~d"-nan", :xsd) == "-NaN"
+    assert Decimal.to_string(~d"-inf", :xsd) == "-Infinity"
+  end
+
   test "to_integer" do
     Decimal.with_context(%Context{precision: 36, rounding: :floor}, fn ->
       assert Decimal.to_integer(~d"0") == 0
