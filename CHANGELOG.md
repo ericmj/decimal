@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## v1.6.0 (2018-11-22)
+
+### Enhancements
+
+* Support for canonical XSD representation on `Decimal.to_string/2`
+
+### Bugfixes
+
+* Fix exponent off-by-one when converting from decimal to float
+* Fix negative?/1 and positive?/1 specs
+
+### Deprecations
+
+* Deprecate passing float to `Decimal.new/1` in favor of `Decimal.from_float/1`
+
 ## v1.5.0 (2018-03-24)
 
 ### Enhancements
