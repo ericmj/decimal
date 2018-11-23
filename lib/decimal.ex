@@ -878,6 +878,7 @@ defmodule Decimal do
   @doc """
   Check if given number is positive
   """
+  @doc since: "1.5.0"
   @spec positive?(t) :: boolean
   def positive?(%Decimal{coef: :sNaN} = num),
     do: error(:invalid_operation, "operation on NaN", num)
@@ -890,6 +891,7 @@ defmodule Decimal do
   @doc """
   Check if given number is negative
   """
+  @doc since: "1.5.0"
   @spec negative?(t) :: boolean
   def negative?(%Decimal{coef: :sNaN} = num),
     do: error(:invalid_operation, "operation on NaN", num)
@@ -1094,6 +1096,7 @@ defmodule Decimal do
       #Decimal<3.14>
 
   """
+  @doc since: "1.5.0"
   @spec from_float(float) :: t
   def from_float(float) when is_float(float) do
     float
