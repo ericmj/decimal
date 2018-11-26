@@ -1,3 +1,15 @@
+defmodule Decimal.Macros do
+  @moduledoc false
+
+  defmacro doc_since(version) do
+    if Version.match?(System.version(), ">= 1.7.0") do
+      quote do
+        @doc since: unquote(version)
+      end
+    end
+  end
+end
+
 defmodule Decimal do
   @moduledoc """
   Decimal arithmetic on arbitrary precision floating-point numbers.
@@ -50,6 +62,7 @@ defmodule Decimal do
 
   import Bitwise
   import Kernel, except: [abs: 1, div: 2, max: 2, min: 2, rem: 2, round: 1]
+  import Decimal.Macros
 
   @power_of_2_to_52 4_503_599_627_370_496
 
@@ -878,7 +891,7 @@ defmodule Decimal do
   @doc """
   Check if given number is positive
   """
-  @doc since: "1.5.0"
+  doc_since "1.5.0"
   @spec positive?(t) :: boolean
   def positive?(%Decimal{coef: :sNaN} = num),
     do: error(:invalid_operation, "operation on NaN", num)
@@ -891,7 +904,7 @@ defmodule Decimal do
   @doc """
   Check if given number is negative
   """
-  @doc since: "1.5.0"
+  doc_since "1.5.0"
   @spec negative?(t) :: boolean
   def negative?(%Decimal{coef: :sNaN} = num),
     do: error(:invalid_operation, "operation on NaN", num)
@@ -1096,7 +1109,7 @@ defmodule Decimal do
       #Decimal<3.14>
 
   """
-  @doc since: "1.5.0"
+  doc_since "1.5.0"
   @spec from_float(float) :: t
   def from_float(float) when is_float(float) do
     float
