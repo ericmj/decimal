@@ -158,7 +158,7 @@ defmodule DecimalTest do
       Decimal.add(~d"snan", ~d"0")
     end
 
-    assert_raise ArgumentError, ~r/implicit convertion of 2.0 to Decimal is not allowed/, fn ->
+    assert_raise ArgumentError, ~r/implicit conversion of 2.0 to Decimal is not allowed/, fn ->
       Decimal.add(1, 2.0)
     end
   end

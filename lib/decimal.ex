@@ -1688,7 +1688,7 @@ defmodule Decimal do
 
   defp decimal(other) when is_float(other) do
     raise ArgumentError,
-          "implicit convertion of #{inspect(other)} to Decimal is not allowed. Use Decimal.from_float/1"
+          "implicit conversion of #{inspect(other)} to Decimal is not allowed. Use Decimal.from_float/1"
   end
 
   defp handle_error(signals, reason, result, context) do
