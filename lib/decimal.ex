@@ -891,7 +891,7 @@ defmodule Decimal do
   @doc """
   Check if given number is positive
   """
-  doc_since "1.5.0"
+  doc_since("1.5.0")
   @spec positive?(t) :: boolean
   def positive?(%Decimal{coef: :sNaN} = num),
     do: error(:invalid_operation, "operation on NaN", num)
@@ -904,7 +904,7 @@ defmodule Decimal do
   @doc """
   Check if given number is negative
   """
-  doc_since "1.5.0"
+  doc_since("1.5.0")
   @spec negative?(t) :: boolean
   def negative?(%Decimal{coef: :sNaN} = num),
     do: error(:invalid_operation, "operation on NaN", num)
@@ -1109,9 +1109,21 @@ defmodule Decimal do
       #Decimal<3.14>
 
   """
-  doc_since "1.5.0"
+  doc_since("1.5.0")
   @spec from_float(float) :: t
   def from_float(float) when is_float(float) do
+    float
+    |> format_float()
+  end
+
+  doc_since("1.5.0")
+  @spec from_float(float) :: t
+  def from_float(float) when is_integer(float) do
+    (float / 1)
+    |> format_float()
+  end
+
+  defp format_float(float) do
     float
     |> :io_lib_format.fwrite_g()
     |> fix_float_exp()

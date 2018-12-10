@@ -44,6 +44,10 @@ defmodule DecimalTest do
     assert Decimal.from_float(0.1) == d(1, 1, -1)
     assert Decimal.from_float(0.000015) == d(1, 15, -6)
     assert Decimal.from_float(-1.5) == d(-1, 15, -1)
+    assert Decimal.from_float(-1.0) == d(-1, 10, -1)
+    assert Decimal.from_float(-1) == d(-1, 10, -1)
+    assert Decimal.from_float(123) == d(1, 1230, -1)
+    assert Decimal.from_float(0) == d(1, 0, -1)
   end
 
   test "string conversion" do
