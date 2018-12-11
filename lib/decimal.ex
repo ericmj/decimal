@@ -891,7 +891,7 @@ defmodule Decimal do
   @doc """
   Check if given number is positive
   """
-  doc_since "1.5.0"
+  doc_since("1.5.0")
   @spec positive?(t) :: boolean
   def positive?(%Decimal{coef: :sNaN} = num),
     do: error(:invalid_operation, "operation on NaN", num)
@@ -904,7 +904,7 @@ defmodule Decimal do
   @doc """
   Check if given number is negative
   """
-  doc_since "1.5.0"
+  doc_since("1.5.0")
   @spec negative?(t) :: boolean
   def negative?(%Decimal{coef: :sNaN} = num),
     do: error(:invalid_operation, "operation on NaN", num)
@@ -1059,6 +1059,10 @@ defmodule Decimal do
       numeric-value  ::=  decimal-part [exponent-part] | infinity
       numeric-string ::=  [sign] numeric-value | [sign] nan
 
+  ## Floats
+
+  See also `from_float/1`.
+
   ## Examples
 
       iex> Decimal.new(1)
@@ -1066,16 +1070,18 @@ defmodule Decimal do
 
       iex> Decimal.new("3.14")
       #Decimal<3.14>
-
   """
-  @spec new(t | integer | String.t()) :: t
+  @spec new(decimal) :: t
   def new(%Decimal{} = num), do: num
 
   def new(int) when is_integer(int),
     do: %Decimal{sign: if(int < 0, do: -1, else: 1), coef: Kernel.abs(int)}
 
   def new(float) when is_float(float) do
-    IO.warn("passing float to Decimal.new/1 is deprecated, use Decimal.from_float/1 instead")
+    IO.warn(
+      "passing float to Decimal.new/1 is deprecated as floats have inherent inaccuracy. Use Decimal.from_float/1 instead"
+    )
+
     from_float(float)
   end
 
@@ -1099,9 +1105,21 @@ defmodule Decimal do
   @doc """
   Creates a new decimal number from a floating point number.
 
+  Floating point numbers use a fixed number of binary digits to represent
+  a decimal number which has inherent inaccuracy as some decimal numbers cannot
+  be represented exactly in limited precision binary.
+
   Floating point numbers will be converted to decimal numbers with
-  `:io_lib_format.fwrite_g/1`. Since this conversion is not exact it is
-  recommended to give an integer or a string via `new/1` instead.
+  `:io_lib_format.fwrite_g/1`. Since this conversion is not exact and
+  because of inherent inaccuracy mentioned above, we may run into counter-intuitive results:
+
+      iex> Enum.reduce([0.1, 0.1, 0.1], &+/2)
+      0.30000000000000004
+
+      iex> Enum.reduce([Decimal.new("0.1"), Decimal.new("0.1"), Decimal.new("0.1")], &Decimal.add/2)
+      #Decimal<0.3>
+
+  For this reason, it's recommended to build decimals with `new/1`, which is always precise, instead.
 
   ## Examples
 
@@ -1109,7 +1127,7 @@ defmodule Decimal do
       #Decimal<3.14>
 
   """
-  doc_since "1.5.0"
+  doc_since("1.5.0")
   @spec from_float(float) :: t
   def from_float(float) when is_float(float) do
     float
