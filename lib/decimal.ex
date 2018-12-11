@@ -1106,7 +1106,7 @@ defmodule Decimal do
   Creates a new decimal number from a floating point number.
 
   Floating point numbers use a fixed number of binary digits to represent
-  a decimal number which has inherent inaccuracy as some numbers cannot
+  a decimal number which has inherent inaccuracy as some decimal numbers cannot
   be represented exactly in binary.
 
   Floating point numbers will be converted to decimal numbers with
