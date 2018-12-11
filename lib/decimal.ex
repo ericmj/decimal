@@ -1107,7 +1107,7 @@ defmodule Decimal do
 
   Floating point numbers use a fixed number of binary digits to represent
   a decimal number which has inherent inaccuracy as some decimal numbers cannot
-  be represented exactly in binary.
+  be represented exactly in limited precision binary.
 
   Floating point numbers will be converted to decimal numbers with
   `:io_lib_format.fwrite_g/1`. Since this conversion is not exact and
