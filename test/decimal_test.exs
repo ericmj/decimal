@@ -819,6 +819,21 @@ defmodule DecimalTest do
     assert roundneg.(~d"1099") == d(1, 11, 2)
   end
 
+  test "sqrt" do
+    Decimal.with_context(%Context{precision: 9, rounding: :half_even}, fn ->
+      assert Decimal.sqrt(~d"0") == d(1, 0, 0)
+      assert Decimal.sqrt(~d"-0") == d(-1, 0, 0)
+      assert Decimal.sqrt(~d"1") == d(1, 1, 0)
+      assert Decimal.sqrt(~d"1.0") == d(1, 10, -1)
+      assert Decimal.sqrt(~d"1.00") == d(1, 10, -1)
+      assert Decimal.sqrt(~d"0.01") == d(1, 1, -1)
+      assert Decimal.sqrt(~d"100") == d(1, 10, 0)
+      assert Decimal.sqrt(~d"10") == d(1, 316_227_766, -8)
+      assert Decimal.sqrt(~d"7") == d(1, 264_575_131, -8)
+      assert Decimal.sqrt(~d"0.39") == d(1, 624_499_800, -9)
+    end)
+  end
+
   test "issue #13" do
     round_down = &Decimal.round(&1, 0, :down)
     round_up = &Decimal.round(&1, 0, :up)

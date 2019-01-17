@@ -1041,6 +1041,106 @@ defmodule Decimal do
   end
 
   @doc """
+  Finds the square root.
+
+  ## Examples
+
+      iex> Decimal.sqrt("100")
+      #Decimal<10>
+
+  """
+  doc_since("1.7.0")
+  @spec sqrt(decimal) :: t
+  def sqrt(%Decimal{coef: :sNaN} = num),
+    do: error(:invalid_operation, "operation on NaN", num)
+
+  def sqrt(%Decimal{coef: :qNaN} = num),
+    do: error(:invalid_operation, "operation on NaN", num)
+
+  def sqrt(%Decimal{coef: 0, exp: exp} = num),
+    do: %{num | exp: exp >>> 1}
+
+  def sqrt(%Decimal{sign: -1} = num),
+    do: error(:invalid_operation, "less than zero", num)
+
+  def sqrt(%Decimal{sign: 1, coef: :inf} = num),
+    do: num
+
+  def sqrt(%Decimal{sign: 1, coef: coef, exp: exp}) do
+    precision = get_context().precision + 1
+    digits = :erlang.integer_to_list(coef)
+    num_digits = length(digits)
+
+    # Since the root is calculated from integer operations only, it must be
+    # large enough to contain the desired precision. Calculate the amount of
+    # `shift` required (powers of 10).
+    case exp &&& 1 do
+      0 ->
+        # To get the desired `shift`, subtract the precision of `coef`'s square
+        # root from the desired precision.
+        #
+        # If `coef` is 10_000, the root is 100 (3 digits of precision).
+        # If `coef` is 100, the root is 10 (2 digits of precision).
+        shift = precision - ((num_digits + 1) >>> 1)
+        sqrt(coef, shift, exp)
+
+      _ ->
+        # If `exp` is odd, multiply `coef` by 10 and reduce shift by 1/2. `exp`
+        # must be even so the root's exponent is an integer.
+        shift = precision - ((num_digits >>> 1) + 1)
+        sqrt(coef * 10, shift, exp)
+    end
+  end
+
+  def sqrt(num) do
+    sqrt(decimal(num))
+  end
+
+  defp sqrt(coef, shift, exp) do
+    if shift >= 0 do
+      # shift `coef` up by `shift * 2` digits
+      sqrt(coef * pow10(shift <<< 1), shift, exp, true)
+    else
+      # shift `coef` down by `shift * 2` digits
+      operand = pow10((-shift) <<< 1)
+      sqrt(Kernel.div(coef, operand), shift, exp, Kernel.rem(coef, operand) === 0)
+    end
+  end
+
+  defp sqrt(shifted_coef, shift, exp, exact) do
+    # the preferred exponent is `exp / 2` as per IEEE 754
+    exp = exp >>> 1
+    # guess a root 10x higher than desired precision
+    guess = pow10(get_context().precision + 1)
+    root = sqrt_loop(shifted_coef, guess)
+
+    if exact and root * root === shifted_coef do
+      # if the root is exact, use preferred `exp` and shift `coef` to match
+      coef =
+        if shift >= 0,
+          do: Kernel.div(root, pow10(shift)),
+          else: root * pow10(-shift)
+
+      context(%Decimal{sign: 1, coef: coef, exp: exp})
+    else
+      # otherwise the calculated root is inexact (but still meets precision),
+      # so use the root as `coef` and get the final exponent by shifting `exp`
+      context(%Decimal{sign: 1, coef: root, exp: exp - shift})
+    end
+  end
+
+  # Babylonion method
+  defp sqrt_loop(coef, guess) do
+    quotient = Kernel.div(coef, guess)
+
+    if guess <= quotient do
+      guess
+    else
+      sqrt_loop(coef, (guess + quotient) >>> 1)
+    end
+  end
+
+  @doc """
   Creates a new decimal number from an integer or a string representation.
 
   A decimal number will always be created exactly as specified with all digits
