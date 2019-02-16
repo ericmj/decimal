@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v1.7.0 (2019-02-16)
+
+### Enhancements
+
+* Add `Decimal.sqrt/1`
+
 ## v1.6.0 (2018-11-22)
 
 ### Enhancements
