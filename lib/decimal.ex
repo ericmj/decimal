@@ -1102,7 +1102,7 @@ defmodule Decimal do
       sqrt(coef * pow10(shift <<< 1), shift, exp, true)
     else
       # shift `coef` down by `shift * 2` digits
-      operand = pow10((-shift) <<< 1)
+      operand = pow10(-shift <<< 1)
       sqrt(Kernel.div(coef, operand), shift, exp, Kernel.rem(coef, operand) === 0)
     end
   end
