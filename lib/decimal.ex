@@ -1274,7 +1274,7 @@ defmodule Decimal do
     * `:raw` - number converted to its raw, internal format.
 
   """
-  @spec to_string(t, :scientific | :normal | :raw) :: String.t()
+  @spec to_string(t, :scientific | :normal | :xsd | :raw) :: String.t()
   def to_string(num, type \\ :scientific)
 
   def to_string(%Decimal{sign: sign, coef: :qNaN}, _type) do
