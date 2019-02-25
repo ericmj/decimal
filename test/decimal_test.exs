@@ -6,17 +6,13 @@ defmodule DecimalTest do
 
   require Decimal
 
+  import Decimal.Sigils
+
   doctest Decimal
 
   defmacrop d(sign, coef, exp) do
     quote do
       %Decimal{sign: unquote(sign), coef: unquote(coef), exp: unquote(exp)}
-    end
-  end
-
-  defmacrop sigil_d(str, _opts) do
-    quote do
-      Decimal.new(unquote(str))
     end
   end
 

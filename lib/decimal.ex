@@ -1863,6 +1863,20 @@ defmodule Decimal do
   end
 end
 
+defmodule Decimal.Sigils do
+  @moduledoc """
+  Decimal sigils to easily create decimal numbers.
+
+  ## Examples
+     iex> ~d[42.42]
+     #Decimal<42.42>
+  """
+
+  defmacro sigil_d({:<<>>, _, [string]}, _opts) do
+    Macro.escape(Decimal.new(string))
+  end
+end
+
 defimpl Inspect, for: Decimal do
   def inspect(dec, _opts) do
     "#Decimal<" <> Decimal.to_string(dec) <> ">"
