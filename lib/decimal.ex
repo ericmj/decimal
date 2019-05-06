@@ -1179,7 +1179,7 @@ defmodule Decimal do
 
   def new(float) when is_float(float) do
     IO.warn(
-      "passing float to Decimal.new/1 is deprecated as floats have inherent inaccuracy. Use Decimal.from_float/1 instead"
+      "passing float to Decimal.new/1 is deprecated as floats have inherent inaccuracy. Use Decimal.from_float/1 or Decimal.from_any/1 instead"
     )
 
     from_float(float)
@@ -1236,6 +1236,32 @@ defmodule Decimal do
     |> IO.iodata_to_binary()
     |> new()
   end
+
+  @doc """
+  Creates a new decimal number from an integer, string or float.
+
+  Because conversion from a floating point number is not exact, it's recommended
+  to instead use `new/1` or `from_float/1` when the argument's type is certain.
+  See `from_float/1`.
+
+  ## Examples
+
+      iex> Decimal.from_any(3)
+      #Decimal<3>
+
+      iex> Decimal.from_any(3.0)
+      #Decimal<3.0>
+
+      iex> Decimal.from_any("3")
+      #Decimal<3>
+
+      iex> Decimal.from_any("3.0")
+      #Decimal<3.0>
+
+  """
+  @spec from_any(number | binary) :: t
+  def from_any(float) when is_float(float), do: from_float(float)
+  def from_any(value), do: new(value)
 
   @doc """
   Parses a binary into a decimal.
