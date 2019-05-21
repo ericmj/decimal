@@ -1178,10 +1178,6 @@ defmodule Decimal do
     do: %Decimal{sign: if(int < 0, do: -1, else: 1), coef: Kernel.abs(int)}
 
   def new(float) when is_float(float) do
-    IO.warn(
-      "passing float to Decimal.new/1 is deprecated as floats have inherent inaccuracy. Use Decimal.from_float/1 instead"
-    )
-
     from_float(float)
   end
 
