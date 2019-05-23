@@ -115,7 +115,7 @@ defmodule DecimalTest do
     end
   end
 
-  test "from_any conversion" do
+  test "from_any" do
     assert Decimal.from_any(123) == d(1, 123, 0)
     assert Decimal.from_any(123.0) == d(1, 1230, -1)
     assert Decimal.from_any("123") == d(1, 123, 0)
