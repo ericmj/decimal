@@ -1238,7 +1238,7 @@ defmodule Decimal do
   end
 
   @doc """
-  Creates a new decimal number from an integer, string or float.
+  Creates a new decimal number from an integer, string, float, or existing decimal number.
 
   Because conversion from a floating point number is not exact, it's recommended
   to instead use `new/1` or `from_float/1` when the argument's type is certain.
@@ -1258,8 +1258,11 @@ defmodule Decimal do
       iex> Decimal.from_any("3.0")
       #Decimal<3.0>
 
+      iex> Decimal.new(3) |> Decimal.from_any()
+      #Decimal<3>
+
   """
-  @spec from_any(number | binary) :: t
+  @spec from_any(float | decimal) :: t
   def from_any(float) when is_float(float), do: from_float(float)
   def from_any(value), do: new(value)
 

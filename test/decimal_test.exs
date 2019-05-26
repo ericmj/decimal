@@ -120,6 +120,7 @@ defmodule DecimalTest do
     assert Decimal.from_any(123.0) == d(1, 1230, -1)
     assert Decimal.from_any("123") == d(1, 123, 0)
     assert Decimal.from_any("123.0") == d(1, 1230, -1)
+    assert Decimal.new(123) |> Decimal.from_any() == Decimal.new(123)
   end
 
   test "abs" do
