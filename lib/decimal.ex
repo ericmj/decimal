@@ -448,6 +448,60 @@ defmodule Decimal do
   end
 
   @doc """
+  Synonymous with equal?/2 
+
+  ## Examples
+
+      iex> Decimal.eq?("1.0", 1)
+      true
+
+      iex> Decimal.eq?(1, -1)
+      false
+
+  """
+  @spec eq?(decimal, decimal) :: boolean
+  def eq?(num1, num2) do
+    equal?(num1, num2)
+  end
+
+  @doc """
+  Compares two numbers numerically and returns `true` if the the first argument is greater than the second,
+  otherwise `false`.
+
+
+  ## Examples
+
+      iex> Decimal.gt?("1.3", "1.2")
+      true
+
+      iex> Decimal.gt?("1.2", "1.3")
+      false
+
+  """
+  @spec gt?(decimal, decimal) :: boolean
+  def gt?(num1, num2) do
+    cmp(num1, num2) == :gt
+  end
+
+  @doc """
+  Compares two numbers numerically and returns `true` if the the first number is less than the second number,
+  otherwise `false`.
+
+  ## Examples
+
+      iex> Decimal.lt?("1.1", "1.2")
+      true
+
+      iex> Decimal.lt?("1.4", "1.2")
+      false
+
+  """
+  @spec lt?(decimal, decimal) :: boolean
+  def lt?(num1, num2) do
+    cmp(num1, num2) == :lt
+  end
+
+  @doc """
   Divides two numbers.
 
   ## Exceptional conditions
