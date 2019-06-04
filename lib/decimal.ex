@@ -460,9 +460,7 @@ defmodule Decimal do
 
   """
   @spec eq?(decimal, decimal) :: boolean
-  def eq?(num1, num2) do
-    equal?(num1, num2)
-  end
+  def eq?(num1, num2), do: equal?(num1, num2)
 
   @doc """
   Compares two numbers numerically and returns `true` if the the first argument is greater than the second,
@@ -479,9 +477,7 @@ defmodule Decimal do
 
   """
   @spec gt?(decimal, decimal) :: boolean
-  def gt?(num1, num2) do
-    cmp(num1, num2) == :gt
-  end
+  def gt?(num1, num2), do: cmp(num1, num2) == :gt
 
   @doc """
   Compares two numbers numerically and returns `true` if the the first number is less than the second number,
@@ -497,9 +493,7 @@ defmodule Decimal do
 
   """
   @spec lt?(decimal, decimal) :: boolean
-  def lt?(num1, num2) do
-    cmp(num1, num2) == :lt
-  end
+  def lt?(num1, num2), do: cmp(num1, num2) == :lt
 
   @doc """
   Divides two numbers.
