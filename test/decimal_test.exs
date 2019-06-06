@@ -265,13 +265,11 @@ defmodule DecimalTest do
     assert Decimal.gt?(~d"1", ~d"0")
     refute Decimal.gt?(~d"0", ~d"1")
     refute Decimal.gt?(~d"0", ~d"-0")
+    refute Decimal.gt?(~d"nan", ~d"1")
+    refute Decimal.gt?(~d"1", ~d"nan")
 
     assert_raise Error, fn ->
       Decimal.gt?(~d"snan", ~d"0")
-    end
-
-    assert_raise CaseClauseError, fn ->
-      Decimal.gt?(~d"nan", ~d"1")
     end
   end
 
@@ -280,13 +278,11 @@ defmodule DecimalTest do
     refute Decimal.lt?(~d"1", ~d"0")
     assert Decimal.lt?(~d"0", ~d"1")
     refute Decimal.lt?(~d"0", ~d"-0")
+    refute Decimal.lt?(~d"nan", ~d"1")
+    refute Decimal.lt?(~d"1", ~d"nan")
 
     assert_raise Error, fn ->
       Decimal.lt?(~d"snan", ~d"0")
-    end
-
-    assert_raise CaseClauseError, fn ->
-      Decimal.lt?(~d"nan", ~d"1")
     end
   end
 

@@ -448,7 +448,9 @@ defmodule Decimal do
   end
 
   @doc """
-  Synonymous with equal?/2 
+  Compares two numbers numerically and returns `true` if they are equal,
+  otherwise `false`. If one of the operands is a quiet NaN this operation 
+  will always return `false`.
 
   ## Examples
 
@@ -460,12 +462,14 @@ defmodule Decimal do
 
   """
   @spec eq?(decimal, decimal) :: boolean
-  def eq?(num1, num2), do: equal?(num1, num2)
+  def eq?(%Decimal{coef: :qNaN}, _num2), do: false
+  def eq?(_num1, %Decimal{coef: :qNaN}), do: false
+  def eq?(num1, num2), do: cmp(num1, num2) == :eq
 
   @doc """
-  Compares two numbers numerically and returns `true` if the the first argument is greater than the second,
-  otherwise `false`.
-
+  Compares two numbers numerically and returns `true` if the the first argument 
+  is greater than the second, otherwise `false`. If one the operands is a 
+  quiet NaN this operation will always return `false`.
 
   ## Examples
 
@@ -477,11 +481,14 @@ defmodule Decimal do
 
   """
   @spec gt?(decimal, decimal) :: boolean
+  def gt?(%Decimal{coef: :qNaN}, _num2), do: false
+  def gt?(_num1, %Decimal{coef: :qNaN}), do: false
   def gt?(num1, num2), do: cmp(num1, num2) == :gt
 
   @doc """
-  Compares two numbers numerically and returns `true` if the the first number is less than the second number,
-  otherwise `false`.
+  Compares two numbers numerically and returns `true` if the the first number is 
+  less than the second number, otherwise `false`. If one of the operands is a 
+  quiet NaN this operation will always return `false`.
 
   ## Examples
 
@@ -493,6 +500,8 @@ defmodule Decimal do
 
   """
   @spec lt?(decimal, decimal) :: boolean
+  def lt?(%Decimal{coef: :qNaN}, _num2), do: false
+  def lt?(_num1, %Decimal{coef: :qNaN}), do: false
   def lt?(num1, num2), do: cmp(num1, num2) == :lt
 
   @doc """
