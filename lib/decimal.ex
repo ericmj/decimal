@@ -461,6 +461,7 @@ defmodule Decimal do
       false
 
   """
+  doc_since("1.8.0")
   @spec eq?(decimal, decimal) :: boolean
   def eq?(%Decimal{coef: :qNaN}, _num2), do: false
   def eq?(_num1, %Decimal{coef: :qNaN}), do: false
