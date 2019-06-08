@@ -501,6 +501,7 @@ defmodule Decimal do
       false
 
   """
+  doc_since("1.8.0")
   @spec lt?(decimal, decimal) :: boolean
   def lt?(%Decimal{coef: :qNaN}, _num2), do: false
   def lt?(_num1, %Decimal{coef: :qNaN}), do: false
