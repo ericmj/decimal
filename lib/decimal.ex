@@ -481,6 +481,7 @@ defmodule Decimal do
       false
 
   """
+  doc_since("1.8.0")
   @spec gt?(decimal, decimal) :: boolean
   def gt?(%Decimal{coef: :qNaN}, _num2), do: false
   def gt?(_num1, %Decimal{coef: :qNaN}), do: false
