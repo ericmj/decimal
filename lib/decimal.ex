@@ -1244,6 +1244,8 @@ defmodule Decimal do
   to instead use `new/1` or `from_float/1` when the argument's type is certain.
   See `from_float/1`.
 
+  If the value cannot be cast, Decimal.Error is raised.
+
   ## Examples
 
       iex> Decimal.cast(3)
