@@ -247,6 +247,45 @@ defmodule DecimalTest do
     end
   end
 
+  test "eq?" do
+    assert Decimal.eq?(~d"420", ~d"42e1")
+    refute Decimal.eq?(~d"1", ~d"0")
+    refute Decimal.eq?(~d"0", ~d"1")
+    assert Decimal.eq?(~d"0", ~d"-0")
+    refute Decimal.eq?(~d"nan", ~d"1")
+    refute Decimal.eq?(~d"1", ~d"nan")
+
+    assert_raise Error, fn ->
+      Decimal.eq?(~d"snan", ~d"0")
+    end
+  end
+
+  test "gt?" do
+    refute Decimal.gt?(~d"420", ~d"42e1")
+    assert Decimal.gt?(~d"1", ~d"0")
+    refute Decimal.gt?(~d"0", ~d"1")
+    refute Decimal.gt?(~d"0", ~d"-0")
+    refute Decimal.gt?(~d"nan", ~d"1")
+    refute Decimal.gt?(~d"1", ~d"nan")
+
+    assert_raise Error, fn ->
+      Decimal.gt?(~d"snan", ~d"0")
+    end
+  end
+
+  test "lt?" do
+    refute Decimal.lt?(~d"420", ~d"42e1")
+    refute Decimal.lt?(~d"1", ~d"0")
+    assert Decimal.lt?(~d"0", ~d"1")
+    refute Decimal.lt?(~d"0", ~d"-0")
+    refute Decimal.lt?(~d"nan", ~d"1")
+    refute Decimal.lt?(~d"1", ~d"nan")
+
+    assert_raise Error, fn ->
+      Decimal.lt?(~d"snan", ~d"0")
+    end
+  end
+
   test "div" do
     Decimal.with_context(%Context{precision: 5, rounding: :half_up}, fn ->
       assert Decimal.div(~d"1", ~d"3") == d(1, 33333, -5)
