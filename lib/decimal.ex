@@ -330,6 +330,8 @@ defmodule Decimal do
     context(%Decimal{sign: sign, coef: Kernel.abs(coef), exp: exp})
   end
 
+  def add(nil, _num2), do: error(:invalid_operation, "operation on nil", nil)
+  def add(_num1, nil), do: error(:invalid_operation, "operation on nil", nil)
   def add(num1, num2), do: add(decimal(num1), decimal(num2))
 
   @doc """
@@ -355,9 +357,9 @@ defmodule Decimal do
     add(num1, %{num2 | sign: -sign})
   end
 
-  def sub(num1, num2) do
-    sub(decimal(num1), decimal(num2))
-  end
+  def sub(nil, _num2), do: error(:invalid_operation, "operation on nil", nil)
+  def sub(_num1, nil), do: error(:invalid_operation, "operation on nil", nil)
+  def sub(num1, num2), do: sub(decimal(num1), decimal(num2))
 
   @doc """
   Compares two numbers numerically. If the first number is greater than the second
@@ -515,9 +517,9 @@ defmodule Decimal do
     end
   end
 
-  def div(num1, num2) do
-    div(decimal(num1), decimal(num2))
-  end
+  def div(nil, _num2), do: error(:invalid_operation, "operation on nil", nil)
+  def div(_num1, nil), do: error(:invalid_operation, "operation on nil", nil)
+  def div(num1, num2), do: div(decimal(num1), decimal(num2))
 
   @doc """
   Divides two numbers and returns the integer part.
@@ -594,9 +596,9 @@ defmodule Decimal do
     end
   end
 
-  def div_int(num1, num2) do
-    div_int(decimal(num1), decimal(num2))
-  end
+  def div_int(nil, _num2), do: error(:invalid_operation, "operation on nil", nil)
+  def div_int(_num1, nil), do: error(:invalid_operation, "operation on nil", nil)
+  def div_int(num1, num2), do: div_int(decimal(num1), decimal(num2))
 
   @doc """
   Remainder of integer division of two numbers. The result will have the sign of
@@ -666,9 +668,9 @@ defmodule Decimal do
     end
   end
 
-  def rem(num1, num2) do
-    rem(decimal(num1), decimal(num2))
-  end
+  def rem(nil, _num2), do: error(:invalid_operation, "operation on nil", nil)
+  def rem(_num1, nil), do: error(:invalid_operation, "operation on nil", nil)
+  def rem(num1, num2), do: rem(decimal(num1), decimal(num2))
 
   @doc """
   Integer division of two numbers and the remainder. Should be used when both
@@ -761,9 +763,9 @@ defmodule Decimal do
     end
   end
 
-  def div_rem(num1, num2) do
-    div_rem(decimal(num1), decimal(num2))
-  end
+  def div_rem(nil, _num2), do: error(:invalid_operation, "operation on nil", nil)
+  def div_rem(_num1, nil), do: error(:invalid_operation, "operation on nil", nil)
+  def div_rem(num1, num2), do: div_rem(decimal(num1), decimal(num2))
 
   @doc """
   Compares two values numerically and returns the maximum. Unlike most other
@@ -810,9 +812,9 @@ defmodule Decimal do
     |> context()
   end
 
-  def max(num1, num2) do
-    max(decimal(num1), decimal(num2))
-  end
+  def max(nil, _num2), do: error(:invalid_operation, "operation on nil", nil)
+  def max(_num1, nil), do: error(:invalid_operation, "operation on nil", nil)
+  def max(num1, num2), do: max(decimal(num1), decimal(num2))
 
   @doc """
   Compares two values numerically and returns the minimum. Unlike most other
@@ -859,9 +861,9 @@ defmodule Decimal do
     |> context()
   end
 
-  def min(num1, num2) do
-    min(decimal(num1), decimal(num2))
-  end
+  def min(nil, _num2), do: error(:invalid_operation, "operation on nil", nil)
+  def min(_num1, nil), do: error(:invalid_operation, "operation on nil", nil)
+  def min(num1, num2), do: min(decimal(num1), decimal(num2))
 
   @doc """
   Negates the given number.
@@ -879,6 +881,8 @@ defmodule Decimal do
   def minus(%Decimal{coef: :sNaN} = num), do: error(:invalid_operation, "operation on NaN", num)
   def minus(%Decimal{coef: :qNaN} = num), do: num
   def minus(%Decimal{sign: sign} = num), do: context(%{num | sign: -sign})
+
+  def minus(nil), do: error(:invalid_operation, "operation on nil", nil)
   def minus(num), do: minus(decimal(num))
 
   @doc """
@@ -887,6 +891,7 @@ defmodule Decimal do
   @spec plus(t) :: t
   def plus(%Decimal{coef: :sNaN} = num), do: error(:invalid_operation, "operation on NaN", num)
   def plus(%Decimal{} = num), do: context(num)
+  def plus(nil), do: error(:invalid_operation, "operation on nil", nil)
 
   @doc """
   Check if given number is positive
@@ -967,9 +972,9 @@ defmodule Decimal do
     %Decimal{sign: sign, coef: coef1 * coef2, exp: exp1 + exp2} |> context()
   end
 
-  def mult(num1, num2) do
-    mult(decimal(num1), decimal(num2))
-  end
+  def mult(nil, _num2), do: error(:invalid_operation, "operation on nil", nil)
+  def mult(_num1, nil), do: error(:invalid_operation, "operation on nil", nil)
+  def mult(num1, num2), do: mult(decimal(num1), decimal(num2))
 
   @doc """
   Reduces the given number. Removes trailing zeros from coefficient while
@@ -1036,9 +1041,8 @@ defmodule Decimal do
     context(value, [])
   end
 
-  def round(num, n, mode) do
-    round(decimal(num), n, mode)
-  end
+  def round(nil, _n, _mode), do: error(:invalid_operation, "operation on nil", nil)
+  def round(num, n, mode), do: round(decimal(num), n, mode)
 
   @doc """
   Finds the square root.

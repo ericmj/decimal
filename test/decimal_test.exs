@@ -169,6 +169,14 @@ defmodule DecimalTest do
     assert_raise ArgumentError, ~r/implicit conversion of 2.0 to Decimal is not allowed/, fn ->
       Decimal.add(1, 2.0)
     end
+
+    assert_raise Error, fn ->
+      Decimal.add(nil, ~d"1.0")
+    end
+
+    assert_raise Error, fn ->
+      Decimal.add(~d"1.0", nil)
+    end
   end
 
   test "sub" do
@@ -194,6 +202,14 @@ defmodule DecimalTest do
 
     assert_raise Error, fn ->
       Decimal.sub(~d"snan", ~d"0")
+    end
+
+    assert_raise Error, fn ->
+      Decimal.sub(nil, ~d"1.0")
+    end
+
+    assert_raise Error, fn ->
+      Decimal.sub(~d"1.0", nil)
     end
   end
 
@@ -289,6 +305,14 @@ defmodule DecimalTest do
     assert_raise Error, fn ->
       Decimal.div(~d"0", ~d"-0")
     end
+
+    assert_raise Error, fn ->
+      Decimal.div(nil, ~d"1.0")
+    end
+
+    assert_raise Error, fn ->
+      Decimal.div(~d"1.0", nil)
+    end
   end
 
   test "div_int" do
@@ -324,6 +348,14 @@ defmodule DecimalTest do
 
     assert_raise Error, fn ->
       Decimal.div_int(~d"0", ~d"-0")
+    end
+
+    assert_raise Error, fn ->
+      Decimal.div_int(nil, ~d"1.0")
+    end
+
+    assert_raise Error, fn ->
+      Decimal.div_int(~d"1.0", nil)
     end
   end
 
@@ -362,6 +394,14 @@ defmodule DecimalTest do
 
     assert_raise Error, fn ->
       Decimal.rem(~d"0", ~d"-0")
+    end
+
+    assert_raise Error, fn ->
+      Decimal.rem(nil, ~d"1.0")
+    end
+
+    assert_raise Error, fn ->
+      Decimal.rem(~d"1.0", nil)
     end
   end
 
@@ -422,6 +462,10 @@ defmodule DecimalTest do
     assert_raise Error, fn ->
       Decimal.minus(~d"snan")
     end
+
+    assert_raise Error, fn ->
+      Decimal.minus(nil)
+    end
   end
 
   test "plus" do
@@ -434,6 +478,10 @@ defmodule DecimalTest do
 
     assert_raise Error, fn ->
       Decimal.plus(~d"snan")
+    end
+
+    assert_raise Error, fn ->
+      Decimal.plus(nil)
     end
   end
 
@@ -908,7 +956,7 @@ defmodule DecimalTest do
   end
 
   test "issue #60" do
-    assert_raise(FunctionClauseError, "no function clause matching in Decimal.decimal/1", fn ->
+    assert_raise(Decimal.Error, ": operation on nil", fn ->
       Decimal.round(nil)
     end)
   end
