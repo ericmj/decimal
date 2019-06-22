@@ -1239,7 +1239,7 @@ defmodule Decimal do
 
   def new(float) when is_float(float) do
     IO.warn(
-      "passing float to Decimal.new/1 is deprecated as floats have inherent inaccuracy. Use Decimal.from_float/1 or Decimal.from_any/1 instead"
+      "passing float to Decimal.new/1 is deprecated as floats have inherent inaccuracy. Use Decimal.from_float/1 or Decimal.cast/1 instead"
     )
 
     from_float(float)
@@ -1308,27 +1308,29 @@ defmodule Decimal do
   to instead use `new/1` or `from_float/1` when the argument's type is certain.
   See `from_float/1`.
 
+  If the value cannot be cast, Decimal.Error is raised.
+
   ## Examples
 
-      iex> Decimal.from_any(3)
+      iex> Decimal.cast(3)
       #Decimal<3>
 
-      iex> Decimal.from_any(3.0)
+      iex> Decimal.cast(3.0)
       #Decimal<3.0>
 
-      iex> Decimal.from_any("3")
+      iex> Decimal.cast("3")
       #Decimal<3>
 
-      iex> Decimal.from_any("3.0")
+      iex> Decimal.cast("3.0")
       #Decimal<3.0>
 
-      iex> Decimal.new(3) |> Decimal.from_any()
+      iex> Decimal.new(3) |> Decimal.cast()
       #Decimal<3>
 
   """
-  @spec from_any(float | decimal) :: t
-  def from_any(float) when is_float(float), do: from_float(float)
-  def from_any(value), do: new(value)
+  @spec cast(float | decimal) :: t
+  def cast(float) when is_float(float), do: from_float(float)
+  def cast(value), do: new(value)
 
   @doc """
   Parses a binary into a decimal.
