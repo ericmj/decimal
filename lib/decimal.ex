@@ -449,7 +449,7 @@ defmodule Decimal do
 
   @doc """
   Compares two numbers numerically and returns `true` if they are equal,
-  otherwise `false`. If one of the operands is a quiet NaN this operation 
+  otherwise `false`. If one of the operands is a quiet NaN this operation
   will always return `false`.
 
   ## Examples
@@ -468,8 +468,8 @@ defmodule Decimal do
   def eq?(num1, num2), do: cmp(num1, num2) == :eq
 
   @doc """
-  Compares two numbers numerically and returns `true` if the the first argument 
-  is greater than the second, otherwise `false`. If one the operands is a 
+  Compares two numbers numerically and returns `true` if the the first argument
+  is greater than the second, otherwise `false`. If one the operands is a
   quiet NaN this operation will always return `false`.
 
   ## Examples
@@ -488,8 +488,8 @@ defmodule Decimal do
   def gt?(num1, num2), do: cmp(num1, num2) == :gt
 
   @doc """
-  Compares two numbers numerically and returns `true` if the the first number is 
-  less than the second number, otherwise `false`. If one of the operands is a 
+  Compares two numbers numerically and returns `true` if the the first number is
+  less than the second number, otherwise `false`. If one of the operands is a
   quiet NaN this operation will always return `false`.
 
   ## Examples
@@ -1260,7 +1260,11 @@ defmodule Decimal do
   kept - it will not be rounded with the context.
   """
   @spec new(1 | -1, non_neg_integer | :qNaN | :sNaN | :inf, integer) :: t
-  def new(sign, coefficient, exponent), do: %Decimal{sign: sign, coef: coefficient, exp: exponent}
+  def new(sign, coef, exp)
+      when sign in [1, -1] and
+             ((is_integer(coef) and coef > 0) or coef in [:qNaN, :sNan, :inf]) and
+             is_integer(exp),
+      do: %Decimal{sign: sign, coef: coef, exp: exp}
 
   @doc """
   Creates a new decimal number from a floating point number.
