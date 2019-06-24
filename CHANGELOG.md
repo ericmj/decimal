@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## v1.8.1-dev
+
 ## v1.8.0 (2019-06-24)
 
 ### Enhancements
