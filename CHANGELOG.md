@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v1.8.0 (2019-06-24)
+
+### Enhancements
+
+* Add `Decimal.cast/1`
+* Add `Decimal.eq?/2`, `Decimal.gt?/2`, and `Decimal.lt?/2`
+* Add guards to `Decimal.new/3` to prevent invalid Decimal numbers
+
 ## v1.7.0 (2019-02-16)
 
 ### Enhancements
