@@ -1262,7 +1262,7 @@ defmodule Decimal do
   @spec new(1 | -1, non_neg_integer | :qNaN | :sNaN | :inf, integer) :: t
   def new(sign, coef, exp)
       when sign in [1, -1] and
-             ((is_integer(coef) and coef > 0) or coef in [:qNaN, :sNan, :inf]) and
+             ((is_integer(coef) and coef >= 0) or coef in [:qNaN, :sNan, :inf]) and
              is_integer(exp),
       do: %Decimal{sign: sign, coef: coef, exp: exp}
 
