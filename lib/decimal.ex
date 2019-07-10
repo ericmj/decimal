@@ -1510,6 +1510,24 @@ defmodule Decimal do
     end
   end
 
+  @doc """
+  Returns the sum of all elements in the given enumerable.
+
+  ## Examples
+
+      iex> Decimal.sum([1, "2", Decimal.new("3")])
+      #Decimal<6>
+
+      iex> Decimal.sum([])
+      #Decimal<0>
+
+  """
+  doc_since("1.9.0")
+  @spec sum(Enumerable.t()) :: t()
+  def sum(enumerable) do
+    Enum.reduce(enumerable, Decimal.new(0), &Decimal.add/2)
+  end
+
   defp scale_up(num, den, exp) when num >= den, do: {num, exp}
   defp scale_up(num, den, exp), do: scale_up(num <<< 1, den, exp - 1)
 
