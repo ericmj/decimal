@@ -277,6 +277,29 @@ defmodule Decimal do
   def abs(%Decimal{} = num), do: context(%{num | sign: 1})
 
   @doc """
+  Returns the sum of all elements in the given enumerable.
+
+  ## Exceptional conditions
+
+    * If one number is -Infinity and the other +Infinity `:invalid_operation` will
+      be signalled.
+
+  ## Examples
+
+      iex> Decimal.add([1, "2", Decimal.new("3")])
+      #Decimal<6>
+
+      iex> Decimal.add([])
+      #Decimal<0>
+
+  """
+  doc_since("1.9.0")
+  @spec add(Enumerable.t()) :: t()
+  def add(enumerable) do
+    Enum.reduce(enumerable, Decimal.new(0), &Decimal.add/2)
+  end
+
+  @doc """
   Adds two numbers together.
 
   ## Exceptional conditions
@@ -1508,24 +1531,6 @@ defmodule Decimal do
         {num, exp} = scale_up(num, boundary, 52)
         decimal_to_float(sign, num, den, exp)
     end
-  end
-
-  @doc """
-  Returns the sum of all elements in the given enumerable.
-
-  ## Examples
-
-      iex> Decimal.sum([1, "2", Decimal.new("3")])
-      #Decimal<6>
-
-      iex> Decimal.sum([])
-      #Decimal<0>
-
-  """
-  doc_since("1.9.0")
-  @spec sum(Enumerable.t()) :: t()
-  def sum(enumerable) do
-    Enum.reduce(enumerable, Decimal.new(0), &Decimal.add/2)
   end
 
   defp scale_up(num, den, exp) when num >= den, do: {num, exp}
