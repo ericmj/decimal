@@ -394,11 +394,15 @@ defmodule Decimal do
 
   def compare(_num1, %Decimal{coef: :inf, sign: sign}), do: %Decimal{sign: sign * -1, coef: 1}
 
-  def compare(num1, num2) do
+  def compare(%Decimal{} = num1, %Decimal{} = num2) do
     case sub(num1, num2) do
       %Decimal{coef: 0} -> %Decimal{sign: 1, coef: 0}
       %Decimal{sign: sign} -> %Decimal{sign: sign, coef: 1}
     end
+  end
+
+  def compare(num1, num2) do
+    compare(decimal(num1), decimal(num2))
   end
 
   @doc """

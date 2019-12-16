@@ -228,6 +228,8 @@ defmodule DecimalTest do
     assert Decimal.compare(~d"nan", ~d"inf") == d(1, :qNaN, 0)
     assert Decimal.compare(~d"nan", ~d"-inf") == d(1, :qNaN, 0)
 
+    assert Decimal.compare("Inf", "Inf") == d(1, 0, 0)
+
     assert_raise Error, fn ->
       Decimal.compare(~d"snan", ~d"0")
     end
