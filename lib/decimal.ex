@@ -162,7 +162,7 @@ defmodule Decimal do
   defmodule Context do
     @moduledoc """
     The context is kept in the process dictionary. It can be accessed with
-    `get/0` and `Decimal.set_context/1`.
+    `get/0` and `set/1`.
 
     The default context has a precision of 28, the rounding algorithm is
     `:half_up`. The set trap enablers are `:invalid_operation` and
@@ -245,6 +245,16 @@ defmodule Decimal do
     @spec get() :: t()
     def get() do
       Process.get(@context_key, %Context{})
+    end
+
+    @doc """
+    Set the process' context.
+    """
+    doc_since("1.9.0")
+    @spec set(t()) :: :ok
+    def set(%Context{} = context) do
+      Process.put(@context_key, context)
+      :ok
     end
   end
 
@@ -1578,7 +1588,7 @@ defmodule Decimal do
     try do
       fun.()
     after
-      set_context(old || %Context{})
+      Context.set(old || %Context{})
     end
   end
 
@@ -1588,13 +1598,10 @@ defmodule Decimal do
     Decimal.Context.get()
   end
 
-  @doc """
-  Set the process' context.
-  """
-  @spec set_context(Context.t()) :: :ok
-  def set_context(%Context{} = context) do
-    Process.put(@context_key, context)
-    :ok
+  @doc false
+  @deprecated "Use Decimal.Context.set/1 instead"
+  def set_context(context) do
+    Decimal.Context.set(context)
   end
 
   @doc """
@@ -1602,7 +1609,7 @@ defmodule Decimal do
   """
   @spec update_context((Context.t() -> Context.t())) :: :ok
   def update_context(fun) when is_function(fun, 1) do
-    Context.get() |> fun.() |> set_context
+    Context.get() |> fun.() |> Context.set()
   end
 
   ## ARITHMETIC ##
@@ -1946,7 +1953,7 @@ defmodule Decimal do
     signals = List.wrap(signals)
 
     flags = Enum.reduce(signals, context.flags, &put_uniq(&2, &1))
-    set_context(%{context | flags: flags})
+    Context.set(%{context | flags: flags})
 
     error_signal = Enum.find(signals, &(&1 in context.traps))
     nan = if error_signal, do: :sNaN, else: :qNaN
