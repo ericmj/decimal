@@ -256,6 +256,15 @@ defmodule Decimal do
       Process.put(@context_key, context)
       :ok
     end
+
+    @doc """
+    Update the process' context.
+    """
+    doc_since("1.9.0")
+    @spec update((t() -> t())) :: :ok
+    def update(fun) when is_function(fun, 1) do
+      get() |> fun.() |> set()
+    end
   end
 
   defmacrop error(flags, reason, result, context \\ nil) do
@@ -1604,12 +1613,10 @@ defmodule Decimal do
     Decimal.Context.set(context)
   end
 
-  @doc """
-  Update the process' context.
-  """
-  @spec update_context((Context.t() -> Context.t())) :: :ok
-  def update_context(fun) when is_function(fun, 1) do
-    Context.get() |> fun.() |> Context.set()
+  @doc false
+  @deprecated "Use Decimal.Context.update/1 instead"
+  def update_context(fun) do
+    Decimal.Context.update(fun)
   end
 
   ## ARITHMETIC ##
