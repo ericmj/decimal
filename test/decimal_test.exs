@@ -888,23 +888,23 @@ defmodule DecimalTest do
 
   test "with_context/2 set flags" do
     Decimal.with_context(%Context{precision: 2}, fn ->
-      assert [] = Decimal.get_context().flags
+      assert [] = Context.get().flags
       Decimal.add(~d"2", ~d"2")
-      assert [] = Decimal.get_context().flags
+      assert [] = Context.get().flags
       Decimal.add(~d"2.0000", ~d"2")
-      assert [:rounded] = Decimal.get_context().flags
+      assert [:rounded] = Context.get().flags
       Decimal.add(~d"2.0001", ~d"2")
-      assert :inexact in Decimal.get_context().flags
+      assert :inexact in Context.get().flags
     end)
 
     Decimal.with_context(%Context{precision: 2}, fn ->
-      assert [] = Decimal.get_context().flags
+      assert [] = Context.get().flags
 
       assert_raise Error, fn ->
         assert Decimal.mult(~d"inf", ~d"0")
       end
 
-      assert :invalid_operation in Decimal.get_context().flags
+      assert :invalid_operation in Context.get().flags
     end)
   end
 
@@ -912,7 +912,7 @@ defmodule DecimalTest do
     Decimal.with_context(%Context{traps: []}, fn ->
       assert Decimal.mult(~d"inf", ~d"0") == d(1, :qNaN, 0)
       assert Decimal.div(~d"5", ~d"0") == d(1, :inf, 0)
-      assert :division_by_zero in Decimal.get_context().flags
+      assert :division_by_zero in Context.get().flags
     end)
   end
 
