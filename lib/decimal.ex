@@ -927,23 +927,30 @@ defmodule Decimal do
     min(decimal(num1), decimal(num2))
   end
 
+  @doc false
+  @deprecated "Use Decimal.negate/1 instead"
+  def minus(decimal) do
+    negate(decimal)
+  end
+
   @doc """
   Negates the given number.
 
   ## Examples
 
-      iex> Decimal.minus(1)
+      iex> Decimal.negate(1)
       #Decimal<-1>
 
-      iex> Decimal.minus("-Inf")
+      iex> Decimal.negate("-Inf")
       #Decimal<Infinity>
 
   """
-  @spec minus(decimal) :: t
-  def minus(%Decimal{coef: :sNaN} = num), do: error(:invalid_operation, "operation on NaN", num)
-  def minus(%Decimal{coef: :qNaN} = num), do: num
-  def minus(%Decimal{sign: sign} = num), do: context(%{num | sign: -sign})
-  def minus(num), do: minus(decimal(num))
+  doc_since("1.9.0")
+  @spec negate(decimal) :: t
+  def negate(%Decimal{coef: :sNaN} = num), do: error(:invalid_operation, "operation on NaN", num)
+  def negate(%Decimal{coef: :qNaN} = num), do: num
+  def negate(%Decimal{sign: sign} = num), do: context(%{num | sign: -sign})
+  def negate(num), do: negate(decimal(num))
 
   @doc """
   Applies the context to the given number rounding it to specified precision.

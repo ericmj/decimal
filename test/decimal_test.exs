@@ -470,16 +470,16 @@ defmodule DecimalTest do
     end
   end
 
-  test "minus/1" do
-    assert Decimal.minus(~d"0") == d(-1, 0, 0)
-    assert Decimal.minus(~d"1") == d(-1, 1, 0)
-    assert Decimal.minus(~d"-1") == d(1, 1, 0)
+  test "negate/1" do
+    assert Decimal.negate(~d"0") == d(-1, 0, 0)
+    assert Decimal.negate(~d"1") == d(-1, 1, 0)
+    assert Decimal.negate(~d"-1") == d(1, 1, 0)
 
-    assert Decimal.minus(~d"inf") == d(-1, :inf, 0)
-    assert Decimal.minus(~d"nan") == d(1, :qNaN, 0)
+    assert Decimal.negate(~d"inf") == d(-1, :inf, 0)
+    assert Decimal.negate(~d"nan") == d(1, :qNaN, 0)
 
     assert_raise Error, fn ->
-      Decimal.minus(~d"snan")
+      Decimal.negate(~d"snan")
     end
   end
 
