@@ -483,16 +483,16 @@ defmodule DecimalTest do
     end
   end
 
-  test "plus/1" do
+  test "apply_context/1" do
     Decimal.with_context(%Context{precision: 2}, fn ->
-      assert Decimal.plus(~d"0") == d(1, 0, 0)
-      assert Decimal.plus(~d"5") == d(1, 5, 0)
-      assert Decimal.plus(~d"123") == d(1, 12, 1)
-      assert Decimal.plus(~d"nan") == d(1, :qNaN, 0)
+      assert Decimal.apply_context(~d"0") == d(1, 0, 0)
+      assert Decimal.apply_context(~d"5") == d(1, 5, 0)
+      assert Decimal.apply_context(~d"123") == d(1, 12, 1)
+      assert Decimal.apply_context(~d"nan") == d(1, :qNaN, 0)
     end)
 
     assert_raise Error, fn ->
-      Decimal.plus(~d"snan")
+      Decimal.apply_context(~d"snan")
     end
   end
 
