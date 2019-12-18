@@ -130,8 +130,6 @@ defmodule Decimal do
 
   defstruct sign: 1, coef: 0, exp: 0
 
-  @context_key :"$decimal_context"
-
   defmodule Error do
     @moduledoc """
     The exception that all decimal operations may raise.
@@ -237,6 +235,21 @@ defmodule Decimal do
               traps: [:invalid_operation, :division_by_zero]
 
     @context_key :"$decimal_context"
+
+    @doc """
+    Runs function with given context.
+    """
+    doc_since("1.9.0")
+    @spec with(t(), (() -> x)) :: x when x: var
+    def with(%Context{} = context, fun) when is_function(fun, 0) do
+      old = Process.put(@context_key, context)
+
+      try do
+        fun.()
+      after
+        set(old || %Context{})
+      end
+    end
 
     @doc """
     Gets the process' context.
@@ -1587,18 +1600,10 @@ defmodule Decimal do
     tmp
   end
 
-  @doc """
-  Runs function with given context.
-  """
-  @spec with_context(Context.t(), (() -> x)) :: x when x: var
-  def with_context(%Context{} = context, fun) when is_function(fun, 0) do
-    old = Process.put(@context_key, context)
-
-    try do
-      fun.()
-    after
-      Context.set(old || %Context{})
-    end
+  @doc false
+  @deprecated "Use Decimal.Context.with/2 instead"
+  def with_context(context, fun) do
+    Decimal.Context.with(context, fun)
   end
 
   @doc false

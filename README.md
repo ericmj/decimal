@@ -43,13 +43,13 @@ automatically.
 
 The context is accessed with `Decimal.Context.get/0` and set with
 `Decimal.Context.set/1`. It can also be temporarily set with
-`Decimal.with_context/2`.
+`Decimal.Context.with/2`.
 
 ```elixir
 iex> D.Context.get()
 %Decimal.Context{flags: [:rounded, :inexact], precision: 9, rounding: :half_up,
  traps: [:invalid_operation, :division_by_zero]}
-iex> D.with_context %D.Context{precision: 2}, fn -> IO.inspect D.Context.get() end
+iex> D.Context.with(%D.Context{precision: 2}, fn -> IO.inspect D.Context.get() end)
 %Decimal.Context{flags: [], precision: 2, rounding: :half_up,
  traps: [:invalid_operation, :division_by_zero]}
 %Decimal.Context{flags: [], precision: 2, rounding: :half_up,
