@@ -1437,30 +1437,6 @@ defmodule Decimal do
     tmp
   end
 
-  @doc false
-  @deprecated "Use Decimal.Context.with/2 instead"
-  def with_context(context, fun) do
-    Decimal.Context.with(context, fun)
-  end
-
-  @doc false
-  @deprecated "Use Decimal.Context.get/0 instead"
-  def get_context() do
-    Decimal.Context.get()
-  end
-
-  @doc false
-  @deprecated "Use Decimal.Context.set/1 instead"
-  def set_context(context) do
-    Decimal.Context.set(context)
-  end
-
-  @doc false
-  @deprecated "Use Decimal.Context.update/1 instead"
-  def update_context(fun) do
-    Decimal.Context.update(fun)
-  end
-
   ## ARITHMETIC ##
 
   defp add_align(coef1, exp1, coef2, exp2) when exp1 == exp2, do: {coef1, coef2}
