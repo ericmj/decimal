@@ -211,38 +211,23 @@ defmodule DecimalTest do
     end
   end
 
-  test "compare/2" do
-    assert Decimal.compare(~d"420", ~d"42e1") == d(1, 0, 0)
-    assert Decimal.compare(~d"1", ~d"0") == d(1, 1, 0)
-    assert Decimal.compare(~d"0", ~d"1") == d(-1, 1, 0)
-    assert Decimal.compare(~d"0", ~d"-0") == d(1, 0, 0)
-    assert Decimal.compare(~d"nan", ~d"1") == d(1, :qNaN, 0)
-    assert Decimal.compare(~d"1", ~d"nan") == d(1, :qNaN, 0)
-
-    assert Decimal.compare(~d"-inf", ~d"inf") == d(-1, 1, 0)
-    assert Decimal.compare(~d"inf", ~d"-inf") == d(1, 1, 0)
-    assert Decimal.compare(~d"inf", ~d"0") == d(1, 1, 0)
-    assert Decimal.compare(~d"-inf", ~d"0") == d(-1, 1, 0)
-    assert Decimal.compare(~d"0", ~d"inf") == d(-1, 1, 0)
-    assert Decimal.compare(~d"0", ~d"-inf") == d(1, 1, 0)
-    assert Decimal.compare(~d"nan", ~d"inf") == d(1, :qNaN, 0)
-    assert Decimal.compare(~d"nan", ~d"-inf") == d(1, :qNaN, 0)
-
-    assert Decimal.compare("Inf", "Inf") == d(1, 0, 0)
-
-    assert_raise Error, fn ->
-      Decimal.compare(~d"snan", ~d"0")
-    end
-  end
-
   test "cmp/2" do
     assert Decimal.cmp(~d"420", ~d"42e1") == :eq
     assert Decimal.cmp(~d"1", ~d"0") == :gt
     assert Decimal.cmp(~d"0", ~d"1") == :lt
     assert Decimal.cmp(~d"0", ~d"-0") == :eq
 
+    assert Decimal.cmp(~d"-inf", ~d"inf") == :lt
+    assert Decimal.cmp(~d"inf", ~d"-inf") == :gt
+    assert Decimal.cmp(~d"inf", ~d"0") == :gt
+    assert Decimal.cmp(~d"-inf", ~d"0") == :lt
+    assert Decimal.cmp(~d"0", ~d"inf") == :lt
+    assert Decimal.cmp(~d"0", ~d"-inf") == :gt
+
+    assert Decimal.cmp("Inf", "Inf") == :eq
+
     assert_raise Error, fn ->
-      Decimal.compare(~d"snan", ~d"0")
+      Decimal.cmp(~d"snan", ~d"0")
     end
 
     assert_raise CaseClauseError, fn ->

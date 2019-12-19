@@ -359,21 +359,8 @@ defmodule Decimal do
     sub(decimal(num1), decimal(num2))
   end
 
-  @doc """
-  Compares two numbers numerically. If the first number is greater than the second
-  `#Decimal<1>` is returned, if less than `#Decimal<-1>` is returned. Otherwise,
-  if both numbers are equal `#Decimal<0>` is returned. If either number is a quiet
-  NaN, then that number is returned.
-
-  ## Examples
-
-      iex> Decimal.compare("1.0", 1)
-      #Decimal<0>
-
-      iex> Decimal.compare("Inf", -1)
-      #Decimal<1>
-
-  """
+  @doc false
+  @deprecated "Use Decimal.cmp/2 instead"
   @spec compare(decimal, decimal) :: t
   def compare(%Decimal{coef: :qNaN} = num1, _num2), do: num1
 
