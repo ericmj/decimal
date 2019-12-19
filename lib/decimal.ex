@@ -864,12 +864,6 @@ defmodule Decimal do
   def negate(%Decimal{sign: sign} = num), do: context(%{num | sign: -sign})
   def negate(num), do: negate(decimal(num))
 
-  @doc false
-  @deprecated "Use Decimal.apply_context/1 instead"
-  def plus(decimal) do
-    apply_context(decimal)
-  end
-
   @doc """
   Applies the context to the given number rounding it to specified precision.
   """
