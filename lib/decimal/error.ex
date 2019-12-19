@@ -15,12 +15,11 @@ defmodule Decimal.Error do
   after the operation if the result needs to be inspected.
   """
 
-  defexception [:message, :signal, :reason, :result]
+  defexception [:signal, :reason, :result]
 
-  def exception(opts) do
-    reason = if opts[:reason], do: ": " <> opts[:reason]
-    message = "#{opts[:signal]}#{reason}"
-
-    struct(__MODULE__, [message: message] ++ opts)
+  @impl true
+  def message(%{signal: signal, reason: reason}) do
+    reason = reason && ": " <> reason
+    "#{signal}#{reason}"
   end
 end
