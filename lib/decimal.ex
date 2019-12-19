@@ -845,12 +845,6 @@ defmodule Decimal do
     min(decimal(num1), decimal(num2))
   end
 
-  @doc false
-  @deprecated "Use Decimal.negate/1 instead"
-  def minus(decimal) do
-    negate(decimal)
-  end
-
   @doc """
   Negates the given number.
 
