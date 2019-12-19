@@ -289,40 +289,6 @@ defmodule Decimal do
     sub(decimal(num1), decimal(num2))
   end
 
-  @doc false
-  @deprecated "Use Decimal.cmp/2 instead. " <>
-                "This function will be re-introduced in Decimal v2.0 with new return value"
-  @spec compare(decimal, decimal) :: t
-  def compare(%Decimal{coef: :qNaN} = num1, _num2), do: num1
-
-  def compare(_num1, %Decimal{coef: :qNaN} = num2), do: num2
-
-  def compare(%Decimal{coef: :inf, sign: sign}, %Decimal{coef: :inf, sign: sign}),
-    do: %Decimal{sign: 1, coef: 0}
-
-  def compare(%Decimal{coef: :inf, sign: sign1}, %Decimal{coef: :inf, sign: sign2})
-      when sign1 < sign2,
-      do: %Decimal{sign: -1, coef: 1}
-
-  def compare(%Decimal{coef: :inf, sign: sign1}, %Decimal{coef: :inf, sign: sign2})
-      when sign1 > sign2,
-      do: %Decimal{sign: 1, coef: 1}
-
-  def compare(%Decimal{coef: :inf, sign: sign}, _num2), do: %Decimal{sign: sign, coef: 1}
-
-  def compare(_num1, %Decimal{coef: :inf, sign: sign}), do: %Decimal{sign: sign * -1, coef: 1}
-
-  def compare(%Decimal{} = num1, %Decimal{} = num2) do
-    case sub(num1, num2) do
-      %Decimal{coef: 0} -> %Decimal{sign: 1, coef: 0}
-      %Decimal{sign: sign} -> %Decimal{sign: sign, coef: 1}
-    end
-  end
-
-  def compare(num1, num2) do
-    compare(decimal(num1), decimal(num2))
-  end
-
   @doc """
   Compares two numbers numerically. If the first number is greater than the second
   `:gt` is returned, if less than `:lt` is returned, if both numbers are equal
@@ -332,25 +298,59 @@ defmodule Decimal do
 
   ## Examples
 
-      iex> Decimal.cmp("1.0", 1)
+      iex> Decimal.compare("1.0", 1)
       :eq
 
-      iex> Decimal.cmp("Inf", -1)
+      iex> Decimal.compare("Inf", -1)
       :gt
 
   """
+  @spec compare(decimal, decimal) :: t
+  def compare(%Decimal{coef: :inf, sign: sign}, %Decimal{coef: :inf, sign: sign}),
+    do: :eq
+
+  def compare(%Decimal{coef: :inf, sign: sign1}, %Decimal{coef: :inf, sign: sign2})
+      when sign1 < sign2,
+      do: :lt
+
+  def compare(%Decimal{coef: :inf, sign: sign1}, %Decimal{coef: :inf, sign: sign2})
+      when sign1 > sign2,
+      do: :gt
+
+  def compare(%Decimal{coef: :inf, sign: 1}, _num2), do: :gt
+  def compare(%Decimal{coef: :inf, sign: -1}, _num2), do: :lt
+
+  def compare(_num1, %Decimal{coef: :inf, sign: 1}), do: :lt
+  def compare(_num1, %Decimal{coef: :inf, sign: -1}), do: :gt
+
+  def compare(%Decimal{coef: :qNaN} = num1, _num2),
+    do: error(:invalid_operation, "operation on NaN", num1)
+
+  def compare(_num1, %Decimal{coef: :qNaN} = num2),
+    do: error(:invalid_operation, "operation on NaN", num2)
+
+  def compare(%Decimal{} = num1, %Decimal{} = num2) do
+    case sub(num1, num2) do
+      %Decimal{coef: 0} -> :eq
+      %Decimal{sign: 1} -> :gt
+      %Decimal{sign: -1} -> :lt
+    end
+  end
+
+  def compare(num1, num2) do
+    compare(decimal(num1), decimal(num2))
+  end
+
+  @deprecated "Use compare/2 instead"
   @spec cmp(decimal, decimal) :: :lt | :eq | :gt
   def cmp(num1, num2) do
-    case compare(num1, num2) do
-      %Decimal{coef: 1, sign: -1} -> :lt
-      %Decimal{coef: 0} -> :eq
-      %Decimal{coef: 1, sign: 1} -> :gt
-    end
+    compare(num1, num2)
   end
 
   @doc """
   Compares two numbers numerically and returns `true` if they are equal,
-  otherwise `false`.
+  otherwise `false`. If one of the operands is a quiet NaN this operation
+  will always return `false`.
 
   ## Examples
 
@@ -363,10 +363,7 @@ defmodule Decimal do
   """
   @spec equal?(decimal, decimal) :: boolean
   def equal?(num1, num2) do
-    case compare(num1, num2) do
-      %Decimal{sign: 1, coef: 0, exp: 0} -> true
-      _ -> false
-    end
+    eq?(num1, num2)
   end
 
   @doc """
@@ -387,7 +384,7 @@ defmodule Decimal do
   @spec eq?(decimal, decimal) :: boolean
   def eq?(%Decimal{coef: :qNaN}, _num2), do: false
   def eq?(_num1, %Decimal{coef: :qNaN}), do: false
-  def eq?(num1, num2), do: cmp(num1, num2) == :eq
+  def eq?(num1, num2), do: compare(num1, num2) == :eq
 
   @doc """
   Compares two numbers numerically and returns `true` if the the first argument
@@ -407,7 +404,7 @@ defmodule Decimal do
   @spec gt?(decimal, decimal) :: boolean
   def gt?(%Decimal{coef: :qNaN}, _num2), do: false
   def gt?(_num1, %Decimal{coef: :qNaN}), do: false
-  def gt?(num1, num2), do: cmp(num1, num2) == :gt
+  def gt?(num1, num2), do: compare(num1, num2) == :gt
 
   @doc """
   Compares two numbers numerically and returns `true` if the the first number is
@@ -427,7 +424,7 @@ defmodule Decimal do
   @spec lt?(decimal, decimal) :: boolean
   def lt?(%Decimal{coef: :qNaN}, _num2), do: false
   def lt?(_num1, %Decimal{coef: :qNaN}), do: false
-  def lt?(num1, num2), do: cmp(num1, num2) == :lt
+  def lt?(num1, num2), do: compare(num1, num2) == :lt
 
   @doc """
   Divides two numbers.
@@ -559,7 +556,7 @@ defmodule Decimal do
     div_sign = if sign1 == sign2, do: 1, else: -1
 
     cond do
-      compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == %Decimal{sign: -1, coef: 1} ->
+      compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == :lt ->
         %Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2}
 
       coef1 == 0 ->
@@ -629,7 +626,7 @@ defmodule Decimal do
     %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2
 
     cond do
-      compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == %Decimal{sign: -1, coef: 1} ->
+      compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == :lt ->
         %{num1 | sign: sign1}
 
       coef1 == 0 ->
@@ -726,7 +723,7 @@ defmodule Decimal do
     div_sign = if sign1 == sign2, do: 1, else: -1
 
     cond do
-      compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == %Decimal{sign: -1, coef: 1} ->
+      compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == :lt ->
         {%Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2}, %{num1 | sign: sign1}}
 
       coef1 == 0 ->
@@ -771,13 +768,13 @@ defmodule Decimal do
 
   def max(%Decimal{sign: sign1, exp: exp1} = num1, %Decimal{sign: sign2, exp: exp2} = num2) do
     case compare(num1, num2) do
-      %Decimal{sign: -1, coef: 1} ->
+      :lt ->
         num2
 
-      %Decimal{sign: 1, coef: 1} ->
+      :gt ->
         num1
 
-      %Decimal{coef: 0} ->
+      :eq ->
         cond do
           sign1 != sign2 ->
             if sign1 == 1, do: num1, else: num2
@@ -820,13 +817,13 @@ defmodule Decimal do
 
   def min(%Decimal{sign: sign1, exp: exp1} = num1, %Decimal{sign: sign2, exp: exp2} = num2) do
     case compare(num1, num2) do
-      %Decimal{sign: -1, coef: 1} ->
+      :lt ->
         num1
 
-      %Decimal{sign: 1, coef: 1} ->
+      :gt ->
         num2
 
-      %Decimal{coef: 0} ->
+      :eq ->
         cond do
           sign1 != sign2 ->
             if sign1 == -1, do: num1, else: num2
