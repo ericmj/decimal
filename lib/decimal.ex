@@ -957,12 +957,6 @@ defmodule Decimal do
     mult(decimal(num1), decimal(num2))
   end
 
-  @doc false
-  @deprecated "Use normalize/1 instead"
-  def reduce(decimal) do
-    normalize(decimal)
-  end
-
   @doc """
   Normalizes the given decimal: removes trailing zeros from coefficient while
   keeping the number numerically equivalent by increasing the exponent.
