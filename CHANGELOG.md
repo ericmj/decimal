@@ -1,6 +1,11 @@
 # CHANGELOG
 
-## v1.8.1-dev
+## v1.8.1 (2019-12-20)
+
+### Bug fixes
+
+* Fix Decimal.compare/2 with string arguments
+* Set :signal on error
 
 ## v1.8.0 (2019-06-24)
 
