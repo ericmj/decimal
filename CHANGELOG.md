@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## v1.9.0-dev
+
 ## v1.8.1 (2019-12-20)
 
 ### Bug fixes
