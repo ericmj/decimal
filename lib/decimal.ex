@@ -261,12 +261,34 @@ defmodule Decimal do
   def inf?(%Decimal{coef: :inf}), do: true
   def inf?(%Decimal{}), do: false
 
-  @doc """
-  Returns `true` if argument is a decimal number, otherwise `false`.
-  """
+  @doc false
   @spec decimal?(any) :: boolean
+  @deprecated "Use Decimal.is_decimal/1 macro instead"
   def decimal?(%Decimal{}), do: true
   def decimal?(_), do: false
+
+  @doc """
+  Returns `true` if argument is a decimal number, otherwise `false`.
+
+  ## Examples
+
+      iex> Decimal.is_decimal(Decimal.new(42))
+      true
+
+      iex> Decimal.is_decimal(42)
+      false
+
+  """
+  doc_since("1.9.0")
+  # TODO: make it similar to Kernel.is_struct when we require Elixir v1.10
+  defmacro is_decimal(term) do
+    quote do
+      case unquote(term) do
+        %Decimal{} -> true
+        _ -> false
+      end
+    end
+  end
 
   @doc """
   The absolute value of given number. Sets the number's sign to positive.
