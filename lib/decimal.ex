@@ -397,7 +397,7 @@ defmodule Decimal do
   `:gt` is returned, if less than `:lt` is returned, if both numbers are equal
   `:eq` is returned.
 
-  Neither number can be a NaN. If you need to handle quiet NaNs, use `compare/2`.
+  Neither number can be a NaN.
 
   ## Examples
 
