@@ -341,8 +341,12 @@ defmodule DecimalTest do
       Decimal.div(~d"-2", ~d"-snan")
     end
 
-    assert_raise Error, fn ->
+    assert_raise Error, "invalid_operation: 0 / 0", fn ->
       Decimal.div(~d"0", ~d"-0")
+    end
+
+    assert_raise Error, "division_by_zero", fn ->
+      Decimal.div(~d"1", ~d"0")
     end
   end
 
