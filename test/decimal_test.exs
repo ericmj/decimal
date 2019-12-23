@@ -545,19 +545,19 @@ defmodule DecimalTest do
     end
   end
 
-  test "reduce/1" do
-    assert Decimal.reduce(~d"2.1") == d(1, 21, -1)
-    assert Decimal.reduce(~d"2.10") == d(1, 21, -1)
-    assert Decimal.reduce(~d"-2") == d(-1, 2, 0)
-    assert Decimal.reduce(~d"-2.00") == d(-1, 2, 0)
-    assert Decimal.reduce(~d"200") == d(1, 2, 2)
-    assert Decimal.reduce(~d"0") == d(1, 0, 0)
-    assert Decimal.reduce(~d"-0") == d(-1, 0, 0)
-    assert Decimal.reduce(~d"-inf") == d(-1, :inf, 0)
-    assert Decimal.reduce(~d"nan") == d(1, :qNaN, 0)
+  test "normalize/1" do
+    assert Decimal.normalize(~d"2.1") == d(1, 21, -1)
+    assert Decimal.normalize(~d"2.10") == d(1, 21, -1)
+    assert Decimal.normalize(~d"-2") == d(-1, 2, 0)
+    assert Decimal.normalize(~d"-2.00") == d(-1, 2, 0)
+    assert Decimal.normalize(~d"200") == d(1, 2, 2)
+    assert Decimal.normalize(~d"0") == d(1, 0, 0)
+    assert Decimal.normalize(~d"-0") == d(-1, 0, 0)
+    assert Decimal.normalize(~d"-inf") == d(-1, :inf, 0)
+    assert Decimal.normalize(~d"nan") == d(1, :qNaN, 0)
 
     assert_raise Error, fn ->
-      Decimal.reduce(~d"snan")
+      Decimal.normalize(~d"snan")
     end
   end
 

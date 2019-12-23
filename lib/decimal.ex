@@ -1038,34 +1038,42 @@ defmodule Decimal do
     mult(decimal(num1), decimal(num2))
   end
 
+  @doc false
+  @deprecated "Use normalize/1 instead"
+  def reduce(decimal) do
+    normalize(decimal)
+  end
+
   @doc """
-  Reduces the given number. Removes trailing zeros from coefficient while
+  Normalizes the given decimal: removes trailing zeros from coefficient while
   keeping the number numerically equivalent by increasing the exponent.
 
   ## Examples
 
-      iex> Decimal.reduce(Decimal.new("1.00"))
+      iex> Decimal.normalize(Decimal.new("1.00"))
       #Decimal<1>
 
-      iex> Decimal.reduce(Decimal.new("1.01"))
+      iex> Decimal.normalize(Decimal.new("1.01"))
       #Decimal<1.01>
 
   """
-  @spec reduce(t) :: t
-  def reduce(%Decimal{coef: :sNaN} = num), do: error(:invalid_operation, "operation on NaN", num)
+  doc_since("1.9.0")
+  @spec normalize(t) :: t
+  def normalize(%Decimal{coef: :sNaN} = num),
+    do: error(:invalid_operation, "operation on NaN", num)
 
-  def reduce(%Decimal{coef: :qNaN} = num), do: num
+  def normalize(%Decimal{coef: :qNaN} = num), do: num
 
-  def reduce(%Decimal{coef: :inf} = num) do
+  def normalize(%Decimal{coef: :inf} = num) do
     # exponent?
     %{num | exp: 0}
   end
 
-  def reduce(%Decimal{sign: sign, coef: coef, exp: exp}) do
+  def normalize(%Decimal{sign: sign, coef: coef, exp: exp}) do
     if coef == 0 do
       %Decimal{sign: sign, coef: 0, exp: 0}
     else
-      %{do_reduce(coef, exp) | sign: sign} |> context
+      %{do_normalize(coef, exp) | sign: sign} |> context
     end
   end
 
@@ -1096,7 +1104,7 @@ defmodule Decimal do
   def round(%Decimal{coef: :inf} = num, _, _), do: num
 
   def round(%Decimal{} = num, n, mode) do
-    %Decimal{sign: sign, coef: coef, exp: exp} = reduce(num)
+    %Decimal{sign: sign, coef: coef, exp: exp} = normalize(num)
     digits = :erlang.integer_to_list(coef)
     target_exp = -n
     value = do_round(sign, digits, exp, target_exp, mode)
@@ -1667,9 +1675,9 @@ defmodule Decimal do
     end
   end
 
-  defp do_reduce(coef, exp) do
+  defp do_normalize(coef, exp) do
     if Kernel.rem(coef, 10) == 0 do
-      do_reduce(Kernel.div(coef, 10), exp + 1)
+      do_normalize(Kernel.div(coef, 10), exp + 1)
     else
       %Decimal{coef: coef, exp: exp}
     end
