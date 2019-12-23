@@ -939,12 +939,21 @@ defmodule Decimal do
   def negate(%Decimal{sign: sign} = num), do: context(%{num | sign: -sign})
   def negate(num), do: negate(decimal(num))
 
+  @doc false
+  @deprecated "Use Decimal.apply_context/1 instead"
+  def plus(decimal) do
+    apply_context(decimal)
+  end
+
   @doc """
   Applies the context to the given number rounding it to specified precision.
   """
-  @spec plus(t) :: t
-  def plus(%Decimal{coef: :sNaN} = num), do: error(:invalid_operation, "operation on NaN", num)
-  def plus(%Decimal{} = num), do: context(num)
+  doc_since("1.9.0")
+  @spec apply_context(t) :: t
+  def apply_context(%Decimal{coef: :sNaN} = num),
+    do: error(:invalid_operation, "operation on NaN", num)
+
+  def apply_context(%Decimal{} = num), do: context(num)
 
   @doc """
   Check if given number is positive
