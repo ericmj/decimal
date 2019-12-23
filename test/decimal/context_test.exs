@@ -104,7 +104,7 @@ defmodule Decimal.ContextTest do
 
   test "with_context/2 traps" do
     Context.with(%Context{traps: []}, fn ->
-      assert Decimal.mult(~d"inf", ~d"0") == d(1, :qNaN, 0)
+      assert Decimal.mult(~d"inf", ~d"0") == d(1, :NaN, 0)
       assert Decimal.div(~d"5", ~d"0") == d(1, :inf, 0)
       assert :division_by_zero in Context.get().flags
     end)
