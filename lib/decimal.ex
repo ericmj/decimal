@@ -130,8 +130,6 @@ defmodule Decimal do
 
   defstruct sign: 1, coef: 0, exp: 0
 
-  @context_key :"$decimal_context"
-
   defmodule Error do
     @moduledoc """
     The exception that all decimal operations may raise.
@@ -162,7 +160,7 @@ defmodule Decimal do
   defmodule Context do
     @moduledoc """
     The context is kept in the process dictionary. It can be accessed with
-    `Decimal.get_context/0` and `Decimal.set_context/1`.
+    `get/0` and `set/1`.
 
     The default context has a precision of 28, the rounding algorithm is
     `:half_up`. The set trap enablers are `:invalid_operation` and
@@ -235,6 +233,51 @@ defmodule Decimal do
               rounding: :half_up,
               flags: [],
               traps: [:invalid_operation, :division_by_zero]
+
+    @context_key :"$decimal_context"
+
+    @doc """
+    Runs function with given context.
+    """
+    doc_since("1.9.0")
+    @spec with(t(), (() -> x)) :: x when x: var
+    def with(%Context{} = context, fun) when is_function(fun, 0) do
+      old = Process.put(@context_key, context)
+
+      try do
+        fun.()
+      after
+        set(old || %Context{})
+      end
+    end
+
+    @doc """
+    Gets the process' context.
+    """
+    doc_since("1.9.0")
+    @spec get() :: t()
+    def get() do
+      Process.get(@context_key, %Context{})
+    end
+
+    @doc """
+    Set the process' context.
+    """
+    doc_since("1.9.0")
+    @spec set(t()) :: :ok
+    def set(%Context{} = context) do
+      Process.put(@context_key, context)
+      :ok
+    end
+
+    @doc """
+    Update the process' context.
+    """
+    doc_since("1.9.0")
+    @spec update((t() -> t())) :: :ok
+    def update(fun) when is_function(fun, 1) do
+      get() |> fun.() |> set()
+    end
   end
 
   defmacrop error(flags, reason, result, context \\ nil) do
@@ -558,7 +601,7 @@ defmodule Decimal do
     if coef1 == 0 do
       context(%Decimal{sign: sign, coef: 0, exp: exp1 - exp2}, [])
     else
-      prec10 = pow10(get_context().precision)
+      prec10 = pow10(Context.get().precision)
       {coef1, coef2, adjust} = div_adjust(coef1, coef2, 0)
       {coef, adjust, _rem, signals} = div_calc(coef1, coef2, 0, adjust, prec10)
 
@@ -1142,7 +1185,7 @@ defmodule Decimal do
     do: num
 
   def sqrt(%Decimal{sign: 1, coef: coef, exp: exp}) do
-    precision = get_context().precision + 1
+    precision = Context.get().precision + 1
     digits = :erlang.integer_to_list(coef)
     num_digits = length(digits)
 
@@ -1186,7 +1229,7 @@ defmodule Decimal do
     # the preferred exponent is `exp / 2` as per IEEE 754
     exp = exp >>> 1
     # guess a root 10x higher than desired precision
-    guess = pow10(get_context().precision + 1)
+    guess = pow10(Context.get().precision + 1)
     root = sqrt_loop(shifted_coef, guess)
 
     if exact and root * root === shifted_coef do
@@ -1557,43 +1600,28 @@ defmodule Decimal do
     tmp
   end
 
-  @doc """
-  Runs function with given context.
-  """
-  @spec with_context(Context.t(), (() -> x)) :: x when x: var
-  def with_context(%Context{} = context, fun) when is_function(fun, 0) do
-    old = Process.put(@context_key, context)
-
-    try do
-      fun.()
-    after
-      set_context(old || %Context{})
-    end
+  @doc false
+  @deprecated "Use Decimal.Context.with/2 instead"
+  def with_context(context, fun) do
+    Decimal.Context.with(context, fun)
   end
 
-  @doc """
-  Gets the process' context.
-  """
-  @spec get_context() :: Context.t()
-  def get_context do
-    Process.get(@context_key, %Context{})
+  @doc false
+  @deprecated "Use Decimal.Context.get/0 instead"
+  def get_context() do
+    Decimal.Context.get()
   end
 
-  @doc """
-  Set the process' context.
-  """
-  @spec set_context(Context.t()) :: :ok
-  def set_context(%Context{} = context) do
-    Process.put(@context_key, context)
-    :ok
+  @doc false
+  @deprecated "Use Decimal.Context.set/1 instead"
+  def set_context(context) do
+    Decimal.Context.set(context)
   end
 
-  @doc """
-  Update the process' context.
-  """
-  @spec update_context((Context.t() -> Context.t())) :: :ok
-  def update_context(fun) when is_function(fun, 1) do
-    get_context() |> fun.() |> set_context
+  @doc false
+  @deprecated "Use Decimal.Context.update/1 instead"
+  def update_context(fun) do
+    Decimal.Context.update(fun)
   end
 
   ## ARITHMETIC ##
@@ -1611,7 +1639,7 @@ defmodule Decimal do
       coef > 0 -> 1
       coef < 0 -> -1
       sign1 == -1 and sign2 == -1 -> -1
-      sign1 != sign2 and get_context().rounding == :floor -> -1
+      sign1 != sign2 and Context.get().rounding == :floor -> -1
       true -> 1
     end
   end
@@ -1661,7 +1689,7 @@ defmodule Decimal do
 
     {coef, _rem} = div_int_calc(coef1, coef2, 0, adjust, precision)
 
-    prec10 = pow10(get_context().precision)
+    prec10 = pow10(Context.get().precision)
 
     if coef > prec10 do
       {
@@ -1822,7 +1850,7 @@ defmodule Decimal do
   ## CONTEXT ##
 
   defp context(num, signals \\ []) do
-    context = get_context()
+    context = Context.get()
     {result, prec_signals} = precision(num, context.precision, context.rounding)
     error(put_uniq(signals, prec_signals), nil, result, context)
   end
@@ -1933,11 +1961,11 @@ defmodule Decimal do
   end
 
   defp handle_error(signals, reason, result, context) do
-    context = context || get_context()
+    context = context || Context.get()
     signals = List.wrap(signals)
 
     flags = Enum.reduce(signals, context.flags, &put_uniq(&2, &1))
-    set_context(%{context | flags: flags})
+    Context.set(%{context | flags: flags})
 
     error_signal = Enum.find(signals, &(&1 in context.traps))
     nan = if error_signal, do: :sNaN, else: :qNaN
