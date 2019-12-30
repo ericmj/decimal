@@ -453,7 +453,8 @@ defmodule Decimal do
   end
 
   @doc false
-  @deprecated "Use Decimal.cmp/2 instead"
+  @deprecated "Use Decimal.cmp/2 instead. " <>
+                "This function will be re-introduced in Decimal v2.0 with new return value"
   @spec compare(decimal, decimal) :: t
   def compare(%Decimal{coef: :qNaN} = num1, _num2), do: num1
 
@@ -1437,6 +1438,8 @@ defmodule Decimal do
 
   """
   @spec cast(float | decimal) :: t
+  @deprecated "Use Decimal.new/1 or Decimal.from_float/1 instead. " <>
+                "This function will be re-introduced in Decimal v2.0 with new return value"
   def cast(float) when is_float(float), do: from_float(float)
   def cast(value), do: new(value)
 
