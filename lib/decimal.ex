@@ -345,7 +345,7 @@ defmodule Decimal do
         :guard ->
           quote do
             is_map(unquote(term)) and :erlang.is_map_key(:__struct__, unquote(term)) and
-              is_atom(:erlang.map_get(:__struct__, unquote(term))) == Decimal
+              :erlang.map_get(:__struct__, unquote(term)) == Decimal
           end
       end
     end

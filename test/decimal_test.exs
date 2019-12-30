@@ -33,12 +33,25 @@ defmodule DecimalTest do
     refute Decimal.inf?(~d"0")
   end
 
-  test "is_decimal/1" do
+  test "is_decimal/1 expression" do
     assert Decimal.is_decimal(~d"nan")
     assert Decimal.is_decimal(~d"inf")
     assert Decimal.is_decimal(~d"0")
     refute Decimal.is_decimal(42)
     refute Decimal.is_decimal("42")
+  end
+
+  if function_exported?(:erlang, :is_map_key, 2) do
+    defp decimal?(struct) when Decimal.is_decimal(struct), do: true
+    defp decimal?(_other), do: false
+
+    test "is_decimal/1 guard" do
+      assert decimal?(~d"nan")
+      assert decimal?(~d"inf")
+      assert decimal?(~d"0")
+      refute decimal?(42)
+      refute decimal?("42")
+    end
   end
 
   test "new/1 conversion" do
