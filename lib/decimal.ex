@@ -28,12 +28,9 @@ defmodule Decimal do
     * [IBM's General Decimal Arithmetic Specification](http://speleotrove.com/decimal/decarith.html)
     * [IEEE standard 854-1987](http://754r.ucbtest.org/standards/854.pdf)
 
-  This implementation follows the above standards as closely as possible. But at
-  some places the implementation diverges from the specification. The reasons
-  are different for each case but may be that the specification doesn't map to
-  this environment, ease of implementation or that API will be nicer. Still, the
-  implementation is close enough that the specifications can be seen as
-  additional documentation that can be used when things are unclear.
+  This library follows the above specifications for reference of arithmetic
+  operation implementations, but the public APIs may differ to provide a
+  more idiomatic Elixir interface.
 
   The specification models the sign of the number as 1, for a negative number,
   and 0 for a positive number. Internally this implementation models the sign as
@@ -43,7 +40,7 @@ defmodule Decimal do
 
   There is currently no maximum or minimum values for the exponent. Because of
   that all numbers are "normal". This means that when an operation should,
-  according to the specification, return a number that "underflow" 0 is returned
+  according to the specification, return a number that "underflows" 0 is returned
   instead of Etiny. This may happen when dividing a number with infinity.
   Additionally, overflow, underflow and clamped may never be signalled.
   """
