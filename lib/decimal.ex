@@ -8,6 +8,14 @@ defmodule Decimal.Macros do
       end
     end
   end
+
+  defmacro doc_deprecated(message) do
+    if Version.match?(System.version(), ">= 1.7.0") do
+      quote do
+        @doc deprecated: unquote(message)
+      end
+    end
+  end
 end
 
 defmodule Decimal do
@@ -1458,6 +1466,7 @@ defmodule Decimal do
       :error
 
   """
+  doc_deprecated("This function will be re-introduced in Decimal v2.0 with new return value")
   @spec parse(String.t()) :: {:ok, t} | :error
   def parse(binary) when is_binary(binary) do
     case do_parse(binary) do
