@@ -33,12 +33,12 @@ defmodule DecimalTest do
     refute Decimal.inf?(~d"0")
   end
 
-  test "decimal?/1" do
-    assert Decimal.decimal?(~d"nan")
-    assert Decimal.decimal?(~d"inf")
-    assert Decimal.decimal?(~d"0")
-    refute Decimal.decimal?(42)
-    refute Decimal.decimal?("42")
+  test "is_decimal/1" do
+    assert Decimal.is_decimal(~d"nan")
+    assert Decimal.is_decimal(~d"inf")
+    assert Decimal.is_decimal(~d"0")
+    refute Decimal.is_decimal(42)
+    refute Decimal.is_decimal("42")
   end
 
   test "new/1 conversion" do
