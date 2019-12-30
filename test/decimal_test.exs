@@ -120,27 +120,6 @@ defmodule DecimalTest do
     assert Decimal.from_float(-1.5) == d(-1, 15, -1)
   end
 
-  # TODO: uncomment on decimal 2.0
-  # test "cast/1" do
-  #   assert Decimal.cast(123) == d(1, 123, 0)
-  #   assert Decimal.cast(123.0) == d(1, 1230, -1)
-  #   assert Decimal.cast("123") == d(1, 123, 0)
-  #   assert Decimal.cast("123.0") == d(1, 1230, -1)
-  #   assert Decimal.new(123) |> Decimal.cast() == Decimal.new(123)
-
-  #   assert_raise Error, fn ->
-  #     Decimal.cast("one two three")
-  #   end
-
-  #   assert_raise Error, fn ->
-  #     Decimal.cast("e0")
-  #   end
-
-  #   assert_raise FunctionClauseError, fn ->
-  #     Decimal.cast(:one_two_three)
-  #   end
-  # end
-
   test "abs/1" do
     assert Decimal.abs(~d"123") == d(1, 123, 0)
     assert Decimal.abs(~d"-123") == d(1, 123, 0)
