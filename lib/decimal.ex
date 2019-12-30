@@ -278,14 +278,42 @@ defmodule Decimal do
       iex> Decimal.is_decimal(42)
       false
 
+  Allowed in guard tests on OTP 21+.
   """
   doc_since("1.9.0")
-  # TODO: make it similar to Kernel.is_struct when we require Elixir v1.10
-  defmacro is_decimal(term) do
-    quote do
-      case unquote(term) do
-        %Decimal{} -> true
-        _ -> false
+  defmacro is_decimal(term)
+
+  if function_exported?(:erlang, :is_map_key, 2) do
+    defmacro is_decimal(term) do
+      case __CALLER__.context do
+        nil ->
+          quote do
+            case unquote(term) do
+              %_{} -> true
+              _ -> false
+            end
+          end
+
+        :match ->
+          raise ArgumentError,
+                "invalid expression in match, is_decimal is not allowed in patterns " <>
+                  "such as function clauses, case clauses or on the left side of the = operator"
+
+        :guard ->
+          quote do
+            is_map(unquote(term)) and :erlang.is_map_key(:__struct__, unquote(term)) and
+              is_atom(:erlang.map_get(:__struct__, unquote(term))) == Decimal
+          end
+      end
+    end
+  else
+    # TODO: remove when we require Elixir v1.10
+    defmacro is_decimal(term) do
+      quote do
+        case unquote(term) do
+          %Decimal{} -> true
+          _ -> false
+        end
       end
     end
   end
