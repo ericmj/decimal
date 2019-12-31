@@ -290,7 +290,8 @@ defmodule Decimal do
   end
 
   @doc false
-  @deprecated "Use Decimal.cmp/2 instead"
+  @deprecated "Use Decimal.cmp/2 instead. " <>
+                "This function will be re-introduced in Decimal v2.0 with new return value"
   @spec compare(decimal, decimal) :: t
   def compare(%Decimal{coef: :qNaN} = num1, _num2), do: num1
 
@@ -1246,34 +1247,9 @@ defmodule Decimal do
     |> new()
   end
 
-  @doc """
-  Creates a new decimal number from an integer, string, float, or existing decimal number.
-
-  Because conversion from a floating point number is not exact, it's recommended
-  to instead use `new/1` or `from_float/1` when the argument's type is certain.
-  See `from_float/1`.
-
-  If the value cannot be cast, Decimal.Error is raised.
-
-  ## Examples
-
-      iex> Decimal.cast(3)
-      #Decimal<3>
-
-      iex> Decimal.cast(3.0)
-      #Decimal<3.0>
-
-      iex> Decimal.cast("3")
-      #Decimal<3>
-
-      iex> Decimal.cast("3.0")
-      #Decimal<3.0>
-
-      iex> Decimal.new(3) |> Decimal.cast()
-      #Decimal<3>
-
-  """
   @spec cast(float | decimal) :: t
+  @deprecated "Use Decimal.new/1 or Decimal.from_float/1 instead. " <>
+                "This function will be re-introduced in Decimal v2.0 with new return value"
   def cast(float) when is_float(float), do: from_float(float)
   def cast(value), do: new(value)
 
