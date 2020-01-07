@@ -1247,11 +1247,28 @@ defmodule Decimal do
     |> new()
   end
 
-  @spec cast(float | decimal) :: t
-  @deprecated "Use Decimal.new/1 or Decimal.from_float/1 instead. " <>
-                "This function will be re-introduced in Decimal v2.0 with new return value"
-  def cast(float) when is_float(float), do: from_float(float)
-  def cast(value), do: new(value)
+  @doc """
+  Creates a new decimal number from an integer, string, float, or existing decimal number.
+
+  Because conversion from a floating point number is not exact, it's recommended
+  to instead use `new/1` or `from_float/1` when the argument's type is certain.
+  See `from_float/1`.
+
+  ## Examples
+
+      iex> {:ok, decimal} = Decimal.cast(3)
+      iex> decimal
+      #Decimal<3>
+
+      iex> Decimal.cast("bad")
+      :error
+
+  """
+  @spec cast(decimal | float) :: {:ok, t} | :error
+  def cast(integer) when is_integer(integer), do: {:ok, Decimal.new(integer)}
+  def cast(%Decimal{} = decimal), do: {:ok, decimal}
+  def cast(binary) when is_binary(binary), do: parse(binary)
+  def cast(float) when is_float(float), do: {:ok, from_float(float)}
 
   @doc """
   Parses a binary into a decimal.
