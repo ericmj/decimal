@@ -1,6 +1,24 @@
 # CHANGELOG
 
-## v1.9.0-dev
+## v1.9.0-rc.0 (2020-01-07)
+
+### Enhancements
+
+* Add `Decimal.negate/1`
+* Add `Decimal.apply_context/1`
+* Add `Decimal.normalize/1`
+* Add `Decimal.Context.with/2`, `Decimal.Context.get/1`, `Decimal.Context.set/2`,
+  and `Decimal.Context.update/1`
+* Add `Decimal.is_decimal/1`
+
+### Deprecations
+
+* Deprecate `Decimal.minus/1` in favour of the new `Decimal.negate/1`
+* Deprecate `Decimal.plus/1` in favour of the new `Decimal.apply_context/1`
+* Deprecate `Decimal.reduce/1` in favour of the new `Decimal.normalize/1`
+* Deprecate `Decimal.with_context/2`, `Decimal.get_context/1`, `Decimal.set_context/2`,
+  and `Decimal.update_context/1` in favour of new functions on the `Decimal.Context` module
+* Deprecate `Decimal.decimal?/1` in favour of the new `Decimal.is_decimal/1`
 
 ## v1.8.1 (2019-12-20)
 
