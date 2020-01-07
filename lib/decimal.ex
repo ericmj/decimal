@@ -141,12 +141,6 @@ defmodule Decimal do
   def inf?(%Decimal{coef: :inf}), do: true
   def inf?(%Decimal{}), do: false
 
-  @doc false
-  @spec decimal?(any) :: boolean
-  @deprecated "Use Decimal.is_decimal/1 macro instead"
-  def decimal?(%Decimal{}), do: true
-  def decimal?(_), do: false
-
   @doc """
   Returns `true` if argument is a decimal number, otherwise `false`.
 
@@ -842,12 +836,6 @@ defmodule Decimal do
     min(decimal(num1), decimal(num2))
   end
 
-  @doc false
-  @deprecated "Use Decimal.negate/1 instead"
-  def minus(decimal) do
-    negate(decimal)
-  end
-
   @doc """
   Negates the given number.
 
@@ -866,12 +854,6 @@ defmodule Decimal do
   def negate(%Decimal{coef: :qNaN} = num), do: num
   def negate(%Decimal{sign: sign} = num), do: context(%{num | sign: -sign})
   def negate(num), do: negate(decimal(num))
-
-  @doc false
-  @deprecated "Use Decimal.apply_context/1 instead"
-  def plus(decimal) do
-    apply_context(decimal)
-  end
 
   @doc """
   Applies the context to the given number rounding it to specified precision.
@@ -964,12 +946,6 @@ defmodule Decimal do
 
   def mult(num1, num2) do
     mult(decimal(num1), decimal(num2))
-  end
-
-  @doc false
-  @deprecated "Use normalize/1 instead"
-  def reduce(decimal) do
-    normalize(decimal)
   end
 
   @doc """
@@ -1179,14 +1155,6 @@ defmodule Decimal do
 
   def new(int) when is_integer(int),
     do: %Decimal{sign: if(int < 0, do: -1, else: 1), coef: Kernel.abs(int)}
-
-  def new(float) when is_float(float) do
-    IO.warn(
-      "passing float to Decimal.new/1 is deprecated as floats have inherent inaccuracy. Use Decimal.from_float/1 or Decimal.cast/1 instead"
-    )
-
-    from_float(float)
-  end
 
   def new(binary) when is_binary(binary) do
     case do_parse(binary) do
@@ -1458,30 +1426,6 @@ defmodule Decimal do
     exp = if tmp < @power_of_2_to_52, do: exp, else: exp + 1
     <<tmp::float>> = <<sign::size(1), exp + 1023::size(11), tmp::size(52)>>
     tmp
-  end
-
-  @doc false
-  @deprecated "Use Decimal.Context.with/2 instead"
-  def with_context(context, fun) do
-    Decimal.Context.with(context, fun)
-  end
-
-  @doc false
-  @deprecated "Use Decimal.Context.get/0 instead"
-  def get_context() do
-    Decimal.Context.get()
-  end
-
-  @doc false
-  @deprecated "Use Decimal.Context.set/1 instead"
-  def set_context(context) do
-    Decimal.Context.set(context)
-  end
-
-  @doc false
-  @deprecated "Use Decimal.Context.update/1 instead"
-  def update_context(fun) do
-    Decimal.Context.update(fun)
   end
 
   ## ARITHMETIC ##
