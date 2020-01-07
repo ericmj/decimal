@@ -34,7 +34,7 @@ defmodule Decimal.Mixfile do
   defp package() do
     [
       maintainers: ["Eric Meadows-Jönsson"],
-      licenses: ["Apache 2.0"],
+      licenses: ["Apache-2.0"],
       links: %{"GitHub" => "https://github.com/ericmj/decimal"}
     ]
   end
