@@ -793,15 +793,6 @@ defmodule DecimalTest do
     end)
   end
 
-  test "error sets result" do
-    try do
-      Decimal.mult(~d"inf", ~d"0")
-    rescue
-      ex in [Error] ->
-        assert ex.result == d(1, :sNaN, 0)
-    end
-  end
-
   test "issue #13" do
     round_down = &Decimal.round(&1, 0, :down)
     round_up = &Decimal.round(&1, 0, :up)
