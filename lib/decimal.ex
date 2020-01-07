@@ -141,12 +141,6 @@ defmodule Decimal do
   def inf?(%Decimal{coef: :inf}), do: true
   def inf?(%Decimal{}), do: false
 
-  @doc false
-  @spec decimal?(any) :: boolean
-  @deprecated "Use Decimal.is_decimal/1 macro instead"
-  def decimal?(%Decimal{}), do: true
-  def decimal?(_), do: false
-
   @doc """
   Returns `true` if argument is a decimal number, otherwise `false`.
 
