@@ -7,7 +7,6 @@ defmodule Decimal.Error do
     * `signal` - the signalled error, additional signalled errors will be found
       in the context.
     * `reason` - the reason for the error.
-    * `result` - the result of the operation signalling the error.
 
   Rescuing the error to access the result or the other fields of the error is
   discouraged and should only be done for exceptional conditions. It is more
@@ -15,7 +14,7 @@ defmodule Decimal.Error do
   after the operation if the result needs to be inspected.
   """
 
-  defexception [:signal, :reason, :result]
+  defexception [:signal, :reason]
 
   @impl true
   def message(%{signal: signal, reason: reason}) do

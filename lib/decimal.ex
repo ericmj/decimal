@@ -1836,7 +1836,7 @@ defmodule Decimal do
     result = if match?(%Decimal{coef: :NaN}, result), do: %{result | coef: nan}, else: result
 
     if error_signal do
-      error = [signal: error_signal, reason: reason, result: result]
+      error = [signal: error_signal, reason: reason]
       {:error, error}
     else
       {:ok, result}
