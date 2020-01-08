@@ -1264,11 +1264,12 @@ defmodule Decimal do
       :error
 
   """
-  @spec cast(decimal | float) :: {:ok, t} | :error
+  @spec cast(term) :: {:ok, t} | :error
   def cast(integer) when is_integer(integer), do: {:ok, Decimal.new(integer)}
   def cast(%Decimal{} = decimal), do: {:ok, decimal}
   def cast(binary) when is_binary(binary), do: parse(binary)
   def cast(float) when is_float(float), do: {:ok, from_float(float)}
+  def cast(_), do: :error
 
   @doc """
   Parses a binary into a decimal.

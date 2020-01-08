@@ -127,10 +127,7 @@ defmodule DecimalTest do
 
     assert Decimal.cast("one two three") == :error
     assert Decimal.cast("e0") == :error
-
-    assert_raise FunctionClauseError, fn ->
-      Decimal.cast(:one_two_three)
-    end
+    assert Decimal.cast(:one_two_three) == :error
   end
 
   test "abs/1" do
