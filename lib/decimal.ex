@@ -1157,9 +1157,9 @@ defmodule Decimal do
     do: %Decimal{sign: if(int < 0, do: -1, else: 1), coef: Kernel.abs(int)}
 
   def new(binary) when is_binary(binary) do
-    case do_parse(binary) do
-      {:ok, decimal} -> decimal
-      {:error, error} -> raise Error, error
+    case parse(binary) do
+      {decimal, ""} -> decimal
+      _ -> raise Error, reason: "number parsing syntax: #{inspect(binary)}"
     end
   end
 
@@ -1232,34 +1232,52 @@ defmodule Decimal do
   @spec cast(term) :: {:ok, t} | :error
   def cast(integer) when is_integer(integer), do: {:ok, Decimal.new(integer)}
   def cast(%Decimal{} = decimal), do: {:ok, decimal}
-  def cast(binary) when is_binary(binary), do: parse(binary)
   def cast(float) when is_float(float), do: {:ok, from_float(float)}
+
+  def cast(binary) when is_binary(binary) do
+    case parse(binary) do
+      {decimal, ""} -> {:ok, decimal}
+      _ -> :error
+    end
+  end
+
   def cast(_), do: :error
 
   @doc """
   Parses a binary into a decimal.
 
-  If successful, returns a tuple in the form of `{:ok, decimal}`,
+  If successful, returns a tuple in the form of `{decimal, remainder_of_binary}`,
   otherwise `:error`.
 
   ## Examples
 
       iex> Decimal.parse("3.14")
-      {:ok, %Decimal{coef: 314, exp: -2, sign: 1}}
+      {%Decimal{coef: 314, exp: -2, sign: 1}, ""}
+
+      iex> Decimal.parse("3.14.15")
+      {%Decimal{coef: 314, exp: -2, sign: 1}, ".15"}
 
       iex> Decimal.parse("-1.1e3")
-      {:ok, %Decimal{coef: 11, exp: 2, sign: -1}}
+      {%Decimal{coef: 11, exp: 2, sign: -1}, ""}
 
       iex> Decimal.parse("bad")
       :error
 
   """
-  @spec parse(String.t()) :: {:ok, t} | :error
-  def parse(binary) when is_binary(binary) do
-    case do_parse(binary) do
-      {:ok, decimal} -> {:ok, decimal}
-      {:error, _} -> :error
+  @spec parse(binary()) :: {t(), binary()} | :error
+  def parse("+" <> rest) do
+    parse_unsign(rest)
+  end
+
+  def parse("-" <> rest) do
+    case parse_unsign(rest) do
+      {%Decimal{} = num, rest} -> {%{num | sign: -1}, rest}
+      :error -> :error
     end
+  end
+
+  def parse(binary) when is_binary(binary) do
+    parse_unsign(binary)
   end
 
   @doc """
@@ -1687,49 +1705,45 @@ defmodule Decimal do
 
   ## PARSING ##
 
-  defp do_parse("+" <> rest = raw) do
-    rest |> String.downcase() |> parse_unsign(raw)
-  end
-
-  defp do_parse("-" <> rest = raw) do
-    case rest |> String.downcase() |> parse_unsign(raw) do
-      {:ok, num} -> {:ok, %{num | sign: -1}}
-      {:error, error} -> {:error, error}
+  defp parse_unsign(<<first, remainder::size(7)-binary, rest::binary>>) when first in [?i, ?I] do
+    if String.downcase(remainder) == "nfinity" do
+      {%Decimal{coef: :inf}, rest}
+    else
+      :error
     end
   end
 
-  defp do_parse(bin) do
-    bin |> String.downcase() |> parse_unsign(bin)
+  defp parse_unsign(<<first, remainder::size(2)-binary, rest::binary>>) when first in [?i, ?I] do
+    if String.downcase(remainder) == "nf" do
+      {%Decimal{coef: :inf}, rest}
+    else
+      :error
+    end
   end
 
-  defp parse_unsign("inf", _) do
-    {:ok, %Decimal{coef: :inf}}
+  defp parse_unsign(<<first, remainder::size(3)-binary, rest::binary>>) when first in [?s, ?S] do
+    if String.downcase(remainder) == "nan" do
+      {%Decimal{coef: :sNaN}, rest}
+    else
+      :error
+    end
   end
 
-  defp parse_unsign("infinity", _) do
-    {:ok, %Decimal{coef: :inf}}
+  defp parse_unsign(<<first, remainder::size(2)-binary, rest::binary>>) when first in [?n, ?N] do
+    if String.downcase(remainder) == "an" do
+      {%Decimal{coef: :qNaN}, rest}
+    else
+      :error
+    end
   end
 
-  defp parse_unsign("snan", _) do
-    {:ok, %Decimal{coef: :sNaN}}
-  end
-
-  defp parse_unsign("nan", _) do
-    {:ok, %Decimal{coef: :qNaN}}
-  end
-
-  defp parse_unsign(bin, raw) do
+  defp parse_unsign(bin) do
     {int, rest} = parse_digits(bin)
     {float, rest} = parse_float(rest)
     {exp, rest} = parse_exp(rest)
 
-    if rest != "" or (int == [] and float == []) do
-      handle_error(
-        :invalid_operation,
-        "number parsing syntax: " <> raw,
-        %Decimal{coef: :NaN},
-        nil
-      )
+    if int == [] and float == [] do
+      :error
     else
       int = if int == [], do: '0', else: int
       exp = if exp == [], do: '0', else: exp
@@ -1739,14 +1753,14 @@ defmodule Decimal do
         exp: List.to_integer(exp) - length(float)
       }
 
-      {:ok, number}
+      {number, rest}
     end
   end
 
   defp parse_float("." <> rest), do: parse_digits(rest)
   defp parse_float(bin), do: {[], bin}
 
-  defp parse_exp(<<?e, rest::binary>>) do
+  defp parse_exp(<<e, rest::binary>>) when e in [?e, ?E] do
     case rest do
       <<sign, rest::binary>> when sign in [?+, ?-] ->
         {digits, rest} = parse_digits(rest)

@@ -9,6 +9,74 @@ defmodule DecimalTest do
 
   doctest Decimal
 
+  test "parse/1" do
+    assert Decimal.parse("123") == {d(1, 123, 0), ""}
+    assert Decimal.parse("+123") == {d(1, 123, 0), ""}
+    assert Decimal.parse("-123") == {d(-1, 123, 0), ""}
+    assert Decimal.parse("-123x") == {d(-1, 123, 0), "x"}
+    assert Decimal.parse("-123X") == {d(-1, 123, 0), "X"}
+
+    assert Decimal.parse("123.0") == {d(1, 1230, -1), ""}
+    assert Decimal.parse("+123.0") == {d(1, 1230, -1), ""}
+    assert Decimal.parse("-123.0") == {d(-1, 1230, -1), ""}
+    assert Decimal.parse("-123.0x") == {d(-1, 1230, -1), "x"}
+
+    assert Decimal.parse("1.5") == {d(1, 15, -1), ""}
+    assert Decimal.parse("+1.5") == {d(1, 15, -1), ""}
+    assert Decimal.parse("-1.5") == {d(-1, 15, -1), ""}
+    assert Decimal.parse("-1.5x") == {d(-1, 15, -1), "x"}
+
+    assert Decimal.parse("0") == {d(1, 0, 0), ""}
+    assert Decimal.parse("+0") == {d(1, 0, 0), ""}
+    assert Decimal.parse("-0") == {d(-1, 0, 0), ""}
+
+    assert Decimal.parse("0.") == {d(1, 0, 0), ""}
+    assert Decimal.parse("0.x") == {d(1, 0, 0), "x"}
+    assert Decimal.parse(".0") == {d(1, 0, -1), ""}
+    assert Decimal.parse(".0x") == {d(1, 0, -1), "x"}
+
+    assert Decimal.parse("0.0") == {d(1, 0, -1), ""}
+    assert Decimal.parse("-0.0") == {d(-1, 0, -1), ""}
+    assert Decimal.parse("+0.0") == {d(1, 0, -1), ""}
+
+    assert Decimal.parse("0.0.0") == {d(1, 0, -1), ".0"}
+    assert Decimal.parse("-0.0.0") == {d(-1, 0, -1), ".0"}
+    assert Decimal.parse("+0.0.0") == {d(1, 0, -1), ".0"}
+
+    assert Decimal.parse("1230e13") == {d(1, 1230, 13), ""}
+    assert Decimal.parse("+1230e+2") == {d(1, 1230, 2), ""}
+    assert Decimal.parse("-1230e-2") == {d(-1, 1230, -2), ""}
+    assert Decimal.parse("-1230e-2x") == {d(-1, 1230, -2), "x"}
+
+    assert Decimal.parse("1230.00e13") == {d(1, 123_000, 11), ""}
+    assert Decimal.parse("+1230.1230e+5") == {d(1, 12_301_230, 1), ""}
+    assert Decimal.parse("-1230.01010e-5") == {d(-1, 123_001_010, -10), ""}
+    assert Decimal.parse("-1230.01010e-5x") == {d(-1, 123_001_010, -10), "x"}
+
+    assert Decimal.parse("0e0") == {d(1, 0, 0), ""}
+    assert Decimal.parse("+0e-0") == {d(1, 0, 0), ""}
+    assert Decimal.parse("-0e+0") == {d(-1, 0, 0), ""}
+    assert Decimal.parse("-0e+0x") == {d(-1, 0, 0), "x"}
+
+    assert Decimal.parse("inf") == {d(1, :inf, 0), ""}
+    assert Decimal.parse("infinity") == {d(1, :inf, 0), ""}
+    assert Decimal.parse("INFinity") == {d(1, :inf, 0), ""}
+    assert Decimal.parse("INFINITY") == {d(1, :inf, 0), ""}
+
+    assert Decimal.parse("nan") == {d(1, :qNaN, 0), ""}
+    assert Decimal.parse("-NaN") == {d(-1, :qNaN, 0), ""}
+    assert Decimal.parse("nAn") == {d(1, :qNaN, 0), ""}
+    assert Decimal.parse("-sNaN") == {d(-1, :sNaN, 0), ""}
+    assert Decimal.parse("snAn") == {d(1, :sNaN, 0), ""}
+
+    assert Decimal.parse("42.+42") == {d(1, 42, 0), "+42"}
+
+    assert Decimal.parse("") == :error
+    assert Decimal.parse("a") == :error
+    assert Decimal.parse("test") == :error
+    assert Decimal.parse("e0") == :error
+  end
+
   test "nan?/1" do
     assert Decimal.nan?(~d"nan")
     refute Decimal.nan?(~d"0")
@@ -51,48 +119,15 @@ defmodule DecimalTest do
 
   test "new/1 parsing" do
     assert Decimal.new("123") == d(1, 123, 0)
-    assert Decimal.new("+123") == d(1, 123, 0)
-    assert Decimal.new("-123") == d(-1, 123, 0)
 
-    assert Decimal.new("123.0") == d(1, 1230, -1)
-    assert Decimal.new("+123.0") == d(1, 1230, -1)
-    assert Decimal.new("-123.0") == d(-1, 1230, -1)
-
-    assert Decimal.new("1.5") == d(1, 15, -1)
-    assert Decimal.new("+1.5") == d(1, 15, -1)
-    assert Decimal.new("-1.5") == d(-1, 15, -1)
-
-    assert Decimal.new(".0") == d(1, 0, -1)
-    assert Decimal.new("0.") == d(1, 0, 0)
-
-    assert Decimal.new("0") == d(1, 0, 0)
-    assert Decimal.new("+0") == d(1, 0, 0)
-    assert Decimal.new("-0") == d(-1, 0, 0)
-
-    assert Decimal.new("1230e13") == d(1, 1230, 13)
-    assert Decimal.new("+1230e+2") == d(1, 1230, 2)
-    assert Decimal.new("-1230e-2") == d(-1, 1230, -2)
-
-    assert Decimal.new("1230.00e13") == d(1, 123_000, 11)
-    assert Decimal.new("+1230.1230e+5") == d(1, 12_301_230, 1)
-    assert Decimal.new("-1230.01010e-5") == d(-1, 123_001_010, -10)
-
-    assert Decimal.new("0e0") == d(1, 0, 0)
-    assert Decimal.new("+0e-0") == d(1, 0, 0)
-    assert Decimal.new("-0e+0") == d(-1, 0, 0)
-
-    assert Decimal.new("inf") == d(1, :inf, 0)
-    assert Decimal.new("infinity") == d(1, :inf, 0)
-    assert Decimal.new("-InfInitY") == d(-1, :inf, 0)
-
-    assert Decimal.new("nAn") == d(1, :qNaN, 0)
-    assert Decimal.new("-NaN") == d(-1, :qNaN, 0)
-
-    assert Decimal.new("snAn") == d(1, :sNaN, 0)
-    assert Decimal.new("-sNaN") == d(-1, :sNaN, 0)
+    assert Decimal.new("123.45") == d(1, 12345, -2)
 
     assert_raise Error, fn ->
       Decimal.new("")
+    end
+
+    assert_raise Error, fn ->
+      Decimal.new("123x")
     end
 
     assert_raise Error, fn ->
