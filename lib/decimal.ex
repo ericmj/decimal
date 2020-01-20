@@ -1714,10 +1714,7 @@ defmodule Decimal do
 
     flags = Enum.reduce(signals, context.flags, &put_uniq(&2, &1))
     Context.set(%{context | flags: flags})
-
     error_signal = Enum.find(signals, &(&1 in context.traps))
-    nan = :NaN
-    result = if match?(%Decimal{coef: :NaN}, result), do: %{result | coef: nan}, else: result
 
     if error_signal do
       error = [signal: error_signal, reason: reason]
