@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## v2.0.0-rc.0 (2020-01-21)
+
+Decimal v2.0 requires Elixir v1.2+.
+
+### Breaking changes
+
+* Change `Decimal.compare/2` to return `:lt | :eq | :gt`
+* Change `Decimal.cast/1` to return `{:ok, t} | :error`
+* Change `Decimal.parse/1` to return `{t, binary} | :error`
+* Remove `:message` and `:result` fields from `Decimal.Error`
+* Remove sNaN
+* Rename qNaN to NaN
+* Remove deprecated support for floats in `Decimal.new/1`
+* Remove deprecated `Decimal.minus/1`
+* Remove deprecated `Decimal.plus/1`
+* Remove deprecated `Decimal.reduce/1`
+* Remove deprecated `Decimal.with_context/2`, `Decimal.get_context/1`, `Decimal.set_context/1`,
+  and `Decimal.update_context/1`
+* Remove deprecated `Decimal.decimal?/1
+
+### Deprecations
+
+* Deprecate `Decimal.cmp/2`
+
 ## v1.9.0-rc.0 (2020-01-07)
 
 ### Enhancements
