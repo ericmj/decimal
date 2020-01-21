@@ -18,7 +18,7 @@ Decimal v2.0 requires Elixir v1.2+.
 * Remove deprecated `Decimal.reduce/1`
 * Remove deprecated `Decimal.with_context/2`, `Decimal.get_context/1`, `Decimal.set_context/1`,
   and `Decimal.update_context/1`
-* Remove deprecated `Decimal.decimal?/1
+* Remove deprecated `Decimal.decimal?/1`
 
 ### Deprecations
 
