@@ -96,11 +96,11 @@ Using compare operators (`<`, `=`, `>`) directly with two decimals may not retur
 the correct result. Instead use comparison functions.
 
 ```elixir
-iex> D.cmp(-1, 0)
+iex> D.compare(-1, 0)
 :lt
-iex> D.cmp(0, -1)
+iex> D.compare(0, -1)
 :gt
-iex> D.cmp(0, 0)
+iex> D.compare(0, 0)
 :eq
 
 iex> D.equal?(-1, 0)
