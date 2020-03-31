@@ -277,7 +277,7 @@ defmodule DecimalTest do
   end
   
   test "gte?/2" do
-    refute Decimal.gte?(~d"420", ~d"42e1")
+    assert Decimal.gte?(~d"420", ~d"42e1")
     assert Decimal.gte?(~d"0", ~d"0")
     assert Decimal.gte?(~d"1", ~d"0")
     refute Decimal.gte?(~d"0", ~d"1")
@@ -296,7 +296,7 @@ defmodule DecimalTest do
   end
   
   test "lte?/2" do
-    refute Decimal.lte?(~d"420", ~d"42e1")
+    assert Decimal.lte?(~d"420", ~d"42e1")
     refute Decimal.lte?(~d"1", ~d"0")
     assert Decimal.lte?(~d"0", ~d"0")
     assert Decimal.lte?(~d"0", ~d"1")
