@@ -285,7 +285,7 @@ defmodule Decimal do
       :gt
 
   """
-  @spec compare(decimal, decimal) :: t
+  @spec compare(decimal, decimal) :: :lt | :gt | :eq
   def compare(%Decimal{coef: :inf, sign: sign}, %Decimal{coef: :inf, sign: sign}),
     do: :eq
 
