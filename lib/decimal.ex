@@ -1391,6 +1391,30 @@ defmodule Decimal do
     tmp
   end
 
+  @doc """
+  Returns `true` when the given `decimal` has no significant digits after the decimal point.
+
+  ## Examples
+
+      iex> "1.00" |> Decimal.new() |> Decimal.integer?()
+      true
+
+      iex> "1.1000" |> Decimal.new() |> Decimal.integer?()
+      false
+  """
+  doc_since("2.0.0")
+  @spec integer?(t) :: boolean
+  def integer?(%Decimal{coef: :NaN}), do: false
+  def integer?(%Decimal{coef: :inf}), do: false
+
+  def integer?(%Decimal{} = num) do
+    normalized = normalize(num)
+    normalized.exp >= 0 or number_after_dot(normalized) == 0
+  end
+
+  defp number_after_dot(%Decimal{coef: coef, exp: exp}),
+    do: Kernel.rem(coef, exp |> Kernel.abs() |> pow10())
+
   ## ARITHMETIC ##
 
   defp add_align(coef1, exp1, coef2, exp2) when exp1 == exp2, do: {coef1, coef2}

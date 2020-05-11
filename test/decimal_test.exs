@@ -747,6 +747,23 @@ defmodule DecimalTest do
     end)
   end
 
+  test "integer?/1" do
+    assert Decimal.integer?(~d"1.0000")
+    assert Decimal.integer?(~d"1")
+    assert Decimal.integer?(~d"-1")
+    assert Decimal.integer?(%Decimal{coef: 100, exp: -2})
+    assert Decimal.integer?(~d"1e100")
+
+    refute Decimal.integer?(~d"0.1")
+    refute Decimal.integer?(~d"0.10")
+    refute Decimal.integer?(~d"0.1000")
+    refute Decimal.integer?(~d"0.1234")
+    refute Decimal.integer?(~d"-0.1234")
+    refute Decimal.integer?(~d"1e-100")
+    refute Decimal.integer?(~d"inf")
+    refute Decimal.integer?(~d"NaN")
+  end
+
   test "issue #13" do
     round_down = &Decimal.round(&1, 0, :down)
     round_up = &Decimal.round(&1, 0, :up)
