@@ -1487,7 +1487,7 @@ defmodule Decimal do
 
   defp pow10(num) when num > 104, do: pow10(104) * pow10(num - 104)
 
-  defp base10?(num) when num > unquote(pow10_max) do
+  defp base10?(num) when num >= unquote(pow10_max) do
     if Kernel.rem(num, unquote(pow10_max)) == 0 do
       base10?(Kernel.div(num, unquote(pow10_max)))
     else
