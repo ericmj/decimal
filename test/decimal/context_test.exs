@@ -91,6 +91,17 @@ defmodule Decimal.ContextTest do
       assert :inexact in Context.get().flags
     end)
 
+    Context.with(%Context{precision: 111}, fn ->
+      assert [] = Context.get().flags
+
+      Decimal.div(
+        ~d"10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        ~d"17"
+      )
+
+      assert [:rounded] = Context.get().flags
+    end)
+
     Context.with(%Context{precision: 2}, fn ->
       assert [] = Context.get().flags
 

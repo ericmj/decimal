@@ -23,7 +23,7 @@ defmodule Decimal do
   ## Specifications
 
     * [IBM's General Decimal Arithmetic Specification](http://speleotrove.com/decimal/decarith.html)
-    * [IEEE standard 854-1987](http://754r.ucbtest.org/standards/854.pdf)
+    * [IEEE standard 854-1987](http://web.archive.org/web/20150908012941/http://754r.ucbtest.org/standards/854.pdf)
 
   This library follows the above specifications for reference of arithmetic
   operation implementations, but the public APIs may differ to provide a
@@ -1487,7 +1487,7 @@ defmodule Decimal do
 
   defp pow10(num) when num > 104, do: pow10(104) * pow10(num - 104)
 
-  defp base10?(num) when num > unquote(pow10_max) do
+  defp base10?(num) when num >= unquote(pow10_max) do
     if Kernel.rem(num, unquote(pow10_max)) == 0 do
       base10?(Kernel.div(num, unquote(pow10_max)))
     else
