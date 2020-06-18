@@ -110,7 +110,7 @@ defmodule DecimalTest do
     assert Decimal.new(d(-1, 3, 2)) == d(-1, 3, 2)
     assert Decimal.new(123) == d(1, 123, 0)
 
-    assert_raise FunctionClauseError, fn ->
+    assert_raise Decimal.Error, fn ->
       Decimal.new(:atom)
     end
   end
@@ -834,5 +834,250 @@ defmodule DecimalTest do
     assert to_float.("0.8888888888888888888888") == 0.8888888888888888888888
     assert to_float.("0.9999999999999999") == 0.9999999999999999
     assert to_float.("0.99999999999999999") == 0.99999999999999999
+  end
+
+  test "issue negative coef" do
+    assert_raise Decimal.Error, fn ->
+      Decimal.new(%Decimal{coef: -1})
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.new(d(-1, -1, -1))
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.to_integer(d(-1, -1, -1))
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.to_float(d(-1, -1, -1))
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.to_string(d(-1, -1, -1))
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.sqrt(d(1, -1, -1))
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.round(d(-1, -1, -1))
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.round(d(-1, -1, -1), 1)
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.round(d(-1, -1, -1), 1, :half_up)
+    end
+
+    # mult
+    assert_raise Decimal.Error, fn ->
+      Decimal.mult(d(-1, -1, -1), ~d"1")
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.mult(~d"1", d(-1, -1, -1))
+    end
+
+    # div_rem
+    assert_raise Decimal.Error, fn ->
+      Decimal.div_rem(d(-1, -1, -1), ~d"1")
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.div_rem(~d"1", d(-1, -1, -1))
+    end
+
+    # rem
+    assert_raise Decimal.Error, fn ->
+      Decimal.rem(d(-1, -1, -1), ~d"1")
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.rem(~d"1", d(-1, -1, -1))
+    end
+
+    # div_int
+    assert_raise Decimal.Error, fn ->
+      Decimal.div_int(d(-1, -1, -1), ~d"1")
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.div_int(~d"1", d(-1, -1, -1))
+    end
+
+    # div
+    assert_raise Decimal.Error, fn ->
+      Decimal.div(d(-1, -1, -1), ~d"1")
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.div(~d"1", d(-1, -1, -1))
+    end
+
+    # compare
+    assert_raise Decimal.Error, fn ->
+      Decimal.compare(d(-1, -1, -1), ~d"1")
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.compare(~d"1", d(-1, -1, -1))
+    end
+
+    # sub
+    assert_raise Decimal.Error, fn ->
+      Decimal.sub(d(-1, -1, -1), ~d"1")
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.sub(~d"1", d(-1, -1, -1))
+    end
+
+    # add
+    assert_raise Decimal.Error, fn ->
+      Decimal.add(d(-1, -1, -1), ~d"1")
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.add(~d"1", d(-1, -1, -1))
+    end
+
+    assert inspect(d(-1, -1, -1)) =~ "Decimal.Error"
+  end
+
+  test "issue wrong sign value" do
+    assert_raise Decimal.Error, fn ->
+      Decimal.new(%Decimal{sign: -300})
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.new(d(-300, 1, -1))
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.to_integer(d(-300, 1, -1))
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.to_float(d(-300, 1, -1))
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.to_string(d(-300, 1, -1))
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.sqrt(d(300, 1, -1))
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.round(d(-300, 1, -1))
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.round(d(-300, 1, -1), 1)
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.round(d(-300, 1, -1), 1, :half_up)
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.normalize(%Decimal{sign: -300})
+    end
+
+    # mult
+    assert_raise Decimal.Error, fn ->
+      Decimal.mult(d(-300, 1, -1), ~d"1")
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.mult(~d"1", d(-300, 1, -1))
+    end
+
+    # div_rem
+    assert_raise Decimal.Error, fn ->
+      Decimal.div_rem(d(-300, 1, -1), ~d"1")
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.div_rem(~d"1", d(-300, 1, -1))
+    end
+
+    # rem
+    assert_raise Decimal.Error, fn ->
+      Decimal.rem(d(-300, 1, -1), ~d"1")
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.rem(~d"1", d(-300, 1, -1))
+    end
+
+    # div_int
+    assert_raise Decimal.Error, fn ->
+      Decimal.div_int(d(-300, 1, -1), ~d"1")
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.div_int(~d"1", d(-300, 1, -1))
+    end
+
+    # div
+    assert_raise Decimal.Error, fn ->
+      Decimal.div(d(-300, 1, -1), ~d"1")
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.div(~d"1", d(-300, 1, -1))
+    end
+
+    # compare
+    assert_raise Decimal.Error, fn ->
+      Decimal.compare(d(-300, 1, -1), ~d"1")
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.compare(~d"1", d(-300, 1, -1))
+    end
+
+    # sub
+    assert_raise Decimal.Error, fn ->
+      Decimal.sub(d(-300, 1, -1), ~d"1")
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.sub(~d"1", d(-300, 1, -1))
+    end
+
+    # add
+    assert_raise Decimal.Error, fn ->
+      Decimal.add(d(-300, 1, -1), ~d"1")
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.add(~d"1", d(-300, 1, -1))
+    end
+
+    assert inspect(d(-300, 1, 1)) =~ "Decimal.Error"
+    assert inspect(d(300, -1, 1)) =~ "Decimal.Error"
+  end
+
+  test "test wrong exp value" do
+    assert_raise Decimal.Error, fn ->
+      Decimal.new(%Decimal{exp: 3.3})
+    end
+  end
+
+  test "test sqrt negative value" do
+    assert_raise Decimal.Error, fn ->
+      Decimal.sqrt(d(-1, 1, -1))
+    end
+  end
+
+  test "test Decimal.new/3" do
+    assert Decimal.new(-1, 3, 2) == d(-1, 3, 2)
   end
 end
