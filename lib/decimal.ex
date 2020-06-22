@@ -229,21 +229,6 @@ defmodule Decimal do
 
   def add(%Decimal{}, %Decimal{coef: :inf} = num2), do: num2
 
-  def add(%Decimal{coef: coef1}, %Decimal{coef: coef2})
-      when coef1 < 0 or coef2 < 0 do
-    error(:invalid_operation, "wrong coef", %Decimal{coef: :NaN})
-  end
-
-  def add(%Decimal{sign: sign1}, %Decimal{})
-      when sign1 != 1 and sign1 != -1 do
-    error(:invalid_operation, "wrong sign", %Decimal{coef: :NaN})
-  end
-
-  def add(%Decimal{}, %Decimal{sign: sign2})
-      when sign2 != 1 and sign2 != -1 do
-    error(:invalid_operation, "wrong sign", %Decimal{coef: :NaN})
-  end
-
   def add(%Decimal{} = num1, %Decimal{} = num2) do
     %Decimal{sign: sign1, coef: coef1, exp: exp1} = num1
     %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2
@@ -323,21 +308,6 @@ defmodule Decimal do
 
   def compare(_num1, %Decimal{coef: :NaN} = num2),
     do: error(:invalid_operation, "operation on NaN", num2)
-
-  def compare(%Decimal{coef: coef1}, %Decimal{coef: coef2})
-      when coef1 < 0 or coef2 < 0 do
-    error(:invalid_operation, "wrong coef", %Decimal{coef: :NaN})
-  end
-
-  def compare(%Decimal{sign: sign1}, %Decimal{})
-      when sign1 != 1 and sign1 != -1 do
-    error(:invalid_operation, "wrong sign", %Decimal{coef: :NaN})
-  end
-
-  def compare(%Decimal{}, %Decimal{sign: sign2})
-      when sign2 != 1 and sign2 != -1 do
-    error(:invalid_operation, "wrong sign", %Decimal{coef: :NaN})
-  end
 
   def compare(%Decimal{} = num1, %Decimal{} = num2) do
     case sub(num1, num2) do
@@ -477,21 +447,6 @@ defmodule Decimal do
   def div(%Decimal{coef: 0}, %Decimal{coef: 0}),
     do: error(:invalid_operation, "0 / 0", %Decimal{coef: :NaN})
 
-  def div(%Decimal{coef: coef1}, %Decimal{coef: coef2})
-      when coef1 < 0 or coef2 < 0 do
-    error(:invalid_operation, "wrong coef", %Decimal{coef: :NaN})
-  end
-
-  def div(%Decimal{sign: sign1}, %Decimal{})
-      when sign1 != 1 and sign1 != -1 do
-    error(:invalid_operation, "wrong sign", %Decimal{coef: :NaN})
-  end
-
-  def div(%Decimal{}, %Decimal{sign: sign2})
-      when sign2 != 1 and sign2 != -1 do
-    error(:invalid_operation, "wrong sign", %Decimal{coef: :NaN})
-  end
-
   def div(%Decimal{sign: sign1}, %Decimal{sign: sign2, coef: 0}) do
     sign = if sign1 == sign2, do: 1, else: -1
     error(:division_by_zero, nil, %Decimal{sign: sign, coef: :inf})
@@ -563,21 +518,6 @@ defmodule Decimal do
     error(:division_by_zero, nil, %Decimal{sign: div_sign, coef: :inf})
   end
 
-  def div_int(%Decimal{coef: coef1}, %Decimal{coef: coef2})
-      when coef1 < 0 or coef2 < 0 do
-    error(:invalid_operation, "wrong coef", %Decimal{coef: :NaN})
-  end
-
-  def div_int(%Decimal{sign: sign1}, %Decimal{})
-      when sign1 != 1 and sign1 != -1 do
-    error(:invalid_operation, "wrong sign", %Decimal{coef: :NaN})
-  end
-
-  def div_int(%Decimal{}, %Decimal{sign: sign2})
-      when sign2 != 1 and sign2 != -1 do
-    error(:invalid_operation, "wrong sign", %Decimal{coef: :NaN})
-  end
-
   def div_int(%Decimal{} = num1, %Decimal{} = num2) do
     %Decimal{sign: sign1, coef: coef1, exp: exp1} = num1
     %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2
@@ -642,21 +582,6 @@ defmodule Decimal do
 
   def rem(%Decimal{sign: sign1}, %Decimal{coef: 0}),
     do: error(:division_by_zero, nil, %Decimal{sign: sign1, coef: 0})
-
-  def rem(%Decimal{coef: coef1}, %Decimal{coef: coef2})
-      when coef1 < 0 or coef2 < 0 do
-    error(:invalid_operation, "wrong coef", %Decimal{coef: :NaN})
-  end
-
-  def rem(%Decimal{sign: sign1}, %Decimal{})
-      when sign1 != 1 and sign1 != -1 do
-    error(:invalid_operation, "wrong sign", %Decimal{coef: :NaN})
-  end
-
-  def rem(%Decimal{}, %Decimal{sign: sign2})
-      when sign2 != 1 and sign2 != -1 do
-    error(:invalid_operation, "wrong sign", %Decimal{coef: :NaN})
-  end
 
   def rem(%Decimal{} = num1, %Decimal{} = num2) do
     %Decimal{sign: sign1, coef: coef1, exp: exp1} = num1
@@ -738,24 +663,6 @@ defmodule Decimal do
     div_error = error(:division_by_zero, nil, %Decimal{sign: div_sign, coef: :inf})
     rem_error = error(:division_by_zero, nil, %Decimal{sign: sign1, coef: 0})
     {div_error, rem_error}
-  end
-
-  def div_rem(%Decimal{coef: coef1}, %Decimal{coef: coef2})
-      when coef1 < 0 or coef2 < 0 do
-    error = error(:invalid_operation, "wrong coef", %Decimal{coef: :NaN})
-    {error, error}
-  end
-
-  def div_rem(%Decimal{sign: sign1}, %Decimal{})
-      when sign1 != 1 and sign1 != -1 do
-    error = error(:invalid_operation, "wrong sign", %Decimal{coef: :NaN})
-    {error, error}
-  end
-
-  def div_rem(%Decimal{}, %Decimal{sign: sign2})
-      when sign2 != 1 and sign2 != -1 do
-    error = error(:invalid_operation, "wrong sign", %Decimal{coef: :NaN})
-    {error, error}
   end
 
   def div_rem(%Decimal{} = num1, %Decimal{} = num2) do
@@ -956,21 +863,6 @@ defmodule Decimal do
   def mult(%Decimal{coef: :inf}, %Decimal{coef: 0}),
     do: error(:invalid_operation, "0 * ±Infinity", %Decimal{coef: :NaN})
 
-  def mult(%Decimal{coef: coef1}, %Decimal{coef: coef2})
-      when coef1 < 0 or coef2 < 0 do
-    error(:invalid_operation, "wrong coef", %Decimal{coef: :NaN})
-  end
-
-  def mult(%Decimal{sign: sign1}, %Decimal{})
-      when sign1 != 1 and sign1 != -1 do
-    error(:invalid_operation, "wrong sign", %Decimal{coef: :NaN})
-  end
-
-  def mult(%Decimal{}, %Decimal{sign: sign2})
-      when sign2 != 1 and sign2 != -1 do
-    error(:invalid_operation, "wrong sign", %Decimal{coef: :NaN})
-  end
-
   def mult(%Decimal{sign: sign1, coef: :inf, exp: exp1}, %Decimal{sign: sign2, exp: exp2}) do
     sign = if sign1 == sign2, do: 1, else: -1
     # exponent?
@@ -1016,22 +908,12 @@ defmodule Decimal do
     %{num | exp: 0}
   end
 
-  def normalize(%Decimal{coef: coef})
-      when coef < 0 do
-    error(:invalid_operation, "wrong coefficient", %Decimal{coef: :NaN})
-  end
-
-  def normalize(%Decimal{sign: sign})
-      when sign != 1 and sign != -1 do
-    error(:invalid_operation, "wrong sign", %Decimal{coef: :NaN})
-  end
-
-  def normalize(%Decimal{sign: sign, coef: 0, exp: _exp}) do
-    %Decimal{sign: sign, coef: 0, exp: 0}
-  end
-
   def normalize(%Decimal{sign: sign, coef: coef, exp: exp}) do
-    %{do_normalize(coef, exp) | sign: sign} |> context
+    if coef == 0 do
+      %Decimal{sign: sign, coef: 0, exp: 0}
+    else
+      %{do_normalize(coef, exp) | sign: sign} |> context
+    end
   end
 
   @doc """
@@ -1056,16 +938,6 @@ defmodule Decimal do
   def round(%Decimal{coef: :NaN} = num, _, _), do: num
 
   def round(%Decimal{coef: :inf} = num, _, _), do: num
-
-  def round(%Decimal{coef: coef}, _, _)
-      when coef < 0 do
-    error(:invalid_operation, "wrong coefficient", %Decimal{coef: :NaN})
-  end
-
-  def round(%Decimal{sign: sign}, _, _)
-      when sign != 1 and sign != -1 do
-    error(:invalid_operation, "wrong sign", %Decimal{coef: :NaN})
-  end
 
   def round(%Decimal{} = num, n, mode) do
     %Decimal{sign: sign, coef: coef, exp: exp} = normalize(num)
@@ -1095,16 +967,6 @@ defmodule Decimal do
 
   def sqrt(%Decimal{coef: 0, exp: exp} = num),
     do: %{num | exp: exp >>> 1}
-
-  def sqrt(%Decimal{coef: coef})
-      when coef < 0 do
-    error(:invalid_operation, "wrong coefficient", %Decimal{coef: :NaN})
-  end
-
-  def sqrt(%Decimal{sign: sign})
-      when sign != 1 and sign != -1 do
-    error(:invalid_operation, "wrong sign", %Decimal{coef: :NaN})
-  end
 
   def sqrt(%Decimal{sign: -1} = num),
     do: error(:invalid_operation, "less than zero", num)
@@ -1235,7 +1097,7 @@ defmodule Decimal do
   end
 
   def new(num) do
-    raise Error, reason: "wrong decimal number: (#{inspect(num)})"
+    raise Error, reason: "wrong decimal number: #{inspect(num)}"
   end
 
   @doc """
@@ -1306,8 +1168,18 @@ defmodule Decimal do
   @spec cast(term) :: {:ok, t} | :error
   def cast(integer) when is_integer(integer), do: {:ok, Decimal.new(integer)}
 
+  def cast(%Decimal{sign: sign})
+      when not is_integer(sign) do
+    :error
+  end
+
   def cast(%Decimal{coef: coef})
-      when coef < 0 do
+      when not is_integer(coef) do
+    :error
+  end
+
+  def cast(%Decimal{exp: exp})
+      when not is_integer(exp) do
     :error
   end
 
@@ -1316,8 +1188,8 @@ defmodule Decimal do
     :error
   end
 
-  def cast(%Decimal{exp: exp})
-      when not is_integer(exp) do
+  def cast(%Decimal{coef: coef})
+      when coef < 0 do
     :error
   end
 
