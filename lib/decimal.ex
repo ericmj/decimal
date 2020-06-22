@@ -156,8 +156,13 @@ defmodule Decimal do
         nil ->
           quote do
             case unquote(term) do
-              %_{} -> true
-              _ -> false
+              %_{sign: sign, coef: coef, exp: exp}
+              when sign in [1, -1] and ((is_integer(coef) and coef >= 0) or coef in [:NaN, :inf]) and
+                     is_integer(exp) ->
+                true
+
+              _ ->
+                false
             end
           end
 
@@ -169,7 +174,12 @@ defmodule Decimal do
         :guard ->
           quote do
             is_map(unquote(term)) and :erlang.is_map_key(:__struct__, unquote(term)) and
-              :erlang.map_get(:__struct__, unquote(term)) == Decimal
+              :erlang.map_get(:__struct__, unquote(term)) == Decimal and
+              :erlang.map_get(:sign, unquote(term)) in [1, -1] and
+              ((is_integer(:erlang.map_get(:coef, unquote(term))) and
+                  :erlang.map_get(:coef, unquote(term)) >= 0) or
+                 :erlang.map_get(:coef, unquote(term)) in [:NaN, :inf]) and
+              is_integer(:erlang.map_get(:exp, unquote(term)))
           end
       end
     end
@@ -178,8 +188,13 @@ defmodule Decimal do
     defmacro is_decimal(term) do
       quote do
         case unquote(term) do
-          %Decimal{} -> true
-          _ -> false
+          %Decimal{sign: sign, coef: coef, exp: exp}
+          when sign in [1, -1] and ((is_integer(coef) and coef >= 0) or coef in [:NaN, :inf]) and
+                 is_integer(exp) ->
+            true
+
+          _ ->
+            false
         end
       end
     end
@@ -1080,7 +1095,11 @@ defmodule Decimal do
       #Decimal<3.14>
   """
   @spec new(decimal) :: t
-  def new(%Decimal{} = num), do: num
+  def new(%Decimal{} = num) do
+    if is_decimal(num),
+      do: num,
+      else: raise(Error, reason: "wrong decimal number: #{inspect(num)}")
+  end
 
   def new(int) when is_integer(int),
     do: %Decimal{sign: if(int < 0, do: -1, else: 1), coef: Kernel.abs(int)}
@@ -1090,6 +1109,10 @@ defmodule Decimal do
       {decimal, ""} -> decimal
       _ -> raise Error, reason: "number parsing syntax: #{inspect(binary)}"
     end
+  end
+
+  def new(num) do
+    raise Error, reason: "wrong decimal number: #{inspect(num)}"
   end
 
   @doc """

@@ -91,6 +91,10 @@ defmodule DecimalTest do
     assert Decimal.is_decimal(~d"0")
     refute Decimal.is_decimal(42)
     refute Decimal.is_decimal("42")
+
+    refute Decimal.is_decimal(d(1, -1, 1))
+    refute Decimal.is_decimal(d(3, 1, 1))
+    refute Decimal.is_decimal(d(1, 1, 3.3))
   end
 
   if function_exported?(:erlang, :is_map_key, 2) do
@@ -103,6 +107,10 @@ defmodule DecimalTest do
       assert decimal?(~d"0")
       refute decimal?(42)
       refute decimal?("42")
+
+      refute decimal?(d(1, -1, 1))
+      refute decimal?(d(3, 1, 1))
+      refute decimal?(d(1, 1, 3.3))
     end
   end
 
@@ -110,7 +118,7 @@ defmodule DecimalTest do
     assert Decimal.new(d(-1, 3, 2)) == d(-1, 3, 2)
     assert Decimal.new(123) == d(1, 123, 0)
 
-    assert_raise FunctionClauseError, fn ->
+    assert_raise Decimal.Error, fn ->
       Decimal.new(:atom)
     end
   end
@@ -835,4 +843,42 @@ defmodule DecimalTest do
     assert to_float.("0.9999999999999999") == 0.9999999999999999
     assert to_float.("0.99999999999999999") == 0.99999999999999999
   end
+
+  test "issue negative coef" do
+    assert_raise Decimal.Error, fn ->
+      Decimal.new(%Decimal{coef: -1})
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.new(d(-1, -1, -1))
+    end
+  end
+
+  test "issue wrong sign value" do
+    assert_raise Decimal.Error, fn ->
+      Decimal.new(%Decimal{sign: -300})
+    end
+
+    assert_raise Decimal.Error, fn ->
+      Decimal.new(d(-300, 1, -1))
+    end
+  end
+
+  test "issue wrong exp value" do
+    assert_raise Decimal.Error, fn ->
+      Decimal.new(d(1, 1, 3.3))
+    end
+  end
+
+  test "test sqrt with wrong sign via new/1" do
+    assert_raise Decimal.Error, fn ->
+      Decimal.sqrt(Decimal.new(d(3, 1, -1)))
+    end
+  end
+
+  # test "test sqrt with wrong sign -> infinite loop" do
+  #   assert_raise Decimal.Error, fn ->
+  #     Decimal.sqrt(d(3, 1, -1))
+  #   end
+  # end
 end
