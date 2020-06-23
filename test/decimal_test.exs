@@ -91,6 +91,7 @@ defmodule DecimalTest do
     assert Decimal.is_decimal(~d"0")
     refute Decimal.is_decimal(42)
     refute Decimal.is_decimal("42")
+    refute Decimal.is_decimal(1..2)
   end
 
   if function_exported?(:erlang, :is_map_key, 2) do
@@ -103,6 +104,7 @@ defmodule DecimalTest do
       assert decimal?(~d"0")
       refute decimal?(42)
       refute decimal?("42")
+      refute decimal?(1..2)
     end
   end
 

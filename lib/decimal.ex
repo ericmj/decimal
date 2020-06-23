@@ -156,7 +156,7 @@ defmodule Decimal do
         nil ->
           quote do
             case unquote(term) do
-              %_{} -> true
+              %Decimal{} -> true
               _ -> false
             end
           end
