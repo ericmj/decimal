@@ -1080,7 +1080,10 @@ defmodule Decimal do
       #Decimal<3.14>
   """
   @spec new(decimal) :: t
-  def new(%Decimal{} = num), do: num
+  def new(%Decimal{sign: sign, coef: coef, exp: exp} = num)
+      when sign in [1, -1] and ((is_integer(coef) and coef >= 0) or coef in [:NaN, :inf]) and
+             is_integer(exp),
+      do: num
 
   def new(int) when is_integer(int),
     do: %Decimal{sign: if(int < 0, do: -1, else: 1), coef: Kernel.abs(int)}

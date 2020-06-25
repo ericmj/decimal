@@ -837,4 +837,20 @@ defmodule DecimalTest do
     assert to_float.("0.9999999999999999") == 0.9999999999999999
     assert to_float.("0.99999999999999999") == 0.99999999999999999
   end
+
+  test "issue wrong coef or sign value" do
+    assert_raise FunctionClauseError, fn ->
+      Decimal.new(%Decimal{coef: -1})
+    end
+
+    assert_raise FunctionClauseError, fn ->
+      Decimal.new(%Decimal{sign: -3})
+    end
+  end
+
+  test "test sqrt with wrong sign via new/1" do
+    assert_raise FunctionClauseError, fn ->
+      Decimal.sqrt(Decimal.new(d(3, 1, -1)))
+    end
+  end
 end
