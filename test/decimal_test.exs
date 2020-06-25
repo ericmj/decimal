@@ -848,9 +848,9 @@ defmodule DecimalTest do
     end
   end
 
-  test "test sqrt with wrong sign via new/1" do
+  test "test sqrt with wrong decimal -> infinite loop" do
     assert_raise FunctionClauseError, fn ->
-      Decimal.sqrt(Decimal.new(d(3, 1, -1)))
+      Decimal.sqrt(d(3, 1, -1))
     end
   end
 end

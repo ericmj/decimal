@@ -1702,7 +1702,7 @@ defmodule Decimal do
 
   # Util
 
-  defp decimal(%Decimal{} = num), do: num
+  defp decimal(%Decimal{} = num), do: new(num)
   defp decimal(num) when is_integer(num), do: new(num)
   defp decimal(num) when is_binary(num), do: new(num)
 
