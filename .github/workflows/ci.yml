@@ -51,12 +51,10 @@ jobs:
   check_formatted:
     name: Check formatted
     runs-on: ubuntu-latest
-    container: hexpm/elixir:${{ matrix.elixir }}-erlang-${{ matrix.otp }}-alpine-3.11.6
-    strategy:
-      matrix:
-        include:
-          - elixir: 1.10.4
-            otp: 23.0.3
     steps:
       - uses: actions/checkout@v2.3.1
+      - uses: actions/setup-elixir@v1.3.0
+        with:
+          otp-version: 23.0.3
+          elixir-version: 1.10.4
       - run: mix format --check-formatted
