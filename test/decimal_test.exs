@@ -753,6 +753,8 @@ defmodule DecimalTest do
     assert Decimal.integer?(~d"-1")
     assert Decimal.integer?(%Decimal{coef: 100, exp: -2})
     assert Decimal.integer?(~d"1e100")
+    assert Decimal.integer?(~d"1.23e5")
+    assert Decimal.integer?(~d"10000e-3")
 
     refute Decimal.integer?(~d"0.1")
     refute Decimal.integer?(~d"0.10")
@@ -760,6 +762,10 @@ defmodule DecimalTest do
     refute Decimal.integer?(~d"0.1234")
     refute Decimal.integer?(~d"-0.1234")
     refute Decimal.integer?(~d"1e-100")
+    refute Decimal.integer?(~d"1.2345e3")
+    refute Decimal.integer?(~d"12345e-3")
+    refute Decimal.integer?(~d"123e-5")
+    refute Decimal.integer?(~d"100e-5")
     refute Decimal.integer?(~d"inf")
     refute Decimal.integer?(~d"NaN")
   end
