@@ -1406,18 +1406,14 @@ defmodule Decimal do
   @spec integer?(t) :: boolean
   def integer?(%Decimal{coef: :NaN}), do: false
   def integer?(%Decimal{coef: :inf}), do: false
+  def integer?(%Decimal{coef: coef, exp: exp}), do: exp >= 0 or zero_after_dot?(coef, exp)
+  def integer?(num), do: integer?(decimal(num))
 
-  def integer?(%Decimal{} = num) do
-    normalized = normalize(num)
-    normalized.exp >= 0 or number_after_dot(normalized) == 0
-  end
+  defp zero_after_dot?(coef, exp) when coef >= 10 and exp < 0,
+    do: Kernel.rem(coef, 10) == 0 and zero_after_dot?(Kernel.div(coef, 10), exp + 1)
 
-  def integer?(num) do
-    integer?(decimal(num))
-  end
-
-  defp number_after_dot(%Decimal{coef: coef, exp: exp}),
-    do: Kernel.rem(coef, exp |> Kernel.abs() |> pow10())
+  defp zero_after_dot?(_coef, exp),
+    do: exp == 0
 
   ## ARITHMETIC ##
 
