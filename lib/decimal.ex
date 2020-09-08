@@ -1396,10 +1396,10 @@ defmodule Decimal do
 
   ## Examples
 
-      iex> "1.00" |> Decimal.new() |> Decimal.integer?()
+      iex> Decimal.integer?("1.00")
       true
 
-      iex> "1.1000" |> Decimal.new() |> Decimal.integer?()
+      iex> Decimal.integer?("1.10")
       false
   """
   doc_since("2.0.0")
@@ -1410,6 +1410,10 @@ defmodule Decimal do
   def integer?(%Decimal{} = num) do
     normalized = normalize(num)
     normalized.exp >= 0 or number_after_dot(normalized) == 0
+  end
+
+  def integer?(num) do
+    integer?(decimal(num))
   end
 
   defp number_after_dot(%Decimal{coef: coef, exp: exp}),
