@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## v1.9.0 (2020-09-08)
+
+No changes from v1.9.0-rc.0.
+
 ## v1.9.0-rc.0 (2020-01-07)
 
 ### Enhancements

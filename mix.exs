@@ -1,7 +1,7 @@
 defmodule Decimal.Mixfile do
   use Mix.Project
 
-  @version "1.9.0-rc.0"
+  @version "1.9.0"
 
   def project() do
     [
