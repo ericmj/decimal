@@ -1,7 +1,8 @@
 defmodule Decimal.Mixfile do
   use Mix.Project
 
-  @version "2.0.0-rc.0"
+  @version "2.0.0"
+  @source_url "https://github.com/ericmj/decimal"
 
   def project() do
     [
@@ -10,7 +11,7 @@ defmodule Decimal.Mixfile do
       elixir: "~> 1.2",
       deps: deps(),
       name: "Decimal",
-      source_url: "https://github.com/ericmj/decimal",
+      source_url: @source_url,
       docs: [source_ref: "v#{@version}", main: "readme", extras: ["README.md"]],
       description: description(),
       package: package()
@@ -35,7 +36,7 @@ defmodule Decimal.Mixfile do
     [
       maintainers: ["Eric Meadows-Jönsson"],
       licenses: ["Apache-2.0"],
-      links: %{"GitHub" => "https://github.com/ericmj/decimal"}
+      links: %{"GitHub" => @source_url}
     ]
   end
 end

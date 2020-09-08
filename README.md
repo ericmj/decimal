@@ -4,15 +4,13 @@
 
 Arbitrary precision decimal arithmetic.
 
-Documentation: https://hexdocs.pm/decimal/
-
 ## Usage
 
 Add Decimal as a dependency in your `mix.exs` file.
 
 ```elixir
 def deps do
-  [{:decimal, "~> 1.0"}]
+  [{:decimal, "~> 2.0"}]
 end
 ```
 

@@ -1,8 +1,12 @@
 # CHANGELOG
 
-## v2.0.0-rc.0 (2020-01-21)
+## v2.0.0 (2020-09-08)
 
 Decimal v2.0 requires Elixir v1.2+.
+
+### Enhancements
+
+* Add `Decimal.integer?/1`
 
 ### Breaking changes
 
@@ -24,7 +28,7 @@ Decimal v2.0 requires Elixir v1.2+.
 
 * Deprecate `Decimal.cmp/2`
 
-## v1.9.0-rc.0 (2020-01-07)
+## v1.9.0 (2020-09-08)
 
 ### Enhancements
 
