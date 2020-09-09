@@ -1403,7 +1403,7 @@ defmodule Decimal do
       false
   """
   doc_since("2.0.0")
-  @spec integer?(t) :: boolean
+  @spec integer?(decimal()) :: boolean
   def integer?(%Decimal{coef: :NaN}), do: false
   def integer?(%Decimal{coef: :inf}), do: false
   def integer?(%Decimal{coef: coef, exp: exp}), do: exp >= 0 or zero_after_dot?(coef, exp)
