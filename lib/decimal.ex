@@ -1175,6 +1175,24 @@ defmodule Decimal do
   def cast(_), do: :error
 
   @doc """
+  Creates a new decimal number using `Decimal.cast/1` and raises error when input could not be converted to decimal number.
+
+  ## Examples
+
+      iex> decimal = Decimal.cast!(3)
+      iex> decimal
+      #Decimal<3>
+
+  """
+  @spec cast!(term) :: t
+  def cast!(value) do
+    case cast(value) do
+      {:ok, decimal} -> decimal
+      _ -> raise Error, reason: "could not cast #{inspect(value)}"
+    end
+  end
+
+  @doc """
   Parses a binary into a decimal.
 
   If successful, returns a tuple in the form of `{decimal, remainder_of_binary}`,
