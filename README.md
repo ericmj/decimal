@@ -6,7 +6,7 @@ Arbitrary precision decimal arithmetic.
 
 ## Usage
 
-Add `Decimal` as a dependency in your `mix.exs` file:
+Add Decimal as a dependency in your `mix.exs` file:
 
 ```elixir
 def deps do
