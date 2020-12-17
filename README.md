@@ -6,7 +6,7 @@ Arbitrary precision decimal arithmetic.
 
 ## Usage
 
-Add Decimal as a dependency in your `mix.exs` file.
+Add Decimal as a dependency in your `mix.exs` file:
 
 ```elixir
 def deps do
@@ -14,7 +14,8 @@ def deps do
 end
 ```
 
-After you are done, run `mix deps.get` in your shell to fetch and compile Decimal. Start an interactive Elixir shell with `iex -S mix`.
+Next, run `mix deps.get` in your shell to fetch and compile `Decimal`. Start an
+interactive Elixir shell with `iex -S mix`:
 
 ```elixir
 iex> alias Decimal, as: D
@@ -32,28 +33,30 @@ iex> D.new("0.33")
 
 The context specifies the maximum precision of the result of calculations and
 the rounding algorithm if the result has a higher precision than the specified
-maximum. It also holds the list of set of trap enablers and the currently set
+maximum. It also holds the list of set of trap enablers and the current set
 flags.
 
-The context is stored in the process dictionary, this means that you don't have
-to pass the context around explicitly and the flags will be updated
-automatically.
+The context is stored in the process dictionary. You don't have to pass the
+context around explicitly and the flags will be updated automatically.
 
 The context is accessed with `Decimal.Context.get/0` and set with
-`Decimal.Context.set/1`. It can also be temporarily set with
+`Decimal.Context.set/1`. It can be set temporarily with
 `Decimal.Context.with/2`.
 
 ```elixir
 iex> D.Context.get()
 %Decimal.Context{flags: [:rounded, :inexact], precision: 9, rounding: :half_up,
  traps: [:invalid_operation, :division_by_zero]}
+
 iex> D.Context.with(%D.Context{precision: 2}, fn -> IO.inspect D.Context.get() end)
 %Decimal.Context{flags: [], precision: 2, rounding: :half_up,
  traps: [:invalid_operation, :division_by_zero]}
 %Decimal.Context{flags: [], precision: 2, rounding: :half_up,
  traps: [:invalid_operation, :division_by_zero]}
+
 iex> D.Context.set(%D.Context{D.Context.get() | traps: []})
 :ok
+
 iex> D.Context.get()
 %Decimal.Context{flags: [:rounded, :inexact], precision: 9, rounding: :half_up,
  traps: []}
@@ -61,37 +64,44 @@ iex> D.Context.get()
 
 ### Precision and rounding
 
-The precision is used to limit the amount of decimal digits in the coefficient:
+Use `:precision` option to limit the amount of decimal digits in the
+coefficient:
 
 ```elixir
 iex> D.Context.set(%D.Context{D.Context.get() | precision: 9})
 :ok
+
 iex> D.div(100, 3)
 #Decimal<33.3333333>
+
 iex> D.Context.set(%D.Context{D.Context.get() | precision: 2})
 :ok
+
 iex> D.div(100, 3)
 #Decimal<33>
 ```
 
-The rounding algorithm specifies how the result of an operation shall be rounded
-when it get be represented with the current precision:
+The `:rounding` option specifies the algorithm and precision of the rounding
+operation:
 
 ```elixir
 iex> D.Context.set(%D.Context{D.Context.get() | rounding: :half_up})
 :ok
+
 iex> D.div(31, 2)
 #Decimal<16>
+
 iex> D.Context.set(%D.Context{D.Context.get() | rounding: :floor})
 :ok
+
 iex> D.div(31, 2)
 #Decimal<15>
 ```
 
 ### Comparisons
 
-Using compare operators (`<`, `=`, `>`) directly with two decimals may not return
-the correct result. Instead use comparison functions.
+Using comparison operators (`<`, `=`, `>`) with two or more decimal digits may
+not produce accurate result. Instead, use comparison functions.
 
 ```elixir
 iex> D.compare(-1, 0)
@@ -109,46 +119,54 @@ true
 
 ### Flags and trap enablers
 
-When an exceptional condition is signalled its flag is set in the context and if
-if the trap enabler is set `Decimal.Error` will be raised.
+When an exceptional condition is signalled, its flag is set in the current
+context. `Decimal.Error` will be raised if the trap enabler is set.
 
 ```elixir
 iex> D.Context.set(%D.Context{D.Context.get() | rounding: :floor, precision: 2})
 :ok
+
 iex> D.Context.get().traps
 [:invalid_operation, :division_by_zero]
+
 iex> D.Context.get().flags
 []
+
 iex> D.div(31, 2)
 #Decimal<15>
+
 iex> D.Context.get().flags
 [:inexact, :rounded]
 ```
 
-`:inexact` and `:rounded` were signaled above because the result of the
-operation was inexact given the context's precision and had to be rounded to fit
-the precision. `Decimal.Error` was not raised because the signals' trap enablers
-weren't set. We can, however, set the trap enabler if we what this condition to
-raise.
+`:inexact` and `:rounded` flag were signalled above because the result of the
+operation was inexact given the context's precision and had to be rounded to
+fit the precision. `Decimal.Error` was not raised because the signals' trap
+enablers weren't set.
 
 ```elixir
 iex> D.Context.set(%D.Context{D.Context.get() | traps: D.Context.get().traps ++ [:inexact]})
 :ok
+
 iex> D.div(31, 2)
 ** (Decimal.Error)
 ```
 
-The default trap enablers, such as `:division_by_zero` can be unset:
+The default trap enablers, such as `:division_by_zero`, can be unset:
 
 ```elixir
 iex> D.Context.get().traps
 [:invalid_operation, :division_by_zero]
+
 iex> D.div(42, 0)
 ** (Decimal.Error)
+
 iex> D.Context.set(%D.Context{D.Context.get() | traps: [], flags: []})
 :ok
+
 iex> D.div(42, 0)
 #Decimal<Infinity>
+
 iex> D.Context.get().flags
 [:division_by_zero]
 ```
