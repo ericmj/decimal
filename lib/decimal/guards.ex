@@ -3,9 +3,7 @@ if Version.compare(System.version(), "1.11.0") != :lt do
     defmodule Decimal.Guards do
       import Decimal.Macros
 
-      if Version.match?(System.version(), ">= 1.11.0") do
-        @moduledoc since: "2.1.0"
-      end
+      @moduledoc since: "2.1.0"
 
       @moduledoc """
       Set of guards allowing validating `Decimal` values in guards.
