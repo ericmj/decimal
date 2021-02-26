@@ -1,5 +1,5 @@
 if Version.compare(System.version(), "1.11.0") != :lt do
-  if String.to_integer(System.otp_release()) > 22 do
+  if String.to_integer(apply(System, :otp_release, [])) > 22 do
     defmodule Decimal.Guards do
       @moduledoc since: "2.1.0"
       @moduledoc """
