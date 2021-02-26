@@ -6,6 +6,7 @@ if Version.compare(System.version(), "1.11.0") != :lt do
       if Version.match?(System.version(), ">= 1.11.0") do
         @moduledoc since: "2.1.0"
       end
+
       @moduledoc """
       Set of guards allowing validating `Decimal` values in guards.
 
@@ -21,6 +22,7 @@ if Version.compare(System.version(), "1.11.0") != :lt do
       """
 
       doc_since("2.1.0")
+
       @doc """
       Returns `true` if term is a `Decimal`; otherwise returns `false`.
 
@@ -35,6 +37,7 @@ if Version.compare(System.version(), "1.11.0") != :lt do
       defguard is_decimal(d) when is_map(d) and d.__struct__ == Decimal
 
       doc_since("2.1.0")
+
       @doc """
       Returns `true` if term is a `Decimal` and is non-negative; otherwise returns `false`.
 
@@ -49,6 +52,7 @@ if Version.compare(System.version(), "1.11.0") != :lt do
       defguard is_decimal_non_negative(d) when is_decimal(d) and d.sign == 1
 
       doc_since("2.1.0")
+
       @doc """
       Returns `true` if term is a `Decimal` and is positive; otherwise returns `false`.
 
@@ -64,6 +68,7 @@ if Version.compare(System.version(), "1.11.0") != :lt do
       defguard is_decimal_positive(d) when is_decimal_non_negative(d) and d.coef != 0
 
       doc_since("2.1.0")
+
       @doc """
       Returns `true` if term is a `Decimal` and is negative; otherwise returns `false`.
 
@@ -78,6 +83,7 @@ if Version.compare(System.version(), "1.11.0") != :lt do
       defguard is_decimal_negative(d) when is_decimal(d) and d.sign == -1
 
       doc_since("2.1.0")
+
       @doc """
       Returns `true` if term is a `Decimal` and is non-negative; otherwise returns `false`.
 
@@ -95,6 +101,7 @@ if Version.compare(System.version(), "1.11.0") != :lt do
                when is_decimal_non_negative(d) or ((is_integer(d) or is_float(d)) and d >= 0)
 
       doc_since("2.1.0")
+
       @doc """
       Returns `true` if term is a `Decimal` and is positive; otherwise returns `false`.
 
@@ -112,6 +119,7 @@ if Version.compare(System.version(), "1.11.0") != :lt do
                when is_decimal_positive(d) or ((is_integer(d) or is_float(d)) and d > 0)
 
       doc_since("2.1.0")
+
       @doc """
       Returns `true` if term is a `Decimal` and is negative; otherwise returns `false`.
 
