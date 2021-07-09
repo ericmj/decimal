@@ -1770,6 +1770,50 @@ defmodule Decimal do
   else
     defp integer_to_charlist(string), do: Integer.to_charlist(string)
   end
+
+  @doc """
+  Replaces all `*`, `/`, `+`, and `-` with respective `Decimal` functions.
+
+  ## Examples
+
+      iex> import Decimal, only: [with_decimal: 1]
+      iex> with_decimal(do: (2 + 2) * 6)
+      #Decimal<24>
+
+      iex> import Decimal, only: [with_decimal: 1]
+      iex> with_decimal do
+      ...>   Decimal.from_float(1.5) * 2
+      ...> end
+      #Decimal<3.0>
+
+      iex> import Decimal, only: [with_decimal: 1]
+      iex> fractioned =
+      ...>   with_decimal do
+      ...>     Decimal.from_float(3.5) / 2
+      ...>   end
+      iex> fractioned |> Decimal.round(0, :floor) |> Decimal.to_integer()
+      1
+
+  Note: If your value can't be converted to decimal directly, then you
+  should use manual converision (e.g. `Decimal.from_float/1` as in
+  example above).
+  """
+  defmacro with_decimal(do: body) do
+    Macro.postwalk(body, fn
+      {op, _, _} = node when op in [:+, :-, :*, :/] -> substitute_op(node)
+      otherwise -> otherwise
+    end)
+  end
+
+  defp substitute_op({op, meta, children}) do
+    fun = op_to_fun(op)
+    {{:., [], [{:__aliases__, [alias: false], [:Decimal]}, fun]}, meta, children}
+  end
+
+  defp op_to_fun(:+), do: :add
+  defp op_to_fun(:-), do: :sub
+  defp op_to_fun(:*), do: :mult
+  defp op_to_fun(:/), do: :div
 end
 
 defimpl Inspect, for: Decimal do
