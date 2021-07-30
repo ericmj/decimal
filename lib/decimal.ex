@@ -933,7 +933,7 @@ defmodule Decimal do
 
   """
   @spec round(decimal, integer, rounding) :: t
-  def round(num, places \\ 0, mode \\ :half_up)
+  def round(num, places \\ 0, mode \\ Context.get().rounding)
 
   def round(%Decimal{coef: :NaN} = num, _, _), do: num
 
