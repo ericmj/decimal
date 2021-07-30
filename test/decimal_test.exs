@@ -596,9 +596,11 @@ defmodule DecimalTest do
       assert Decimal.to_integer(d(1, 1_365_900_000_000_000_000_000, -2)) ==
                13_659_000_000_000_000_000
 
-      assert_raise FunctionClauseError, fn ->
-        Decimal.to_integer(d(1, 1001, -2))
-      end
+      assert_raise(
+        ArgumentError,
+        "cannot convert #Decimal<10.01> without losing precision. Use Decimal.round/3 first.",
+        fn -> Decimal.to_integer(d(1, 1001, -2)) end
+      )
 
       assert_raise FunctionClauseError, fn ->
         Decimal.to_integer(d(1, :NaN, 0))

@@ -1331,6 +1331,11 @@ defmodule Decimal do
       when is_integer(coef) and exp < 0 and Kernel.rem(coef, 10) == 0,
       do: to_integer(%Decimal{sign: sign, coef: Kernel.div(coef, 10), exp: exp + 1})
 
+  def to_integer(%Decimal{coef: coef} = decimal) when is_integer(coef) do
+    raise ArgumentError,
+          "cannot convert #{inspect(decimal)} without losing precision. Use Decimal.round/3 first."
+  end
+
   @doc """
   Returns the decimal converted to a float.
 
