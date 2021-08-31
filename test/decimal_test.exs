@@ -598,7 +598,7 @@ defmodule DecimalTest do
 
       assert_raise(
         ArgumentError,
-        "cannot convert #Decimal<10.01> without losing precision. Use Decimal.round/3 first.",
+        "cannot convert Decimal.new(\"10.01\") without losing precision. Use Decimal.round/3 first.",
         fn -> Decimal.to_integer(d(1, 1001, -2)) end
       )
 
