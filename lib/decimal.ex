@@ -407,6 +407,25 @@ defmodule Decimal do
   def lt?(num1, num2), do: compare(num1, num2) == :lt
 
   @doc """
+  ## Examples
+
+      iex> Decimal.member?(1, 10, 5)
+      true
+      iex> Decimal.member?(1, 10, 11)
+      false
+  """
+  @spec member?(decimal, decimal, decimal) :: boolean
+  def member?(%Decimal{coef: :NaN}, _num2, _num3), do: false
+  def member?(_num1, %Decimal{coef: :NaN}, _num3), do: false
+  def member?(_num1, _num2, %Decimal{coef: :NaN}), do: false
+
+  def member?(min, max, decimal) do
+    Decimal.eq?(decimal, min) or Decimal.eq?(decimal, max) or
+      (Decimal.gt?(decimal, min) and
+         Decimal.lt?(decimal, max))
+  end
+
+  @doc """
   Divides two numbers.
 
   ## Exceptional conditions

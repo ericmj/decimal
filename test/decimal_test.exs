@@ -287,6 +287,17 @@ defmodule DecimalTest do
     refute Decimal.lt?(~d"1", ~d"nan")
   end
 
+  test "member?/3" do
+    assert Decimal.member?(~d"0", ~d"1", ~d"0")
+    assert Decimal.member?(~d"0", ~d"1", ~d"1")
+    assert Decimal.member?(~d"0", ~d"2", ~d"1")
+    refute Decimal.member?(~d"0", ~d"2", ~d"3")
+    refute Decimal.member?(~d"1", ~d"2", ~d"0")
+    refute Decimal.member?(~d"nan", ~d"1", ~d"1")
+    refute Decimal.member?(~d"1", ~d"nan", ~d"1")
+    refute Decimal.member?(~d"1", ~d"1", ~d"nan")
+  end
+
   test "div/2" do
     Context.with(%Context{precision: 5, rounding: :half_up}, fn ->
       assert Decimal.div(~d"1", ~d"3") == d(1, 33333, -5)
