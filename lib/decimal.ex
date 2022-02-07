@@ -203,10 +203,10 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.add(1, "1.1")
-      #Decimal<2.1>
+      Decimal.new("2.1")
 
       iex> Decimal.add(1, "Inf")
-      #Decimal<Infinity>
+      Decimal.new("Infinity")
 
   """
   @spec add(decimal, decimal) :: t
@@ -254,10 +254,10 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.sub(1, "0.1")
-      #Decimal<0.9>
+      Decimal.new("0.9")
 
       iex> Decimal.sub(1, "Inf")
-      #Decimal<-Infinity>
+      Decimal.new("-Infinity")
 
   """
   @spec sub(decimal, decimal) :: t
@@ -418,10 +418,10 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.div(3, 4)
-      #Decimal<0.75>
+      Decimal.new("0.75")
 
       iex> Decimal.div("Inf", -1)
-      #Decimal<-Infinity>
+      Decimal.new("-Infinity")
 
   """
   @spec div(decimal, decimal) :: t
@@ -484,10 +484,10 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.div_int(5, 2)
-      #Decimal<2>
+      Decimal.new("2")
 
       iex> Decimal.div_int("Inf", -1)
-      #Decimal<-Infinity>
+      Decimal.new("-Infinity")
 
   """
   @spec div_int(decimal, decimal) :: t
@@ -558,7 +558,7 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.rem(5, 2)
-      #Decimal<1>
+      Decimal.new("1")
 
   """
   @spec rem(decimal, decimal) :: t
@@ -700,13 +700,13 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.max(1, "2.0")
-      #Decimal<2.0>
+      Decimal.new("2.0")
 
       iex> Decimal.max(1, "NaN")
-      #Decimal<1>
+      Decimal.new("1")
 
       iex> Decimal.max("NaN", "NaN")
-      #Decimal<NaN>
+      Decimal.new("NaN")
 
   """
   @spec max(decimal, decimal) :: t
@@ -749,13 +749,13 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.min(1, "2.0")
-      #Decimal<1>
+      Decimal.new("1")
 
       iex> Decimal.min(1, "NaN")
-      #Decimal<1>
+      Decimal.new("1")
 
       iex> Decimal.min("NaN", "NaN")
-      #Decimal<NaN>
+      Decimal.new("NaN")
 
   """
   @spec min(decimal, decimal) :: t
@@ -796,10 +796,10 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.negate(1)
-      #Decimal<-1>
+      Decimal.new("-1")
 
       iex> Decimal.negate("-Inf")
-      #Decimal<Infinity>
+      Decimal.new("Infinity")
 
   """
   doc_since("1.9.0")
@@ -846,10 +846,10 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.mult("0.5", 3)
-      #Decimal<1.5>
+      Decimal.new("1.5")
 
       iex> Decimal.mult("Inf", -1)
-      #Decimal<-Infinity>
+      Decimal.new("-Infinity")
 
   """
   @spec mult(decimal, decimal) :: t
@@ -893,10 +893,10 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.normalize(Decimal.new("1.00"))
-      #Decimal<1>
+      Decimal.new("1")
 
       iex> Decimal.normalize(Decimal.new("1.01"))
-      #Decimal<1.01>
+      Decimal.new("1.01")
 
   """
   doc_since("1.9.0")
@@ -926,10 +926,10 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.round("1.234")
-      #Decimal<1>
+      Decimal.new("1")
 
       iex> Decimal.round("1.234", 1)
-      #Decimal<1.2>
+      Decimal.new("1.2")
 
   """
   @spec round(decimal, integer, rounding) :: t
@@ -957,7 +957,7 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.sqrt("100")
-      #Decimal<10>
+      Decimal.new("10")
 
   """
   doc_since("1.7.0")
@@ -1074,10 +1074,10 @@ defmodule Decimal do
   ## Examples
 
       iex> Decimal.new(1)
-      #Decimal<1>
+      Decimal.new("1")
 
       iex> Decimal.new("3.14")
-      #Decimal<3.14>
+      Decimal.new("3.14")
   """
   @spec new(decimal) :: t
   def new(%Decimal{sign: sign, coef: coef, exp: exp} = num)
@@ -1123,14 +1123,14 @@ defmodule Decimal do
       0.30000000000000004
 
       iex> Enum.reduce([Decimal.new("0.1"), Decimal.new("0.1"), Decimal.new("0.1")], &Decimal.add/2)
-      #Decimal<0.3>
+      Decimal.new("0.3")
 
   For this reason, it's recommended to build decimals with `new/1`, which is always precise, instead.
 
   ## Examples
 
       iex> Decimal.from_float(3.14)
-      #Decimal<3.14>
+      Decimal.new("3.14")
 
   """
   doc_since("1.5.0")
@@ -1154,7 +1154,7 @@ defmodule Decimal do
 
       iex> {:ok, decimal} = Decimal.cast(3)
       iex> decimal
-      #Decimal<3>
+      Decimal.new("3")
 
       iex> Decimal.cast("bad")
       :error
@@ -1779,7 +1779,7 @@ end
 
 defimpl Inspect, for: Decimal do
   def inspect(dec, _opts) do
-    "#Decimal<" <> Decimal.to_string(dec) <> ">"
+    "Decimal.new(\"" <> Decimal.to_string(dec) <> "\")"
   end
 end
 
