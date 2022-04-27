@@ -122,6 +122,15 @@ defmodule Decimal do
 
   @doc """
   Returns `true` if number is NaN, otherwise `false`.
+
+  ## Examples
+
+      iex> Decimal.nan?(Decimal.new("NaN"))
+      true
+
+      iex> Decimal.nan?(Decimal.new(42))
+      false
+
   """
   @spec nan?(t) :: boolean
   def nan?(%Decimal{coef: :NaN}), do: true
@@ -129,6 +138,18 @@ defmodule Decimal do
 
   @doc """
   Returns `true` if number is ±Infinity, otherwise `false`.
+
+  ## Examples
+
+      iex> Decimal.inf?(Decimal.new("+Infinity"))
+      true
+
+      iex> Decimal.inf?(Decimal.new("-Infinity"))
+      true
+
+      iex> Decimal.inf?(Decimal.new("1.5"))
+      false
+
   """
   @spec inf?(t) :: boolean
   def inf?(%Decimal{coef: :inf}), do: true
@@ -187,6 +208,18 @@ defmodule Decimal do
 
   @doc """
   The absolute value of given number. Sets the number's sign to positive.
+
+  ## Examples
+
+      iex> Decimal.abs(Decimal.new("1"))
+      Decimal.new("1")
+
+      iex> Decimal.abs(Decimal.new("-1"))
+      Decimal.new("1")
+
+      iex> Decimal.abs(Decimal.new("NaN"))
+      Decimal.new("NaN")
+
   """
   @spec abs(t) :: t
   def abs(%Decimal{coef: :NaN} = num), do: %{num | sign: 1}
@@ -816,7 +849,22 @@ defmodule Decimal do
   def apply_context(%Decimal{} = num), do: context(num)
 
   @doc """
-  Check if given number is positive
+  Returns `true` if given number is positive, otherwise `false`.
+
+  ## Examples
+
+      iex> Decimal.positive?(Decimal.new("42"))
+      true
+
+      iex> Decimal.positive?(Decimal.new("-42"))
+      false
+
+      iex> Decimal.positive?(Decimal.new("0"))
+      false
+
+      iex> Decimal.positive?(Decimal.new("NaN"))
+      false
+
   """
   doc_since("1.5.0")
   @spec positive?(t) :: boolean
@@ -826,7 +874,22 @@ defmodule Decimal do
   def positive?(%Decimal{sign: 1}), do: true
 
   @doc """
-  Check if given number is negative
+  Returns `true` if given number is negative, otherwise `false`.
+
+  ## Examples
+
+      iex> Decimal.negative?(Decimal.new("-42"))
+      true
+
+      iex> Decimal.negative?(Decimal.new("42"))
+      false
+
+      iex> Decimal.negative?(Decimal.new("0"))
+      false
+
+      iex> Decimal.negative?(Decimal.new("NaN"))
+      false
+
   """
   doc_since("1.5.0")
   @spec negative?(t) :: boolean
@@ -1078,6 +1141,7 @@ defmodule Decimal do
 
       iex> Decimal.new("3.14")
       Decimal.new("3.14")
+
   """
   @spec new(decimal) :: t
   def new(%Decimal{sign: sign, coef: coef, exp: exp} = num)
@@ -1101,6 +1165,12 @@ defmodule Decimal do
 
   A decimal number will always be created exactly as specified with all digits
   kept - it will not be rounded with the context.
+
+  ## Examples
+
+      iex> Decimal.new(1, 42, 0)
+      Decimal.new("42")
+
   """
   @spec new(1 | -1, non_neg_integer | :NaN | :inf, integer) :: t
   def new(sign, coef, exp)
@@ -1221,6 +1291,23 @@ defmodule Decimal do
     * `:xsd` - number converted to the [canonical XSD representation](https://www.w3.org/TR/xmlschema-2/#decimal).
     * `:raw` - number converted to its raw, internal format.
 
+  ## Examples
+
+      iex> Decimal.to_string(Decimal.new("1.00"))
+      "1.00"
+
+      iex> Decimal.to_string(Decimal.new("123e1"), :scientific)
+      "1.23E+3"
+
+      iex> Decimal.to_string(Decimal.new("42.42"), :normal)
+      "42.42"
+
+      iex> Decimal.to_string(Decimal.new("1.00"), :xsd)
+      "1.0"
+
+      iex> Decimal.to_string(Decimal.new("4321.768"), :raw)
+      "4321768E-3"
+
   """
   @spec to_string(t, :scientific | :normal | :xsd | :raw) :: String.t()
   def to_string(num, type \\ :scientific)
@@ -1317,6 +1404,18 @@ defmodule Decimal do
   Returns the decimal represented as an integer.
 
   Fails when loss of precision will occur.
+
+  ## Examples
+
+      iex> Decimal.to_integer(Decimal.new("42"))
+      42
+
+      iex> Decimal.to_integer(Decimal.new("1.00"))
+      1
+
+      iex> Decimal.to_integer(Decimal.new("1.10"))
+      ** (ArgumentError) cannot convert Decimal.new("1.1") without losing precision. Use Decimal.round/3 first.
+
   """
   @spec to_integer(t) :: integer
   def to_integer(%Decimal{sign: sign, coef: coef, exp: 0})
@@ -1341,6 +1440,12 @@ defmodule Decimal do
 
   The returned float may have lower precision than the decimal. Fails if
   the decimal cannot be converted to a float.
+
+  ## Examples
+
+      iex> Decimal.to_float(Decimal.new("1.5"))
+      1.5
+
   """
   @spec to_float(t) :: float
   def to_float(%Decimal{sign: sign, coef: coef, exp: exp}) when is_integer(coef) do
@@ -1406,6 +1511,7 @@ defmodule Decimal do
 
       iex> Decimal.integer?("1.10")
       false
+
   """
   doc_since("2.0.0")
   @spec integer?(decimal()) :: boolean
