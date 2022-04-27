@@ -836,6 +836,31 @@ defmodule Decimal do
   def negative?(%Decimal{sign: -1}), do: true
 
   @doc """
+  Returns `true` if given number is zero, otherwise `false`.
+
+  ## Examples
+
+      iex> Decimal.zero?(Decimal.new("0"))
+      true
+
+      iex> Decimal.zero?(Decimal.new("0.0"))
+      true
+
+      iex> Decimal.zero?(Decimal.new("1"))
+      false
+
+      iex> Decimal.zero?(Decimal.new("-1"))
+      false
+
+      iex> Decimal.zero?(Decimal.new("NaN"))
+      false
+
+  """
+  @spec zero?(t) :: boolean
+  def zero?(%Decimal{coef: 0}), do: true
+  def zero?(%Decimal{}), do: false
+
+  @doc """
   Multiplies two numbers.
 
   ## Exceptional conditions

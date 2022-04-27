@@ -461,6 +461,15 @@ defmodule DecimalTest do
     end)
   end
 
+  test "zero?/1" do
+    Context.with(%Context{precision: 2}, fn ->
+      assert Decimal.zero?(~d"0")
+      refute Decimal.zero?(~d"-5")
+      refute Decimal.zero?(~d"5")
+      refute Decimal.zero?(~d"nan")
+    end)
+  end
+
   test "mult/2" do
     assert Decimal.mult(~d"0", ~d"0") == d(1, 0, 0)
     assert Decimal.mult(~d"42", ~d"0") == d(1, 0, 0)
