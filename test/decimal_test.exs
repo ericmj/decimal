@@ -757,6 +757,8 @@ defmodule DecimalTest do
     assert Decimal.integer?(~d"1e100")
     assert Decimal.integer?(~d"1.23e5")
     assert Decimal.integer?(~d"10000e-3")
+    assert Decimal.integer?(~d"0.0")
+    assert Decimal.integer?(~d"1.0")
 
     refute Decimal.integer?(~d"0.1")
     refute Decimal.integer?(~d"0.10")
