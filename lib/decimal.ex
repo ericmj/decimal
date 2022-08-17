@@ -1520,10 +1520,10 @@ defmodule Decimal do
   def integer?(%Decimal{coef: coef, exp: exp}), do: exp >= 0 or zero_after_dot?(coef, exp)
   def integer?(num), do: integer?(decimal(num))
 
-  def zero_after_dot?(coef, exp) when coef >= 10 and exp < 0,
+  defp zero_after_dot?(coef, exp) when coef >= 10 and exp < 0,
     do: Kernel.rem(coef, 10) == 0 and zero_after_dot?(Kernel.div(coef, 10), exp + 1)
 
-  def zero_after_dot?(coef, exp),
+  defp zero_after_dot?(coef, exp),
     do: coef == 0 or exp == 0
 
   ## ARITHMETIC ##
