@@ -1523,8 +1523,8 @@ defmodule Decimal do
   defp zero_after_dot?(coef, exp) when coef >= 10 and exp < 0,
     do: Kernel.rem(coef, 10) == 0 and zero_after_dot?(Kernel.div(coef, 10), exp + 1)
 
-  defp zero_after_dot?(_coef, exp),
-    do: exp == 0
+  defp zero_after_dot?(coef, exp),
+    do: coef == 0 or exp == 0
 
   ## ARITHMETIC ##
 
