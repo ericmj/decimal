@@ -1015,6 +1015,20 @@ defmodule Decimal do
   end
 
   @doc """
+  Returns the sum of all decimals in the enumerable.
+
+  ## Examples
+
+      iex> Decimal.sum([Decimal.new("1.234"), Decimal.new(2)])
+      Decimal.new("3.234")
+
+  """
+  @spec sum([decimal]) :: t
+  def sum(decimals) do
+    Enum.reduce(decimals, zero(), &add/2)
+  end
+
+  @doc """
   Finds the square root.
 
   ## Examples
