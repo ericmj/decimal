@@ -1160,6 +1160,18 @@ defmodule Decimal do
   end
 
   @doc """
+  Returns the default zero value of a Decimal.
+
+  ## Examples
+
+      iex> Decimal.zero()
+      Decimal.new(0)
+
+  """
+  @spec zero() :: t
+  def zero(), do: Decimal.new(0)
+
+  @doc """
   Creates a new decimal number from the sign, coefficient and exponent such that
   the number will be: `sign * coefficient * 10 ^ exponent`.
 
