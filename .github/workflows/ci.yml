@@ -29,9 +29,6 @@ jobs:
               otp: 24.3.x
           - pair:
               elixir: 1.14.x
-              otp: 23.3.x
-          - pair:
-              elixir: 1.14.x
               otp: 25.x
             lint: lint
     steps:
