@@ -10,18 +10,12 @@ Decimal represents values internally using three integers: a sign, a coefficient
 In this way, numbers of any size and with any number of decimal places can be represented exactly.
 
 ```elixir
-Decimal.new(1, 42, 0)
-# Decimal.new("42")
-Decimal.new(-1, 42, 0)
-# Decimal.new("-42")
-Decimal.new(1, 42, -1)
-# Decimal.new("4.2")
-Decimal.new(1, 42, -20)
-# Decimal.new("4.2E-19")
-Decimal.new(1, 42, 20)
-# Decimal.new("4.2E+21")
-Decimal.new(1, 123456789987654321, -9)
-# Decimal.new("123456789.987654321")
+Decimal.new(_sign = 1, _coefficient = 42, _exponent = 0) #=> Decimal.new("42")
+Decimal.new(-1, 42, 0) #=> Decimal.new("-42")
+Decimal.new(1, 42, -1) #=> Decimal.new("4.2")
+Decimal.new(1, 42, -20) #=> Decimal.new("4.2E-19")
+Decimal.new(1, 42, 20) #=> Decimal.new("4.2E+21")
+Decimal.new(1, 123456789987654321, -9) #=> Decimal.new("123456789.987654321")
 ```
 
 For calculations, the amount of desired precision - that is, the number of
