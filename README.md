@@ -4,6 +4,29 @@
 
 Arbitrary precision decimal arithmetic.
 
+## Concept
+
+Decimal represents values internally using three integers: a sign, a coefficient, and an exponent.
+In this way, numbers of any size and with any number of decimal places can be represented exactly.
+
+```elixir
+Decimal.new(1, 42, 0)
+# Decimal.new("42")
+Decimal.new(-1, 42, 0)
+# Decimal.new("-42")
+Decimal.new(1, 42, -1)
+# Decimal.new("4.2")
+Decimal.new(1, 42, -20)
+# Decimal.new("4.2E-19")
+Decimal.new(1, 42, 20)
+# Decimal.new("4.2E+21")
+Decimal.new(1, 123456789987654321, -9)
+# Decimal.new("123456789.987654321")
+```
+
+For calculations, the amount of desired precision - that is, the number of
+decimal digits in the coefficient - can be specified.
+
 ## Usage
 
 Add Decimal as a dependency in your `mix.exs` file:
@@ -65,7 +88,7 @@ iex> D.Context.get()
 ### Precision and rounding
 
 Use `:precision` option to limit the amount of decimal digits in the
-coefficient:
+coefficient of any calculation result:
 
 ```elixir
 iex> D.Context.set(%D.Context{D.Context.get() | precision: 9})

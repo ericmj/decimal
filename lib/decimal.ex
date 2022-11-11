@@ -1172,7 +1172,7 @@ defmodule Decimal do
       Decimal.new("42")
 
   """
-  @spec new(1 | -1, non_neg_integer | :NaN | :inf, integer) :: t
+  @spec new(sign :: 1 | -1, coef :: non_neg_integer | :NaN | :inf, exp :: integer) :: t
   def new(sign, coef, exp)
       when sign in [1, -1] and ((is_integer(coef) and coef >= 0) or coef in [:NaN, :inf]) and
              is_integer(exp),
