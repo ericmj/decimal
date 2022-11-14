@@ -1490,7 +1490,7 @@ defmodule Decimal do
       2
   """
   @spec scale(t) :: non_neg_integer()
-  def scale(%Decimal{exp: exp}), do: Enum.max([0, -exp])
+  def scale(%Decimal{exp: exp}), do: max(0, -exp)
 
   defp scale_up(num, den, exp) when num >= den, do: {num, exp}
   defp scale_up(num, den, exp), do: scale_up(num <<< 1, den, exp - 1)
