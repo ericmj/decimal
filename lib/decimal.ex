@@ -1469,6 +1469,29 @@ defmodule Decimal do
     end
   end
 
+  @doc """
+  Returns the scale of the decimal.
+
+  A decimal's scale is the number of digits after the decimal point. This
+  includes trailing zeros; see `normalize/1` to remove them.
+
+  ## Examples
+
+      iex> Decimal.scale(Decimal.new("42"))
+      0
+
+      iex> Decimal.scale(Decimal.new(1, 2, 26))
+      0
+
+      iex> Decimal.scale(Decimal.new("99.12345"))
+      5
+
+      iex> Decimal.scale(Decimal.new("1.50"))
+      2
+  """
+  @spec scale(t) :: non_neg_integer()
+  def scale(%Decimal{exp: exp}), do: Kernel.max(0, -exp)
+
   defp scale_up(num, den, exp) when num >= den, do: {num, exp}
   defp scale_up(num, den, exp), do: scale_up(num <<< 1, den, exp - 1)
 
