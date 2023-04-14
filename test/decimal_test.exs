@@ -242,6 +242,8 @@ defmodule DecimalTest do
 
     assert Decimal.compare("Inf", "Inf") == :eq
 
+    assert Decimal.compare(~d"5e10000000000", ~d"0") == :gt
+
     assert_raise Error, fn ->
       Decimal.compare(~d"nan", ~d"0")
     end

@@ -342,16 +342,59 @@ defmodule Decimal do
   def compare(_num1, %Decimal{coef: :NaN} = num2),
     do: error(:invalid_operation, "operation on NaN", num2)
 
+  def compare(%Decimal{coef: 0}, %Decimal{coef: 0}), do: :eq
+
+  def compare(%Decimal{sign: 1}, %Decimal{sign: -1}), do: :gt
+  def compare(%Decimal{sign: -1}, %Decimal{sign: 1}), do: :lt
+
   def compare(%Decimal{} = num1, %Decimal{} = num2) do
-    case sub(num1, num2) do
-      %Decimal{coef: 0} -> :eq
-      %Decimal{sign: 1} -> :gt
-      %Decimal{sign: -1} -> :lt
+    exp1_adjusted = adjust_exponent(num1)
+    exp2_adjusted = adjust_exponent(num2)
+
+    sign =
+      cond do
+        exp1_adjusted == exp2_adjusted ->
+          num1_padded = padd_num(num1, num1.exp - num2.exp)
+          num2_padded = padd_num(num2, num2.exp - num1.exp)
+
+          cond do
+            num1_padded == num2_padded ->
+              0
+
+            num1_padded < num2_padded ->
+              -num1.sign
+
+            true ->
+              num1.sign
+          end
+
+        exp1_adjusted < exp2_adjusted ->
+          -num1.sign
+
+        true ->
+          num1.sign
+      end
+
+    case sign do
+      0 -> :eq
+      1 -> :gt
+      -1 -> :lt
     end
   end
 
   def compare(num1, num2) do
     compare(decimal(num1), decimal(num2))
+  end
+
+  defp adjust_exponent(%Decimal{coef: coef, exp: exp}) do
+    exp + (coef |> Integer.to_string() |> String.length() |> Kernel.-(1))
+  end
+
+  defp padd_num(%Decimal{coef: coef}, n) do
+    coef
+    |> Integer.to_string()
+    |> Kernel.<>("0")
+    |> Kernel.<>(String.duplicate("0", :erlang.max(n, 0)))
   end
 
   @deprecated "Use compare/2 instead"
