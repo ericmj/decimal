@@ -354,8 +354,8 @@ defmodule Decimal do
     sign =
       cond do
         adjusted_exp1 == adjusted_exp2 ->
-          padded_num1 = padd_num(num1, num1.exp - num2.exp)
-          padded_num2 = padd_num(num2, num2.exp - num1.exp)
+          padded_num1 = pad_num(num1, num1.exp - num2.exp)
+          padded_num2 = pad_num(num2, num2.exp - num1.exp)
 
           cond do
             padded_num1 == padded_num2 ->
@@ -387,14 +387,18 @@ defmodule Decimal do
   end
 
   defp adjust_exp(%Decimal{coef: coef, exp: exp}) do
-    digits = :erlang.integer_to_list(coef)
-    num_digits = length(digits)
-    exp + num_digits - 1
+    coef_adjustment = coef_length(coef)
+    exp + coef_adjustment - 1
   end
 
-  defp padd_num(%Decimal{coef: coef}, n) do
-    digits = :erlang.integer_to_list(coef)
-    digits ++ List.duplicate(?0, :erlang.max(n, 0) + 1)
+  def coef_length(0), do: 1
+  def coef_length(coef), do: coef_length(coef, 0)
+
+  def coef_length(0, length), do: length
+  def coef_length(coef, length), do: coef_length(Kernel.div(coef, 10), length + 1)
+
+  defp pad_num(%Decimal{coef: coef}, n) do
+    coef * pow10(Kernel.max(n, 0) + 1)
   end
 
   @deprecated "Use compare/2 instead"
