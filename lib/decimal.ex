@@ -348,27 +348,27 @@ defmodule Decimal do
   def compare(%Decimal{sign: -1}, %Decimal{sign: 1}), do: :lt
 
   def compare(%Decimal{} = num1, %Decimal{} = num2) do
-    exp1_adjusted = adjust_exponent(num1)
-    exp2_adjusted = adjust_exponent(num2)
+    adjusted_exp1 = adjust_exp(num1)
+    adjusted_exp2 = adjust_exp(num2)
 
     sign =
       cond do
-        exp1_adjusted == exp2_adjusted ->
-          num1_padded = padd_num(num1, num1.exp - num2.exp)
-          num2_padded = padd_num(num2, num2.exp - num1.exp)
+        adjusted_exp1 == adjusted_exp2 ->
+          padded_num1 = padd_num(num1, num1.exp - num2.exp)
+          padded_num2 = padd_num(num2, num2.exp - num1.exp)
 
           cond do
-            num1_padded == num2_padded ->
+            padded_num1 == padded_num2 ->
               0
 
-            num1_padded < num2_padded ->
+            padded_num1 < padded_num2 ->
               -num1.sign
 
             true ->
               num1.sign
           end
 
-        exp1_adjusted < exp2_adjusted ->
+        adjusted_exp1 < adjusted_exp2 ->
           -num1.sign
 
         true ->
@@ -386,14 +386,15 @@ defmodule Decimal do
     compare(decimal(num1), decimal(num2))
   end
 
-  defp adjust_exponent(%Decimal{coef: coef, exp: exp}) do
-    exp + (coef |> Integer.to_string() |> String.length() |> Kernel.-(1))
+  defp adjust_exp(%Decimal{coef: coef, exp: exp}) do
+    digits = :erlang.integer_to_list(coef)
+    num_digits = length(digits)
+    exp + num_digits - 1
   end
 
   defp padd_num(%Decimal{coef: coef}, n) do
-    coef
-    |> Integer.to_string()
-    |> Kernel.<>(String.duplicate("0", :erlang.max(n, 0) + 1))
+    digits = :erlang.integer_to_list(coef)
+    digits ++ List.duplicate(?0, :erlang.max(n, 0) + 1)
   end
 
   @deprecated "Use compare/2 instead"
