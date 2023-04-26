@@ -1375,7 +1375,7 @@ defmodule Decimal do
         if diff > 0 do
           List.insert_at(list, diff, ?.)
         else
-          '0.' ++ :lists.duplicate(-diff, ?0) ++ list
+          ~c"0." ++ :lists.duplicate(-diff, ?0) ++ list
         end
       end
 
@@ -1406,8 +1406,8 @@ defmodule Decimal do
 
         true ->
           list = if length > 1, do: List.insert_at(list, 1, ?.), else: list
-          list = list ++ 'E'
-          list = if exp >= 0, do: list ++ '+', else: list
+          list = list ++ ~c"E"
+          list = if exp >= 0, do: list ++ ~c"+", else: list
           list ++ integer_to_charlist(adjusted)
       end
 
@@ -1861,8 +1861,8 @@ defmodule Decimal do
     if int == [] and float == [] do
       :error
     else
-      int = if int == [], do: '0', else: int
-      exp = if exp == [], do: '0', else: exp
+      int = if int == [], do: ~c"0", else: int
+      exp = if exp == [], do: ~c"0", else: exp
 
       number = %Decimal{
         coef: List.to_integer(int ++ float),
