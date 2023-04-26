@@ -393,8 +393,7 @@ defmodule Decimal do
   defp padd_num(%Decimal{coef: coef}, n) do
     coef
     |> Integer.to_string()
-    |> Kernel.<>("0")
-    |> Kernel.<>(String.duplicate("0", :erlang.max(n, 0)))
+    |> Kernel.<>(String.duplicate("0", :erlang.max(n, 0) + 1))
   end
 
   @deprecated "Use compare/2 instead"
