@@ -1,7 +1,3 @@
 [
-  inputs: [
-    "*.exs",
-    "lib/**/*.ex",
-    "test/**/*.{ex,exs}"
-  ]
+  inputs: ["{bench,mix,.formatter}.exs", "{config,lib,test}/**/*.{ex,exs}"]
 ]
