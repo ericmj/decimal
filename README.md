@@ -1,7 +1,5 @@
 # Decimal
 
-[![Build Status](https://travis-ci.org/ericmj/decimal.svg?branch=master)](https://travis-ci.org/ericmj/decimal)
-
 Arbitrary precision decimal arithmetic.
 
 ## Concept
