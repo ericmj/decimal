@@ -228,6 +228,10 @@ defmodule DecimalTest do
   end
 
   test "compare/2" do
+    assert Decimal.compare(~d"0.123", ~d"0") == :gt
+    assert Decimal.compare(~d"0.123", ~d"0.122") == :gt
+    assert Decimal.compare(~d"0.123", ~d"0.123") == :eq
+    assert Decimal.compare(~d"0.123", ~d"0.124") == :lt
     assert Decimal.compare(~d"420", ~d"42e1") == :eq
     assert Decimal.compare(~d"1", ~d"0") == :gt
     assert Decimal.compare(~d"0", ~d"1") == :lt
