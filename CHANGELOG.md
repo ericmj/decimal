@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v2.1.1 (2023-04-26)
+
+Decimal v2.1 requires Elixir v1.8+.
+
+### Bug fixes
+
+* Fix `Decimal.compare/2` when comparing against `0`
+
 ## v2.1.0 (2023-04-26)
 
 Decimal v2.1 requires Elixir v1.8+.
