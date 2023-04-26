@@ -342,16 +342,59 @@ defmodule Decimal do
   def compare(_num1, %Decimal{coef: :NaN} = num2),
     do: error(:invalid_operation, "operation on NaN", num2)
 
+  def compare(%Decimal{coef: 0}, %Decimal{coef: 0}), do: :eq
+
+  def compare(%Decimal{sign: 1}, %Decimal{sign: -1}), do: :gt
+  def compare(%Decimal{sign: -1}, %Decimal{sign: 1}), do: :lt
+
   def compare(%Decimal{} = num1, %Decimal{} = num2) do
-    case sub(num1, num2) do
-      %Decimal{coef: 0} -> :eq
-      %Decimal{sign: 1} -> :gt
-      %Decimal{sign: -1} -> :lt
+    adjusted_exp1 = adjust_exp(num1)
+    adjusted_exp2 = adjust_exp(num2)
+
+    sign =
+      cond do
+        adjusted_exp1 == adjusted_exp2 ->
+          padded_num1 = padd_num(num1, num1.exp - num2.exp)
+          padded_num2 = padd_num(num2, num2.exp - num1.exp)
+
+          cond do
+            padded_num1 == padded_num2 ->
+              0
+
+            padded_num1 < padded_num2 ->
+              -num1.sign
+
+            true ->
+              num1.sign
+          end
+
+        adjusted_exp1 < adjusted_exp2 ->
+          -num1.sign
+
+        true ->
+          num1.sign
+      end
+
+    case sign do
+      0 -> :eq
+      1 -> :gt
+      -1 -> :lt
     end
   end
 
   def compare(num1, num2) do
     compare(decimal(num1), decimal(num2))
+  end
+
+  defp adjust_exp(%Decimal{coef: coef, exp: exp}) do
+    digits = :erlang.integer_to_list(coef)
+    num_digits = length(digits)
+    exp + num_digits - 1
+  end
+
+  defp padd_num(%Decimal{coef: coef}, n) do
+    digits = :erlang.integer_to_list(coef)
+    digits ++ List.duplicate(?0, :erlang.max(n, 0) + 1)
   end
 
   @deprecated "Use compare/2 instead"
