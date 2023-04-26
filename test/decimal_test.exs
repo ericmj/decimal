@@ -240,6 +240,12 @@ defmodule DecimalTest do
     assert Decimal.compare(~d"0", ~d"inf") == :lt
     assert Decimal.compare(~d"0", ~d"-inf") == :gt
 
+    assert Decimal.compare(~d"0.123", ~d"0") == :gt
+    assert Decimal.compare(~d"0.123", ~d"0.122") == :gt
+    assert Decimal.compare(~d"0.123", ~d"0.123") == :eq
+    assert Decimal.compare(~d"0.123", ~d"0.124") == :lt
+    assert Decimal.compare(~d"0.0123", ~d"0.124") == :lt
+
     assert Decimal.compare("Inf", "Inf") == :eq
 
     assert Decimal.compare(~d"5e10000000000", ~d"0") == :gt

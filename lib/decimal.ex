@@ -344,6 +344,11 @@ defmodule Decimal do
 
   def compare(%Decimal{coef: 0}, %Decimal{coef: 0}), do: :eq
 
+  def compare(%Decimal{sign: 1}, %Decimal{coef: 0}), do: :gt
+  def compare(%Decimal{coef: 0}, %Decimal{sign: 1}), do: :lt
+  def compare(%Decimal{sign: -1}, %Decimal{coef: 0}), do: :lt
+  def compare(%Decimal{coef: 0}, %Decimal{sign: -1}), do: :gt
+
   def compare(%Decimal{sign: 1}, %Decimal{sign: -1}), do: :gt
   def compare(%Decimal{sign: -1}, %Decimal{sign: 1}), do: :lt
 
@@ -358,14 +363,9 @@ defmodule Decimal do
           padded_num2 = pad_num(num2, num2.exp - num1.exp)
 
           cond do
-            padded_num1 == padded_num2 ->
-              0
-
-            padded_num1 < padded_num2 ->
-              -num1.sign
-
-            true ->
-              num1.sign
+            padded_num1 == padded_num2 -> 0
+            padded_num1 < padded_num2 -> -num1.sign
+            true -> num1.sign
           end
 
         adjusted_exp1 < adjusted_exp2 ->
