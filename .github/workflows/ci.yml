@@ -19,15 +19,6 @@ jobs:
               elixir: 1.8.2
               otp: 20.3.x
           - pair:
-              elixir: 1.11.4
-              otp: 23.3.x
-          - pair:
-              elixir: 1.12.x
-              otp: 23.3.x
-          - pair:
-              elixir: 1.13.x
-              otp: 24.3.x
-          - pair:
               elixir: 1.14.x
               otp: 25.x
             lint: lint
