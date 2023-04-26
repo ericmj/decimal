@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## v2.1.0 (2023-04-26)
+
+Decimal v2.1 requires Elixir v1.8+.
+
+### Enhancements
+
+* Improve error message from `Decimal.to_integer/1` during precision loss
+* `Inspect` protocol implementation returns strings in the `Decimal.new(...)` format
+* Add `Decimal.scale/1`
+* Optimize `Decimal.compare/2` for numbers with large exponents
+
+### Bug fixes
+
+* Fix `Decimal.integer?/1` spec
+* Fix `Decimal.integer?/1` check on 0 with >1 significant digits
+
 ## v2.0.0 (2020-09-08)
 
 Decimal v2.0 requires Elixir v1.2+.
