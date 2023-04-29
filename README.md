@@ -35,11 +35,11 @@ interactive Elixir shell with `iex -S mix`:
 ```elixir
 iex> alias Decimal, as: D
 iex> D.add(6, 7)
-#Decimal<13>
+Decimal.new("13")
 iex> D.div(1, 3)
-#Decimal<0.333333333>
+Decimal.new("0.3333333333333333333333333333")
 iex> D.new("0.33")
-#Decimal<0.33>
+Decimal.new("0.33")
 ```
 
 ## Examples
@@ -87,13 +87,13 @@ iex> D.Context.set(%D.Context{D.Context.get() | precision: 9})
 :ok
 
 iex> D.div(100, 3)
-#Decimal<33.3333333>
+Decimal.new("33.3333333")
 
 iex> D.Context.set(%D.Context{D.Context.get() | precision: 2})
 :ok
 
 iex> D.div(100, 3)
-#Decimal<33>
+Decimal.new("33")
 ```
 
 The `:rounding` option specifies the algorithm and precision of the rounding
@@ -104,13 +104,13 @@ iex> D.Context.set(%D.Context{D.Context.get() | rounding: :half_up})
 :ok
 
 iex> D.div(31, 2)
-#Decimal<16>
+Decimal.new("16")
 
 iex> D.Context.set(%D.Context{D.Context.get() | rounding: :floor})
 :ok
 
 iex> D.div(31, 2)
-#Decimal<15>
+Decimal.new("15")
 ```
 
 ### Comparisons
@@ -148,7 +148,7 @@ iex> D.Context.get().flags
 []
 
 iex> D.div(31, 2)
-#Decimal<15>
+Decimal.new("15")
 
 iex> D.Context.get().flags
 [:inexact, :rounded]
@@ -180,7 +180,7 @@ iex> D.Context.set(%D.Context{D.Context.get() | traps: [], flags: []})
 :ok
 
 iex> D.div(42, 0)
-#Decimal<Infinity>
+Decimal.new("Infinity")
 
 iex> D.Context.get().flags
 [:division_by_zero]
