@@ -1062,6 +1062,38 @@ defmodule Decimal do
   end
 
   @doc """
+  Rounds the given number to the nearest number given as input with the given strategy
+  (default is to round to nearest one).
+
+  See `Decimal.Context` for more information about rounding algorithms.
+
+  ## Examples
+
+      iex> Decimal.round_to_nearest("47.1", 5)
+      Decimal.new("45")
+
+      iex> Decimal.round_to_nearest("47.51", 5)
+      Decimal.new("50")
+
+  """
+  @spec round_to_nearest(decimal, integer, rounding) :: t
+  def round_to_nearest(num, round_number, mode \\ :half_up)
+
+  def round_to_nearest(%Decimal{coef: :NaN} = num, _, _), do: num
+
+  def round_to_nearest(%Decimal{coef: :inf} = num, _, _), do: num
+
+  def round_to_nearest(%Decimal{} = num, round_number, mode) do
+    div(num, round_number)
+    |> round(0, mode)
+    |> mult(round_number)
+  end
+
+  def round_to_nearest(num, round_number, mode) do
+    round_to_nearest(decimal(num), round_number, mode)
+  end
+
+  @doc """
   Finds the square root.
 
   ## Examples
