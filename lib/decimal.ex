@@ -391,11 +391,11 @@ defmodule Decimal do
     exp + coef_adjustment - 1
   end
 
-  def coef_length(0), do: 1
-  def coef_length(coef), do: coef_length(coef, 0)
+  defp coef_length(0), do: 1
+  defp coef_length(coef), do: coef_length(coef, 0)
 
-  def coef_length(0, length), do: length
-  def coef_length(coef, length), do: coef_length(Kernel.div(coef, 10), length + 1)
+  defp coef_length(0, length), do: length
+  defp coef_length(coef, length), do: coef_length(Kernel.div(coef, 10), length + 1)
 
   defp pad_num(%Decimal{coef: coef}, n) do
     coef * pow10(Kernel.max(n, 0) + 1)
