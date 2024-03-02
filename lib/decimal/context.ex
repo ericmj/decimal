@@ -8,7 +8,12 @@ defmodule Decimal.Context do
 
   The default context has a precision of 28, the rounding algorithm is
   `:half_up`. The set trap enablers are `:invalid_operation` and
-  `:division_by_zero`.
+  `:division_by_zero`. It is possible to override the default precision in
+  your `config/config.exs`:
+
+  ```
+  config :decimal, precision: 30
+  ```
 
   ## Fields
 
@@ -73,7 +78,9 @@ defmodule Decimal.Context do
           traps: [Decimal.signal()]
         }
 
-  defstruct precision: 28,
+  @precision Application.compile_env(:decimal, :precision, 28)
+
+  defstruct precision: @precision,
             rounding: :half_up,
             flags: [],
             traps: [:invalid_operation, :division_by_zero]
