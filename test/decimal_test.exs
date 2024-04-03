@@ -295,6 +295,24 @@ defmodule DecimalTest do
     refute Decimal.lt?(~d"1", ~d"nan")
   end
 
+  test "gte?/2" do
+    assert Decimal.gte?(~d"420", ~d"42e1")
+    assert Decimal.gte?(~d"1", ~d"0")
+    refute Decimal.gte?(~d"0", ~d"1")
+    assert Decimal.gte?(~d"0", ~d"-0")
+    refute Decimal.gte?(~d"nan", ~d"1")
+    refute Decimal.gte?(~d"1", ~d"nan")
+  end
+
+  test "lte?/2" do
+    assert Decimal.lte?(~d"420", ~d"42e1")
+    refute Decimal.lte?(~d"1", ~d"0")
+    assert Decimal.lte?(~d"0", ~d"1")
+    assert Decimal.lte?(~d"0", ~d"-0")
+    refute Decimal.lte?(~d"nan", ~d"1")
+    refute Decimal.lte?(~d"1", ~d"nan")
+  end
+
   test "div/2" do
     Context.with(%Context{precision: 5, rounding: :half_up}, fn ->
       assert Decimal.div(~d"1", ~d"3") == d(1, 33333, -5)
