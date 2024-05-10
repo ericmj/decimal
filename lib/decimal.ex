@@ -1258,31 +1258,25 @@ defmodule Decimal do
       Decimal.new("3.14")
 
       iex> Decimal.new("1.79769313486231581e308")
-      ** (Decimal.Error) : number bigger than DBL_MAX: Decimal.new("1.79769313486231581E+308")
+      Decimal.new("1.79769313486231581e308")
 
       iex> Decimal.new("2.22507385850720139e-308")
-      ** (Decimal.Error) : number smaller than DBL_MIN: Decimal.new("2.22507385850720139E-308")
+      Decimal.new("2.22507385850720139e-308")
 
   """
   @spec new(decimal) :: t
   def new(%Decimal{sign: sign, coef: coef, exp: exp} = num)
       when sign in [1, -1] and ((is_integer(coef) and coef >= 0) or coef in [:NaN, :inf]) and
-             is_integer(exp) do
-    check_dbl_min_max(num)
-  end
+             is_integer(exp),
+      do: num
 
-  def new(int) when is_integer(int) do
-    num = %Decimal{sign: if(int < 0, do: -1, else: 1), coef: Kernel.abs(int)}
-    check_dbl_min_max(num)
-  end
+  def new(int) when is_integer(int),
+    do: %Decimal{sign: if(int < 0, do: -1, else: 1), coef: Kernel.abs(int)}
 
   def new(binary) when is_binary(binary) do
     case parse(binary) do
-      {decimal, ""} ->
-        check_dbl_min_max(decimal)
-
-      _ ->
-        raise Error, reason: "number parsing syntax: #{inspect(binary)}"
+      {decimal, ""} -> decimal
+      _ -> raise Error, reason: "number parsing syntax: #{inspect(binary)}"
     end
   end
 
@@ -1302,10 +1296,8 @@ defmodule Decimal do
   @spec new(sign :: 1 | -1, coef :: non_neg_integer | :NaN | :inf, exp :: integer) :: t
   def new(sign, coef, exp)
       when sign in [1, -1] and ((is_integer(coef) and coef >= 0) or coef in [:NaN, :inf]) and
-             is_integer(exp) do
-    num = %Decimal{sign: sign, coef: coef, exp: exp}
-    check_dbl_min_max(num)
-  end
+             is_integer(exp),
+      do: %Decimal{sign: sign, coef: coef, exp: exp}
 
   @doc """
   Creates a new decimal number from a floating point number.
@@ -1574,10 +1566,25 @@ defmodule Decimal do
 
       iex> Decimal.to_float(Decimal.new("1.5"))
       1.5
+      iex> Decimal.to_float(Decimal.new("-1.79769313486231581e308"))
+      ** (Decimal.Error) : negative number smaller than DBL_MAX: Decimal.new("-1.79769313486231581E+308")
+
+
+      iex> Decimal.to_float(Decimal.new("-1.79769313486231581e308"))
+      ** (Decimal.Error) : negative number smaller than DBL_MAX: Decimal.new("-1.79769313486231581E+308")
+
+
+      iex> Decimal.to_float(Decimal.new("2.22507385850720139e-308"))
+      ** (Decimal.Error) : number smaller than DBL_MIN: Decimal.new("2.22507385850720139E-308")
+
+
+      iex> Decimal.to_float(Decimal.new("-2.22507385850720139e-308"))
+      ** (Decimal.Error): negative number bigger than DBL_MIN: Decimal.new(\"-2.22507385850720139E-308\")
 
   """
   @spec to_float(t) :: float
-  def to_float(%Decimal{sign: sign, coef: coef, exp: exp}) when is_integer(coef) do
+  def to_float(%Decimal{coef: coef} = decimal) when is_integer(coef) do
+    %Decimal{sign: sign, coef: coef, exp: exp} = check_dbl_min_max(decimal)
     # Convert back to float without loss
     # http://www.exploringbinary.com/correct-decimal-to-floating-point-using-big-integers/
     {num, den} = ratio(coef, exp)
@@ -2056,9 +2063,9 @@ defmodule Decimal do
     end
   end
 
-  def dbl_min(sign), do: %Decimal{sign: sign, coef: 22_250_738_585_072_014, exp: -324}
-  def zero(sign), do: %Decimal{sign: sign, coef: 0, exp: 0}
-  def dbl_max(sign), do: %Decimal{sign: sign, coef: 17_976_931_348_623_158, exp: 292}
+  defp dbl_min(sign), do: %Decimal{sign: sign, coef: 22_250_738_585_072_014, exp: -324}
+  defp zero(sign), do: %Decimal{sign: sign, coef: 0, exp: 0}
+  defp dbl_max(sign), do: %Decimal{sign: sign, coef: 17_976_931_348_623_158, exp: 292}
 
   if Version.compare(System.version(), "1.3.0") == :lt do
     defp integer_to_charlist(string), do: Integer.to_char_list(string)
