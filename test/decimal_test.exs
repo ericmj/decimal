@@ -919,13 +919,13 @@ defmodule DecimalTest do
                  ": negative number smaller than DBL_MAX: Decimal.new(\"-1.79769313486231581E+308\")",
                  fn -> Decimal.to_float(Decimal.new("-1.79769313486231581e308")) end
 
-    assert Decimal.to_float(Decimal.new("1.79769313486231579e308")) == 1.79769313486231579e308
+    assert Decimal.to_float(dbl_max(1)) == 1.79769313486231579e308
 
-    assert Decimal.to_float(Decimal.new("-1.79769313486231579e308")) ==
+    assert Decimal.to_float(dbl_max(-1)) ==
              -1.79769313486231579e+308
 
-    assert Decimal.to_float(Decimal.new("2.2250738585072014e-308")) == 2.2250738585072014e-308
-    assert Decimal.to_float(Decimal.new("-2.2250738585072014e-308")) == -2.2250738585072014e-308
+    assert Decimal.to_float(dbl_min(1)) == 2.2250738585072014e-308
+    assert Decimal.to_float(dbl_min(-1)) == -2.2250738585072014e-308
 
     assert_raise Decimal.Error,
                  ": number smaller than DBL_MIN: Decimal.new(\"2.22507385850720139E-308\")",
