@@ -306,9 +306,10 @@ defmodule Decimal do
   end
 
   @doc """
-  Compares two numbers numerically using a threshold. If first number added with threshold
-  is greater than second and the first subtracted with threshold is smaller than second than
-  it will be the same number
+  Compares two numbers numerically using a threshold. If the first number added
+  to the threshold is greater than the second number, and the first number
+  subtracted by the threshold is smaller than the second number, then the two
+  numbers are considered equal
 
   ## Examples
 
@@ -481,9 +482,9 @@ defmodule Decimal do
   def eq?(num1, num2), do: compare(num1, num2) == :eq
 
   @doc """
-  It compares equality of two numbers. If the second number
-  is equal of between `first - thresrold` and `first + thresrold`
-  then it returns `true`, otherwise it returns `false`.
+  It compares the equality of two numbers. If the second number is within
+  the range of first - threshold and first + threshold, it returns true;
+  otherwise, it returns false
 
   ## Examples
 
