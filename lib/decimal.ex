@@ -79,6 +79,9 @@ defmodule Decimal do
           | :rounded
           | :inexact
 
+  @type compare_result ::
+          :lt | :gt | :eq
+
   @typedoc """
   Rounding algorithm.
 
@@ -303,6 +306,37 @@ defmodule Decimal do
   end
 
   @doc """
+  Compares two numbers numerically using a threshold. If first number added with threshold
+  is greater than second and the first subtracted with threshold is smaller than second than
+  it will be the same number
+
+  ## Examples
+
+      iex> Decimal.compare("1.1", 1, "0.2")
+      :eq
+
+      iex> Decimal.compare("1.2", 1, "0.1")
+      :gt
+
+      iex> Decimal.compare("1.0", "1.2", "0.1")
+      :lt
+  """
+  @spec compare(decimal :: decimal(), decimal :: decimal(), threshold :: decimal()) ::
+          compare_result()
+  def compare(n1, n2, threshold) do
+    add_threshold = n1 |> Decimal.add(threshold)
+    sub_threshold = n1 |> Decimal.sub(threshold)
+    case1 = compare(add_threshold, n2)
+    case2 = compare(sub_threshold, n2)
+
+    cond do
+      (case1 == :gt or case1 == :eq) and (case2 == :lt or case2 == :eq) -> :eq
+      case1 == :gt -> :gt
+      case2 == :lt -> :lt
+    end
+  end
+
+  @doc """
   Compares two numbers numerically. If the first number is greater than the second
   `:gt` is returned, if less than `:lt` is returned, if both numbers are equal
   `:eq` is returned.
@@ -318,7 +352,7 @@ defmodule Decimal do
       :gt
 
   """
-  @spec compare(decimal, decimal) :: :lt | :gt | :eq
+  @spec compare(decimal, decimal) :: compare_result()
   def compare(%Decimal{coef: :inf, sign: sign}, %Decimal{coef: :inf, sign: sign}),
     do: :eq
 
@@ -445,6 +479,29 @@ defmodule Decimal do
   def eq?(%Decimal{coef: :NaN}, _num2), do: false
   def eq?(_num1, %Decimal{coef: :NaN}), do: false
   def eq?(num1, num2), do: compare(num1, num2) == :eq
+
+  @doc """
+  It compares equality of two numbers. If the second number
+  is equal of between `first - thresrold` and `first + thresrold`
+  then it returns `true`, otherwise it returns `false`.
+
+  ## Examples
+
+      iex> Decimal.eq?("1.0", 1, "0")
+      true
+
+      iex> Decimal.eq?("1.2", 1, "0.1")
+      false
+
+      iex> Decimal.eq?("1.2", 1, "0.2")
+      true
+
+      iex> Decimal.eq?(1, -1, "0.0")
+      false
+
+  """
+  @spec eq?(decimal :: decimal(), decimal :: decimal(), thresrold :: decimal()) :: boolean()
+  def eq?(num1, num2, thresrold), do: compare(num1, num2, thresrold) == :eq
 
   @doc """
   Compares two numbers numerically and returns `true` if the first argument
