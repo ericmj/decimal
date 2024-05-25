@@ -324,7 +324,10 @@ defmodule Decimal do
   """
   @spec compare(decimal :: decimal(), decimal :: decimal(), threshold :: decimal()) ::
           compare_result()
-  def compare(n1, n2, threshold) do
+
+  def compare(_, _, %Decimal{sign: -1}), do: raise(Error, reason: "threshold cannot be negative")
+
+  def compare(%Decimal{} = n1, %Decimal{} = n2, %Decimal{} = threshold) do
     add_threshold = n1 |> Decimal.add(threshold)
     sub_threshold = n1 |> Decimal.sub(threshold)
     case1 = compare(add_threshold, n2)
@@ -336,6 +339,8 @@ defmodule Decimal do
       case2 == :lt -> :lt
     end
   end
+
+  def compare(n1, n2, threshold), do: compare(decimal(n1), decimal(n2), decimal(threshold))
 
   @doc """
   Compares two numbers numerically. If the first number is greater than the second
