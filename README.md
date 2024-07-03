@@ -48,7 +48,7 @@ Decimal.new("0.33")
 
 The context specifies the maximum precision of the result of calculations and
 the rounding algorithm if the result has a higher precision than the specified
-maximum. It also holds the list of set of trap enablers and the current set
+maximum. It also holds the list of trap enablers and the current set
 flags.
 
 The context is stored in the process dictionary. You don't have to pass the
