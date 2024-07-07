@@ -84,7 +84,7 @@ defmodule Decimal.Context do
   Runs function with given context.
   """
   doc_since("1.9.0")
-  @spec with(t(), (() -> x)) :: x when x: var
+  @spec with(t(), (-> x)) :: x when x: var
   def with(%Context{} = context, fun) when is_function(fun, 0) do
     old = Process.put(@context_key, context)
 
