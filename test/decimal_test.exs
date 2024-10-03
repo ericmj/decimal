@@ -259,6 +259,24 @@ defmodule DecimalTest do
     end
   end
 
+  test "compare/3" do
+    assert Decimal.compare(~d"420.5", ~d"42e1", "0.5") == :eq
+    assert Decimal.compare(~d"420.5", ~d"42e1", "0.2") == :gt
+
+    assert_raise Error, fn ->
+      Decimal.compare(~d"420.5", ~d"42e1", "-0.2")
+    end
+
+    assert Decimal.compare(~d"1", ~d"0", "0") == :gt
+
+    assert Decimal.compare(~d"-inf", ~d"inf", "100") == :lt
+    assert Decimal.compare(~d"inf", ~d"-inf", "0") == :gt
+    assert Decimal.compare(~d"0", ~d"inf", "1000000") == :lt
+
+    assert Decimal.compare(~d"0.123", ~d"0", "0") == :gt
+    assert Decimal.compare(~d"0.123", ~d"0", "0.2") == :eq
+  end
+
   test "equal?/2" do
     assert Decimal.equal?(~d"420", ~d"42e1")
     refute Decimal.equal?(~d"1", ~d"0")
@@ -275,6 +293,16 @@ defmodule DecimalTest do
     assert Decimal.eq?(~d"0", ~d"-0")
     refute Decimal.eq?(~d"nan", ~d"1")
     refute Decimal.eq?(~d"1", ~d"nan")
+  end
+
+  test "eq/3?" do
+    assert Decimal.eq?(~d"420", ~d"42e1", ~d"0")
+    assert Decimal.eq?(~d"1", ~d"0", ~d"1")
+    refute Decimal.eq?(~d"1", ~d"0", ~d"0")
+
+    assert_raise Error, fn ->
+      Decimal.eq?(~d"nan", ~d"1", ~d"1")
+    end
   end
 
   test "gt?/2" do
