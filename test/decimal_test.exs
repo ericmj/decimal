@@ -299,6 +299,7 @@ defmodule DecimalTest do
     assert Decimal.eq?(~d"420", ~d"42e1", ~d"0")
     assert Decimal.eq?(~d"1", ~d"0", ~d"1")
     refute Decimal.eq?(~d"1", ~d"0", ~d"0")
+
     assert_raise Error, fn ->
       Decimal.eq?(~d"nan", ~d"1", ~d"1")
     end
