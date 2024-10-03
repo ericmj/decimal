@@ -309,7 +309,7 @@ defmodule Decimal do
   Compares two numbers numerically using a threshold. If the first number added
   to the threshold is greater than the second number, and the first number
   subtracted by the threshold is smaller than the second number, then the two
-  numbers are considered equal
+  numbers are considered equal.
 
   ## Examples
 
@@ -489,7 +489,7 @@ defmodule Decimal do
   @doc """
   It compares the equality of two numbers. If the second number is within
   the range of first - threshold and first + threshold, it returns true;
-  otherwise, it returns false
+  otherwise, it returns false.
 
   ## Examples
 
