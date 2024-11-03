@@ -506,8 +506,51 @@ defmodule Decimal do
       false
 
   """
-  @spec eq?(decimal :: decimal(), decimal :: decimal(), thresrold :: decimal()) :: boolean()
-  def eq?(num1, num2, thresrold), do: compare(num1, num2, thresrold) == :eq
+  @spec eq?(decimal :: decimal(), decimal :: decimal(), threshold :: decimal()) :: boolean()
+  def eq?(num1, num2, threshold), do: compare(num1, num2, threshold) == :eq
+
+  @doc """
+  Compares two numbers numerically and returns `true` if they are not equal,
+  otherwise `false`. If one of the operands is a quiet NaN this operation
+  will always return `false`.
+
+  ## Examples
+
+      iex> Decimal.neq?("1.0", 1)
+      false
+
+      iex> Decimal.neq?(1, -1)
+      true
+
+  """
+  doc_since("2.2.0")
+  @spec neq?(decimal, decimal) :: boolean
+  def neq?(%Decimal{coef: :NaN}, _num2), do: false
+  def neq?(_num1, %Decimal{coef: :NaN}), do: false
+  def neq?(num1, num2), do: compare(num1, num2) != :eq
+
+  @doc """
+  It compares the equality of two numbers. If the second number is outside
+  the range of first - threshold and first + threshold, it returns true;
+  otherwise, it returns false.
+
+  ## Examples
+
+      iex> Decimal.neq?("1.0", 1, "0")
+      false
+
+      iex> Decimal.neq?("1.2", 1, "0.1")
+      true
+
+      iex> Decimal.neq?("1.2", 1, "0.2")
+      false
+
+      iex> Decimal.neq?(1, -1, "0.0")
+      true
+
+  """
+  @spec neq?(decimal :: decimal(), decimal :: decimal(), threshold :: decimal()) :: boolean()
+  def neq?(num1, num2, threshold), do: compare(num1, num2, threshold) != :eq
 
   @doc """
   Compares two numbers numerically and returns `true` if the first argument

@@ -305,6 +305,25 @@ defmodule DecimalTest do
     end
   end
 
+  test "neq/2?" do
+    refute Decimal.neq?(~d"420", ~d"42e1")
+    assert Decimal.neq?(~d"1", ~d"0")
+    assert Decimal.neq?(~d"0", ~d"1")
+    refute Decimal.neq?(~d"0", ~d"-0")
+    refute Decimal.neq?(~d"nan", ~d"1")
+    refute Decimal.neq?(~d"1", ~d"nan")
+  end
+
+  test "neq/3?" do
+    refute Decimal.neq?(~d"420", ~d"42e1", ~d"0")
+    refute Decimal.neq?(~d"1", ~d"0", ~d"1")
+    assert Decimal.neq?(~d"1", ~d"0", ~d"0")
+
+    assert_raise Error, fn ->
+      Decimal.neq?(~d"nan", ~d"1", ~d"1")
+    end
+  end
+
   test "gt?/2" do
     refute Decimal.gt?(~d"420", ~d"42e1")
     assert Decimal.gt?(~d"1", ~d"0")
