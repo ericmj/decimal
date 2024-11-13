@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v2.2.0 (2024-11-13)
+
+* Add `Decimal.gte?/2` and `Decimal.lte?/2`
+* Add `Decimal.compare/3` and `Decimal.eq?/3` with threshold as parameter
+
 ## v2.1.1 (2023-04-26)
 
 Decimal v2.1 requires Elixir v1.8+.
