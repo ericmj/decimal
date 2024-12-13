@@ -934,4 +934,10 @@ defmodule DecimalTest do
       Decimal.sqrt(Decimal.new(d(3, 1, -1)))
     end
   end
+
+  if Version.match?(System.version(), ">= 1.18.0-rc") do
+    test "JSON.Encoder implementation" do
+      assert JSON.encode!(%{x: Decimal.new("1.0")}) == "{\"x\":\"1.0\"}"
+    end
+  end
 end

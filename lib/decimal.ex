@@ -2095,3 +2095,12 @@ defimpl String.Chars, for: Decimal do
     Decimal.to_string(dec)
   end
 end
+
+# TODO: remove when we require Elixir 1.18
+if Code.ensure_loaded?(JSON.Encoder) and function_exported?(JSON.Encoder, :encode, 2) do
+  defimpl JSON.Encoder, for: Decimal do
+    def encode(decimal, _encoder) do
+      [?", Decimal.to_string(decimal), ?"]
+    end
+  end
+end
