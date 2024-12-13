@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v2.3.0 (2024-12-13)
+
+* Implement the upcoming [`JSON.Encoder`](https://hexdocs.pm/elixir/main/JSON.Encoder.html)
+  protocol
+
 ## v2.2.0 (2024-11-13)
 
 * Add `Decimal.gte?/2` and `Decimal.lte?/2`
