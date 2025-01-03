@@ -506,6 +506,7 @@ defmodule Decimal do
       false
 
   """
+  doc_since("2.2.0")
   @spec eq?(decimal :: decimal(), decimal :: decimal(), threshold :: decimal()) :: boolean()
   def eq?(num1, num2, threshold), do: compare(num1, num2, threshold) == :eq
 
