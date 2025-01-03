@@ -506,8 +506,8 @@ defmodule Decimal do
       false
 
   """
-  @spec eq?(decimal :: decimal(), decimal :: decimal(), thresrold :: decimal()) :: boolean()
-  def eq?(num1, num2, thresrold), do: compare(num1, num2, thresrold) == :eq
+  @spec eq?(decimal :: decimal(), decimal :: decimal(), threshold :: decimal()) :: boolean()
+  def eq?(num1, num2, threshold), do: compare(num1, num2, threshold) == :eq
 
   @doc """
   Compares two numbers numerically and returns `true` if the first argument
