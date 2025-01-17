@@ -2012,15 +2012,15 @@ defmodule Decimal do
   defp parse_float("." <> rest), do: parse_digits(rest)
   defp parse_float(bin), do: {[], bin}
 
-  defp parse_exp(<<e, rest::binary>>) when e in [?e, ?E] do
-    case rest do
-      <<sign, rest::binary>> when sign in [?+, ?-] ->
-        {digits, rest} = parse_digits(rest)
-        {[sign | digits], rest}
+  defp parse_exp(<<e, sign, digit, rest::binary>>)
+       when e in [?e, ?E] and sign in [?+, ?-] and digit in ?0..?9 do
+    {digits, rest} = parse_digits(rest)
+    {[sign, digit | digits], rest}
+  end
 
-      _ ->
-        parse_digits(rest)
-    end
+  defp parse_exp(<<e, digit, rest::binary>>) when e in [?e, ?E] and digit in ?0..?9 do
+    {digits, rest} = parse_digits(rest)
+    {[digit | digits], rest}
   end
 
   defp parse_exp(bin) do
