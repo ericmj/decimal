@@ -69,16 +69,19 @@ defmodule Decimal do
 
       iex> encoder = fn
       ...>   %Decimal{} = decimal, _encoder ->
-      ...>     decimal |> Decimal.to_float() |> :json.encode_float()
+      ...>     if Decimal.inf?(decimal) or Decimal.nan?(decimal) do
+      ...>       raise ArgumentError, "\#{inspect(decimal)} cannot be encoded to JSON"
+      ...>     end
+      ...>
+      ...>     Decimal.to_string(decimal)
       ...>
       ...>   other, encoder ->
       ...>     JSON.protocol_encode(other, encoder)
       ...> end
       ...>
       iex> JSON.encode!(%{x: Decimal.new("1.00")}, encoder)
-      "{\\"x\\":1.0}"
+      "{\\"x\\":1.00}"
 
-  Note: `Decimal.to_float/1` crashes on infinite and NaN decimals.
   """
 
   import Bitwise

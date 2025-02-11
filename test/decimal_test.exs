@@ -995,7 +995,11 @@ defmodule DecimalTest do
 
       encoder = fn
         %Decimal{} = decimal, _encode ->
-          decimal |> Decimal.to_float() |> :json.encode_float()
+          if Decimal.inf?(decimal) or Decimal.nan?(decimal) do
+            raise ArgumentError, "#{inspect(decimal)} cannot be encoded to JSON"
+          end
+
+          Decimal.to_string(decimal)
 
         other, encode ->
           JSON.protocol_encode(other, encode)
