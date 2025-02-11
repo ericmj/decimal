@@ -73,6 +73,8 @@ defmodule DecimalTest do
     assert Decimal.parse("a") == :error
     assert Decimal.parse("test") == :error
     assert Decimal.parse("e0") == :error
+
+    assert Decimal.parse("1e-d") == {d(1, 1, 0), "e-d"}
   end
 
   test "nan?/1" do
