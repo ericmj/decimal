@@ -19,11 +19,11 @@ jobs:
               elixir: 1.8.2
               otp: 20.3.x
           - pair:
-              elixir: 1.14.x
-              otp: 25.x
+              elixir: 1.17.x
+              otp: 27.x
             lint: lint
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: erlef/setup-beam@v1
         with:

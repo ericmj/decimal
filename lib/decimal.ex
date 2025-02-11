@@ -79,6 +79,9 @@ defmodule Decimal do
           | :rounded
           | :inexact
 
+  @type compare_result ::
+          :lt | :gt | :eq
+
   @typedoc """
   Rounding algorithm.
 
@@ -303,6 +306,43 @@ defmodule Decimal do
   end
 
   @doc """
+  Compares two numbers numerically using a threshold. If the first number added
+  to the threshold is greater than the second number, and the first number
+  subtracted by the threshold is smaller than the second number, then the two
+  numbers are considered equal.
+
+  ## Examples
+
+      iex> Decimal.compare("1.1", 1, "0.2")
+      :eq
+
+      iex> Decimal.compare("1.2", 1, "0.1")
+      :gt
+
+      iex> Decimal.compare("1.0", "1.2", "0.1")
+      :lt
+  """
+  @spec compare(decimal :: decimal(), decimal :: decimal(), threshold :: decimal()) ::
+          compare_result()
+
+  def compare(_, _, %Decimal{sign: -1}), do: raise(Error, reason: "threshold cannot be negative")
+
+  def compare(%Decimal{} = n1, %Decimal{} = n2, %Decimal{} = threshold) do
+    add_threshold = n1 |> Decimal.add(threshold)
+    sub_threshold = n1 |> Decimal.sub(threshold)
+    case1 = compare(add_threshold, n2)
+    case2 = compare(sub_threshold, n2)
+
+    cond do
+      (case1 == :gt or case1 == :eq) and (case2 == :lt or case2 == :eq) -> :eq
+      case1 == :gt -> :gt
+      case2 == :lt -> :lt
+    end
+  end
+
+  def compare(n1, n2, threshold), do: compare(decimal(n1), decimal(n2), decimal(threshold))
+
+  @doc """
   Compares two numbers numerically. If the first number is greater than the second
   `:gt` is returned, if less than `:lt` is returned, if both numbers are equal
   `:eq` is returned.
@@ -318,7 +358,7 @@ defmodule Decimal do
       :gt
 
   """
-  @spec compare(decimal, decimal) :: :lt | :gt | :eq
+  @spec compare(decimal, decimal) :: compare_result()
   def compare(%Decimal{coef: :inf, sign: sign}, %Decimal{coef: :inf, sign: sign}),
     do: :eq
 
@@ -445,6 +485,30 @@ defmodule Decimal do
   def eq?(%Decimal{coef: :NaN}, _num2), do: false
   def eq?(_num1, %Decimal{coef: :NaN}), do: false
   def eq?(num1, num2), do: compare(num1, num2) == :eq
+
+  @doc """
+  It compares the equality of two numbers. If the second number is within
+  the range of first - threshold and first + threshold, it returns true;
+  otherwise, it returns false.
+
+  ## Examples
+
+      iex> Decimal.eq?("1.0", 1, "0")
+      true
+
+      iex> Decimal.eq?("1.2", 1, "0.1")
+      false
+
+      iex> Decimal.eq?("1.2", 1, "0.2")
+      true
+
+      iex> Decimal.eq?(1, -1, "0.0")
+      false
+
+  """
+  doc_since("2.2.0")
+  @spec eq?(decimal :: decimal(), decimal :: decimal(), threshold :: decimal()) :: boolean()
+  def eq?(num1, num2, threshold), do: compare(num1, num2, threshold) == :eq
 
   @doc """
   Compares two numbers numerically and returns `true` if the first argument
@@ -1969,15 +2033,15 @@ defmodule Decimal do
   defp parse_float("." <> rest), do: parse_digits(rest)
   defp parse_float(bin), do: {[], bin}
 
-  defp parse_exp(<<e, rest::binary>>) when e in [?e, ?E] do
-    case rest do
-      <<sign, rest::binary>> when sign in [?+, ?-] ->
-        {digits, rest} = parse_digits(rest)
-        {[sign | digits], rest}
+  defp parse_exp(<<e, sign, digit, rest::binary>>)
+       when e in [?e, ?E] and sign in [?+, ?-] and digit in ?0..?9 do
+    {digits, rest} = parse_digits(rest)
+    {[sign, digit | digits], rest}
+  end
 
-      _ ->
-        parse_digits(rest)
-    end
+  defp parse_exp(<<e, digit, rest::binary>>) when e in [?e, ?E] and digit in ?0..?9 do
+    {digits, rest} = parse_digits(rest)
+    {[digit | digits], rest}
   end
 
   defp parse_exp(bin) do
@@ -2083,5 +2147,14 @@ end
 defimpl String.Chars, for: Decimal do
   def to_string(dec) do
     Decimal.to_string(dec)
+  end
+end
+
+# TODO: remove when we require Elixir 1.18
+if Code.ensure_loaded?(JSON.Encoder) and function_exported?(JSON.Encoder, :encode, 2) do
+  defimpl JSON.Encoder, for: Decimal do
+    def encode(decimal, _encoder) do
+      [?", Decimal.to_string(decimal), ?"]
+    end
   end
 end
