@@ -937,6 +937,52 @@ defmodule DecimalTest do
     end
   end
 
+  test "test max_min_dbl in to_float" do
+    assert Decimal.to_float(dbl_max(1)) == 1.7976931348623158e308
+    assert Decimal.to_float(dbl_max(-1)) == -1.7976931348623158e308
+
+    assert_raise Decimal.Error,
+                 ": number bigger than DBL_MAX: Decimal.new(\"1.79769313486231581E+308\")",
+                 fn -> Decimal.to_float(Decimal.new("1.79769313486231581e308")) end
+
+    assert_raise Decimal.Error,
+                 ": negative number smaller than DBL_MAX: Decimal.new(\"-1.79769313486231581E+308\")",
+                 fn -> Decimal.to_float(Decimal.new("-1.79769313486231581e308")) end
+
+    assert Decimal.to_float(dbl_max(1)) == 1.79769313486231579e308
+
+    assert Decimal.to_float(dbl_max(-1)) ==
+             -1.79769313486231579e+308
+
+    assert Decimal.to_float(dbl_min(1)) == 2.2250738585072014e-308
+    assert Decimal.to_float(dbl_min(-1)) == -2.2250738585072014e-308
+
+    assert_raise Decimal.Error,
+                 ": number smaller than DBL_MIN: Decimal.new(\"2.22507385850720139E-308\")",
+                 fn -> Decimal.to_float(Decimal.new("2.22507385850720139e-308")) end
+
+    assert_raise Decimal.Error,
+                 ": negative number bigger than DBL_MIN: Decimal.new(\"-2.22507385850720139E-308\")",
+                 fn -> Decimal.to_float(Decimal.new("-2.22507385850720139e-308")) end
+
+    assert Decimal.to_float(Decimal.new("2.22507385850720141e-308")) == 2.22507385850720141e-308
+
+    assert Decimal.to_float(Decimal.new("-2.22507385850720141e-308")) ==
+             -2.22507385850720141e-308
+
+    assert_raise Decimal.Error,
+                 ": number bigger than DBL_MAX: Decimal.new(\"9.999999999999999999E+1000000000000000000000017\")",
+                 fn ->
+                   Decimal.to_float(Decimal.new("9999999999999999999e999999999999999999999999"))
+                 end
+
+    assert_raise Decimal.Error,
+                 ": number smaller than DBL_MIN: Decimal.new(\"9.9999999999999E-999999999999999999999986\")",
+                 fn ->
+                   Decimal.to_float(Decimal.new("99999999999999e-999999999999999999999999"))
+                 end
+  end
+
   if Version.match?(System.version(), ">= 1.18.0-rc") do
     test "JSON.Encoder implementation" do
       assert JSON.encode!(%{x: Decimal.new("1.0")}) == "{\"x\":\"1.0\"}"

@@ -1321,6 +1321,12 @@ defmodule Decimal do
       iex> Decimal.new("3.14")
       Decimal.new("3.14")
 
+      iex> Decimal.new("1.79769313486231581e308")
+      Decimal.new("1.79769313486231581e308")
+
+      iex> Decimal.new("2.22507385850720139e-308")
+      Decimal.new("2.22507385850720139e-308")
+
   """
   @spec new(decimal) :: t
   def new(%Decimal{sign: sign, coef: coef, exp: exp} = num)
@@ -1624,10 +1630,25 @@ defmodule Decimal do
 
       iex> Decimal.to_float(Decimal.new("1.5"))
       1.5
+      iex> Decimal.to_float(Decimal.new("-1.79769313486231581e308"))
+      ** (Decimal.Error) : negative number smaller than DBL_MAX: Decimal.new("-1.79769313486231581E+308")
+
+
+      iex> Decimal.to_float(Decimal.new("-1.79769313486231581e308"))
+      ** (Decimal.Error) : negative number smaller than DBL_MAX: Decimal.new("-1.79769313486231581E+308")
+
+
+      iex> Decimal.to_float(Decimal.new("2.22507385850720139e-308"))
+      ** (Decimal.Error) : number smaller than DBL_MIN: Decimal.new("2.22507385850720139E-308")
+
+
+      iex> Decimal.to_float(Decimal.new("-2.22507385850720139e-308"))
+      ** (Decimal.Error): negative number bigger than DBL_MIN: Decimal.new(\"-2.22507385850720139E-308\")
 
   """
   @spec to_float(t) :: float
-  def to_float(%Decimal{sign: sign, coef: coef, exp: exp}) when is_integer(coef) do
+  def to_float(%Decimal{coef: coef} = decimal) when is_integer(coef) do
+    %Decimal{sign: sign, coef: coef, exp: exp} = check_dbl_min_max(decimal)
     # Convert back to float without loss
     # http://www.exploringbinary.com/correct-decimal-to-floating-point-using-big-integers/
     {num, den} = ratio(coef, exp)
@@ -2077,6 +2098,38 @@ defmodule Decimal do
   end
 
   defp fix_float_exp([], result), do: :lists.reverse(result)
+
+  defp check_dbl_min_max(%Decimal{coef: :inf} = infinity), do: infinity
+
+  defp check_dbl_min_max(%Decimal{sign: 1} = num) do
+    cond do
+      Decimal.gt?(num, dbl_max(1)) ->
+        raise Error, reason: "number bigger than DBL_MAX: #{inspect(num)}"
+
+      Decimal.gt?(num, zero(1)) and Decimal.lt?(num, dbl_min(1)) ->
+        raise Error, reason: "number smaller than DBL_MIN: #{inspect(num)}"
+
+      true ->
+        num
+    end
+  end
+
+  defp check_dbl_min_max(num) do
+    cond do
+      Decimal.lt?(num, dbl_max(-1)) ->
+        raise Error, reason: "negative number smaller than DBL_MAX: #{inspect(num)}"
+
+      Decimal.lt?(num, zero(-1)) and Decimal.gt?(num, dbl_min(-1)) ->
+        raise Error, reason: "negative number bigger than DBL_MIN: #{inspect(num)}"
+
+      true ->
+        num
+    end
+  end
+
+  defp dbl_min(sign), do: %Decimal{sign: sign, coef: 22_250_738_585_072_014, exp: -324}
+  defp zero(sign), do: %Decimal{sign: sign, coef: 0, exp: 0}
+  defp dbl_max(sign), do: %Decimal{sign: sign, coef: 17_976_931_348_623_158, exp: 292}
 
   if Version.compare(System.version(), "1.3.0") == :lt do
     defp integer_to_charlist(string), do: Integer.to_char_list(string)
