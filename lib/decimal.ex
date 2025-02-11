@@ -40,6 +40,45 @@ defmodule Decimal do
   according to the specification, return a number that "underflows" 0 is returned
   instead of Etiny. This may happen when dividing a number with infinity.
   Additionally, overflow, underflow and clamped may never be signalled.
+
+  ## Protocol Implementations
+
+  `Decimal` implements the following protocols:
+
+  ### `Inspect`
+
+      iex> inspect(Decimal.new("1.00"))
+      "Decimal.new(\\"1.00\\")"
+
+  ### `String.Chars`
+
+      iex> to_string(Decimal.new("1.00"))
+      "1.00"
+
+  ### `JSON.Encoder`
+
+  _(If running Elixir 1.18+.)_
+
+  By default, decimals are encoded as strings to preserve precision:
+
+      iex> JSON.encode!(Decimal.new("1.00"))
+      "\\"1.00\\""
+
+  To change that, pass a custom encoder to `JSON.encode!/2`. The following encodes
+  decimals as floats:
+
+      iex> encoder = fn
+      ...>   %Decimal{} = decimal, _encoder ->
+      ...>     decimal |> Decimal.to_float() |> :json.encode_float()
+      ...>
+      ...>   other, encoder ->
+      ...>     JSON.protocol_encode(other, encoder)
+      ...> end
+      ...>
+      iex> JSON.encode!(%{x: Decimal.new("1.00")}, encoder)
+      "{\\"x\\":1.0}"
+
+  Note: `Decimal.to_float/1` crashes on infinite and NaN decimals.
   """
 
   import Bitwise
@@ -1588,7 +1627,7 @@ defmodule Decimal do
   @doc """
   Returns the decimal represented as an integer.
 
-  Fails when loss of precision will occur.
+  Raises when loss of precision will occur.
 
   ## Examples
 
@@ -1623,27 +1662,29 @@ defmodule Decimal do
   @doc """
   Returns the decimal converted to a float.
 
-  The returned float may have lower precision than the decimal. Fails if
-  the decimal cannot be converted to a float.
+  The returned float may have lower precision than the decimal.
+
+  Raises if the decimal cannot be converted to a float.
 
   ## Examples
 
       iex> Decimal.to_float(Decimal.new("1.5"))
       1.5
-      iex> Decimal.to_float(Decimal.new("-1.79769313486231581e308"))
-      ** (Decimal.Error) : negative number smaller than DBL_MAX: Decimal.new("-1.79769313486231581E+308")
-
 
       iex> Decimal.to_float(Decimal.new("-1.79769313486231581e308"))
       ** (Decimal.Error) : negative number smaller than DBL_MAX: Decimal.new("-1.79769313486231581E+308")
 
+      iex> Decimal.to_float(Decimal.new("-1.79769313486231581e308"))
+      ** (Decimal.Error) : negative number smaller than DBL_MAX: Decimal.new("-1.79769313486231581E+308")
 
       iex> Decimal.to_float(Decimal.new("2.22507385850720139e-308"))
       ** (Decimal.Error) : number smaller than DBL_MIN: Decimal.new("2.22507385850720139E-308")
 
-
       iex> Decimal.to_float(Decimal.new("-2.22507385850720139e-308"))
       ** (Decimal.Error): negative number bigger than DBL_MIN: Decimal.new(\"-2.22507385850720139E-308\")
+
+      iex> Decimal.to_float(Decimal.new("inf"))
+      ** (ArgumentError) Decimal.new("Infinity") cannot be converted to float
 
   """
   @spec to_float(t) :: float
@@ -1667,6 +1708,10 @@ defmodule Decimal do
         {num, exp} = scale_up(num, boundary, 52)
         decimal_to_float(sign, num, den, exp)
     end
+  end
+
+  def to_float(%Decimal{} = decimal) do
+    raise ArgumentError, "#{inspect(decimal)} cannot be converted to float"
   end
 
   @doc """

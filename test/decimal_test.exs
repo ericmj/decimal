@@ -7,7 +7,13 @@ defmodule DecimalTest do
 
   require Decimal
 
-  doctest Decimal
+  elixir_json_available? = Version.match?(System.version(), ">= 1.18.0-rc")
+
+  if elixir_json_available? do
+    doctest Decimal
+  else
+    doctest Decimal, except: [:moduledoc]
+  end
 
   test "parse/1" do
     assert Decimal.parse("123") == {d(1, 123, 0), ""}
@@ -684,7 +690,7 @@ defmodule DecimalTest do
       assert Decimal.to_float(~d"2251799813685248") === 2_251_799_813_685_248.0
       assert Decimal.to_float(~d"9007199254740992") === 9_007_199_254_740_992.0
 
-      assert_raise FunctionClauseError, fn ->
+      assert_raise ArgumentError, fn ->
         Decimal.to_float(d(1, :NaN, 0))
       end
     end)
@@ -983,9 +989,19 @@ defmodule DecimalTest do
                  end
   end
 
-  if Version.match?(System.version(), ">= 1.18.0-rc") do
+  if elixir_json_available? do
     test "JSON.Encoder implementation" do
       assert JSON.encode!(%{x: Decimal.new("1.0")}) == "{\"x\":\"1.0\"}"
+
+      encoder = fn
+        %Decimal{} = decimal, _encode ->
+          decimal |> Decimal.to_float() |> :json.encode_float()
+
+        other, encode ->
+          JSON.protocol_encode(other, encode)
+      end
+
+      assert JSON.encode!(%{x: Decimal.new("1.0")}, encoder) == "{\"x\":1.0}"
     end
   end
 end
