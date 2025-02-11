@@ -796,6 +796,123 @@ defmodule DecimalTest do
     assert roundneg.(~d"1099") == d(1, 11, 2)
   end
 
+  test "round_to_nearest/3: special" do
+    assert Decimal.round_to_nearest(~d"inf", 5, :down) == d(1, :inf, 0)
+    assert Decimal.round_to_nearest(~d"nan", 5, :down) == d(1, :NaN, 0)
+  end
+
+  test "round_to_nearest/3: down" do
+    round_nearest = &Decimal.round_to_nearest(&1, 5, :down)
+    assert round_nearest.(~d"45") == d(1, 45, 0)
+    assert round_nearest.(~d"46.35") == d(1, 45, 0)
+    assert round_nearest.(~d"47.38") == d(1, 45, 0)
+    assert round_nearest.(~d"47.5") == d(1, 45, 0)
+    assert round_nearest.(~d"49.99") == d(1, 45, 0)
+    assert round_nearest.(~d"50") == d(1, 50, 0)
+    assert round_nearest.(~d"-45") == d(-1, 45, 0)
+    assert round_nearest.(~d"-46.35") == d(-1, 45, 0)
+    assert round_nearest.(~d"-47.38") == d(-1, 45, 0)
+    assert round_nearest.(~d"-47.5") == d(-1, 45, 0)
+    assert round_nearest.(~d"-49.99") == d(-1, 45, 0)
+    assert round_nearest.(~d"-50") == d(-1, 50, 0)
+  end
+
+  test "round_to_nearest/3: ceiling" do
+    round_nearest = &Decimal.round_to_nearest(&1, 5, :ceiling)
+    assert round_nearest.(~d"45") == d(1, 45, 0)
+    assert round_nearest.(~d"46.35") == d(1, 50, 0)
+    assert round_nearest.(~d"47.38") == d(1, 50, 0)
+    assert round_nearest.(~d"47.5") == d(1, 50, 0)
+    assert round_nearest.(~d"49.99") == d(1, 50, 0)
+    assert round_nearest.(~d"50") == d(1, 50, 0)
+    assert round_nearest.(~d"-45") == d(-1, 45, 0)
+    assert round_nearest.(~d"-46.35") == d(-1, 45, 0)
+    assert round_nearest.(~d"-47.38") == d(-1, 45, 0)
+    assert round_nearest.(~d"-47.5") == d(-1, 45, 0)
+    assert round_nearest.(~d"-49.99") == d(-1, 45, 0)
+    assert round_nearest.(~d"-50") == d(-1, 50, 0)
+  end
+
+  test "round_to_nearest/3: floor" do
+    round_nearest = &Decimal.round_to_nearest(&1, 5, :floor)
+    assert round_nearest.(~d"45") == d(1, 45, 0)
+    assert round_nearest.(~d"46.35") == d(1, 45, 0)
+    assert round_nearest.(~d"47.38") == d(1, 45, 0)
+    assert round_nearest.(~d"47.5") == d(1, 45, 0)
+    assert round_nearest.(~d"49.99") == d(1, 45, 0)
+    assert round_nearest.(~d"50") == d(1, 50, 0)
+    assert round_nearest.(~d"-45") == d(-1, 45, 0)
+    assert round_nearest.(~d"-46.35") == d(-1, 50, 0)
+    assert round_nearest.(~d"-47.38") == d(-1, 50, 0)
+    assert round_nearest.(~d"-47.5") == d(-1, 50, 0)
+    assert round_nearest.(~d"-49.99") == d(-1, 50, 0)
+    assert round_nearest.(~d"-50") == d(-1, 50, 0)
+  end
+
+  test "round_to_nearest/3: half up" do
+    round_nearest = &Decimal.round_to_nearest(&1, 5, :half_up)
+    assert round_nearest.(~d"45") == d(1, 45, 0)
+    assert round_nearest.(~d"46.35") == d(1, 45, 0)
+    assert round_nearest.(~d"47.38") == d(1, 45, 0)
+    assert round_nearest.(~d"47.5") == d(1, 50, 0)
+    assert round_nearest.(~d"49.99") == d(1, 50, 0)
+    assert round_nearest.(~d"50") == d(1, 50, 0)
+    assert round_nearest.(~d"-45") == d(-1, 45, 0)
+    assert round_nearest.(~d"-46.35") == d(-1, 45, 0)
+    assert round_nearest.(~d"-47.38") == d(-1, 45, 0)
+    assert round_nearest.(~d"-47.5") == d(-1, 50, 0)
+    assert round_nearest.(~d"-49.99") == d(-1, 50, 0)
+    assert round_nearest.(~d"-50") == d(-1, 50, 0)
+  end
+
+  test "round_to_nearest/3: half even" do
+    round_nearest = &Decimal.round_to_nearest(&1, 5, :half_even)
+    assert round_nearest.(~d"45") == d(1, 45, 0)
+    assert round_nearest.(~d"46.35") == d(1, 45, 0)
+    assert round_nearest.(~d"47.38") == d(1, 45, 0)
+    assert round_nearest.(~d"47.5") == d(1, 50, 0)
+    assert round_nearest.(~d"49.99") == d(1, 50, 0)
+    assert round_nearest.(~d"50") == d(1, 50, 0)
+    assert round_nearest.(~d"-45") == d(-1, 45, 0)
+    assert round_nearest.(~d"-46.35") == d(-1, 45, 0)
+    assert round_nearest.(~d"-47.38") == d(-1, 45, 0)
+    assert round_nearest.(~d"-47.5") == d(-1, 50, 0)
+    assert round_nearest.(~d"-49.99") == d(-1, 50, 0)
+    assert round_nearest.(~d"-50") == d(-1, 50, 0)
+  end
+
+  test "round_to_nearest/3: half down" do
+    round_nearest = &Decimal.round_to_nearest(&1, 5, :half_down)
+    assert round_nearest.(~d"45") == d(1, 45, 0)
+    assert round_nearest.(~d"46.35") == d(1, 45, 0)
+    assert round_nearest.(~d"47.38") == d(1, 45, 0)
+    assert round_nearest.(~d"47.5") == d(1, 45, 0)
+    assert round_nearest.(~d"49.99") == d(1, 50, 0)
+    assert round_nearest.(~d"50") == d(1, 50, 0)
+    assert round_nearest.(~d"-45") == d(-1, 45, 0)
+    assert round_nearest.(~d"-46.35") == d(-1, 45, 0)
+    assert round_nearest.(~d"-47.38") == d(-1, 45, 0)
+    assert round_nearest.(~d"-47.5") == d(-1, 45, 0)
+    assert round_nearest.(~d"-49.99") == d(-1, 50, 0)
+    assert round_nearest.(~d"-50") == d(-1, 50, 0)
+  end
+
+  test "round_to_nearest/3: up" do
+    round_nearest = &Decimal.round_to_nearest(&1, 5, :up)
+    assert round_nearest.(~d"45") == d(1, 45, 0)
+    assert round_nearest.(~d"46.35") == d(1, 50, 0)
+    assert round_nearest.(~d"47.38") == d(1, 50, 0)
+    assert round_nearest.(~d"47.5") == d(1, 50, 0)
+    assert round_nearest.(~d"49.99") == d(1, 50, 0)
+    assert round_nearest.(~d"50") == d(1, 50, 0)
+    assert round_nearest.(~d"-45") == d(-1, 45, 0)
+    assert round_nearest.(~d"-46.35") == d(-1, 50, 0)
+    assert round_nearest.(~d"-47.38") == d(-1, 50, 0)
+    assert round_nearest.(~d"-47.5") == d(-1, 50, 0)
+    assert round_nearest.(~d"-49.99") == d(-1, 50, 0)
+    assert round_nearest.(~d"-50") == d(-1, 50, 0)
+  end
+
   test "sqrt/1" do
     Context.with(%Context{precision: 9, rounding: :half_even}, fn ->
       assert Decimal.sqrt(~d"0") == d(1, 0, 0)
