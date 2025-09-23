@@ -8,7 +8,7 @@ defmodule Decimal.Mixfile do
     [
       app: :decimal,
       version: @version,
-      elixir: "~> 1.8",
+      elixir: "~> 1.12",
       deps: deps(),
       name: "Decimal",
       source_url: @source_url,
@@ -25,7 +25,7 @@ defmodule Decimal.Mixfile do
   defp deps() do
     [
       {:ex_doc, ">= 0.0.0", only: :dev},
-      {:stream_data, "~> 0.5.0", only: :test}
+      {:stream_data, "~> 1.2.0", only: :test}
     ]
   end
 
