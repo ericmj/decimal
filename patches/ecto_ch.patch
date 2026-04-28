@@ -1,4 +1,4 @@
-From 861e4ba14004bc83e6bf543796ecc9fa02c0bd98 Mon Sep 17 00:00:00 2001
+From ad1e4bd655e5dfbd5f8ed2a4d70a58fb909c0bb9 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Eric=20Meadows-J=C3=B6nsson?=
  <eric.meadows.jonsson@gmail.com>
 Date: Tue, 28 Apr 2026 22:32:37 +0200
@@ -32,25 +32,10 @@ literals that exceed ClickHouse's Decimal limits, or that are NaN or
 Infinity, now raise ArgumentError at render time instead of silently
 producing malformed SQL. No new public option or API surface is added.
 ---
- CHANGELOG.md                                  |   4 +
  lib/ecto/adapters/clickhouse/connection.ex    |  76 +++++++++++--
  .../adapters/clickhouse/connection_test.exs   | 107 ++++++++++++++++++
- 3 files changed, 179 insertions(+), 8 deletions(-)
+ 2 files changed, 175 insertions(+), 8 deletions(-)
 
-diff --git a/CHANGELOG.md b/CHANGELOG.md
-index 5a1dccb..b2242d9 100644
---- a/CHANGELOG.md
-+++ b/CHANGELOG.md
-@@ -1,5 +1,9 @@
- # Changelog
- 
-+## Unreleased
-+
-+- Validate `Decimal` precision and scale against ClickHouse limits and emit `Decimal(precision, scale)` parameter types sized to the value instead of always `Decimal64(scale)`
-+
- ## 0.8.6 (2026-02-11)
- 
- - Fix invalid `Array(Nothing)` param type for params like for `[[]]` https://github.com/plausible/ecto_ch/pull/264
 diff --git a/lib/ecto/adapters/clickhouse/connection.ex b/lib/ecto/adapters/clickhouse/connection.ex
 index 1350076..d76364b 100644
 --- a/lib/ecto/adapters/clickhouse/connection.ex
