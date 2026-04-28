@@ -1,0 +1,369 @@
+diff --git a/lib/ecto/schema.ex b/lib/ecto/schema.ex
+index 53ab8fc..20779d3 100644
+--- a/lib/ecto/schema.ex
++++ b/lib/ecto/schema.ex
+@@ -300,7 +300,12 @@ defmodule Ecto.Schema do
+ 
+     * For the `:decimal` type, `+Infinity`, `-Infinity`, and `NaN` values
+       are not supported, even though the `Decimal` library handles them.
+-      To support them, you can create a custom type.
++      To support them, you can create a custom type. You can also set
++      `:max_digits` and `:max_exponent` on decimal fields to configure
++      decimal casting limits when supported by the Decimal library. If these
++      options are not set on the field, Ecto uses the global
++      `:decimal_cast_options` configuration, which defaults to
++      Postgrex-compatible limits.
+ 
+     * For calendar types with and without microseconds, the precision is
+       enforced when persisting to the DB. For example, casting `~T[09:00:00]`
+@@ -547,6 +552,11 @@ defmodule Ecto.Schema do
+     :writable
+   ]
+ 
++  @decimal_opts [
++    :max_digits,
++    :max_exponent
++  ]
++
+   @doc """
+   Defines an embedded schema with the given field definitions.
+ 
+@@ -2534,6 +2544,15 @@ defmodule Ecto.Schema do
+     end
+   end
+ 
++  defp check_options!(
++         {:parameterized, {Ecto.Type.ParameterizedDecimal, _}},
++         opts,
++         valid,
++         fun_arity
++       ) do
++    check_options!(opts, valid ++ @decimal_opts, fun_arity)
++  end
++
+   defp check_options!({:parameterized, _}, _opts, _valid, _fun_arity) do
+     :ok
+   end
+@@ -2553,6 +2572,15 @@ defmodule Ecto.Schema do
+             "(no time zone information) or :utc_datetime (time zone is set to UTC)"
+   end
+ 
++  defp check_field_type!(_mod, _name, :decimal, opts) do
++    decimal_opts = Keyword.take(opts, @decimal_opts)
++
++    case decimal_opts do
++      [] -> :decimal
++      opts -> Ecto.ParameterizedType.init(Ecto.Type.ParameterizedDecimal, opts)
++    end
++  end
++
+   defp check_field_type!(mod, name, type, opts) do
+     cond do
+       composite?(type, name) ->
+diff --git a/lib/ecto/type.ex b/lib/ecto/type.ex
+index 243d94d..053946c 100644
+--- a/lib/ecto/type.ex
++++ b/lib/ecto/type.ex
+@@ -237,6 +237,11 @@ defmodule Ecto.Type do
+   )a
+   @composite ~w(array map try in param)a
+   @variadic ~w(in splice)a
++  @decimal_options [:max_digits, :max_exponent]
++  @decimal_default_options [
++    max_digits: 131_072 + 16_383,
++    max_exponent: 131_071
++  ]
+ 
+   @doc """
+   Returns the underlying schema type for the custom type.
+@@ -746,6 +751,14 @@ defmodule Ecto.Type do
+   set on any column.
+ 
+   NaN and infinite decimals are not supported, use custom types instead.
++  When supported by the Decimal library, decimal casting uses bounded parsing
++  with Postgrex-compatible defaults.
++  You can configure global defaults with `:decimal_cast_options`:
++
++      config :ecto, :decimal_cast_options, max_digits: 147_455, max_exponent: 131_071
++
++  You can also set `:max_digits` and `:max_exponent` on decimal schema fields,
++  which override the global configuration for that field.
+ 
+       iex> cast(:any, "whatever")
+       {:ok, "whatever"}
+@@ -834,6 +847,46 @@ defmodule Ecto.Type do
+     cast_fun(type).(value)
+   end
+ 
++  @doc false
++  def cast_decimal(term, params \\ [])
++
++  def cast_decimal(nil, _params) do
++    {:ok, nil}
++  end
++
++  def cast_decimal(term, params) do
++    opts = decimal_cast_options(params)
++
++    cond do
++      Code.ensure_loaded?(Decimal) and function_exported?(Decimal, :cast, 2) ->
++        case apply(Decimal, :cast, [term, opts]) do
++          {:ok, decimal} -> check_decimal(decimal, not is_binary(term))
++          :error -> :error
++        end
++
++      is_binary(term) and Code.ensure_loaded?(Decimal) and function_exported?(Decimal, :parse, 2) ->
++        case apply(Decimal, :parse, [term, opts]) do
++          {decimal, ""} -> check_decimal(decimal, false)
++          {_, remainder} when is_binary(remainder) and byte_size(remainder) > 0 -> :error
++          :error -> :error
++        end
++
++      true ->
++        cast_decimal_unbounded(term)
++    end
++  end
++
++  @doc false
++  def validate_decimal_options!(opts) do
++    Enum.map(opts, fn
++      {key, value} when key in @decimal_options ->
++        {key, validate_decimal_option!(key, value)}
++
++      {key, _value} ->
++        raise ArgumentError, "unknown decimal option #{inspect(key)}"
++    end)
++  end
++
+   defp cast_fun(:integer), do: &cast_integer/1
+   defp cast_fun(:float), do: &cast_float/1
+   defp cast_fun(:boolean), do: &cast_boolean/1
+@@ -844,7 +897,7 @@ defmodule Ecto.Type do
+   defp cast_fun(:id), do: &cast_integer/1
+   defp cast_fun(:binary_id), do: &cast_binary/1
+   defp cast_fun(:any), do: &{:ok, &1}
+-  defp cast_fun(:decimal), do: &cast_decimal/1
++  defp cast_fun(:decimal), do: &cast_decimal(&1, [])
+   defp cast_fun(:date), do: &cast_date/1
+   defp cast_fun(:time), do: &maybe_truncate_usec(cast_time(&1))
+   defp cast_fun(:time_usec), do: &maybe_pad_usec(cast_time(&1))
+@@ -907,7 +960,7 @@ defmodule Ecto.Type do
+   defp cast_float(term) when is_integer(term), do: {:ok, :erlang.float(term)}
+   defp cast_float(_), do: :error
+ 
+-  defp cast_decimal(term) when is_binary(term) do
++  defp cast_decimal_unbounded(term) when is_binary(term) do
+     case Decimal.parse(term) do
+       {decimal, ""} -> check_decimal(decimal, false)
+       {_, remainder} when is_binary(remainder) and byte_size(remainder) > 0 -> :error
+@@ -915,7 +968,32 @@ defmodule Ecto.Type do
+     end
+   end
+ 
+-  defp cast_decimal(term), do: same_decimal(term)
++  defp cast_decimal_unbounded(term), do: same_decimal(term)
++
++  defp decimal_cast_options(params) do
++    @decimal_default_options
++    |> Keyword.merge(global_decimal_options())
++    |> Keyword.merge(params)
++  end
++
++  defp global_decimal_options do
++    case Application.get_env(:ecto, :decimal_cast_options, []) do
++      opts when is_list(opts) ->
++        validate_decimal_options!(opts)
++
++      other ->
++        raise ArgumentError,
++              ":decimal_cast_options must be a keyword list, got: #{inspect(other)}"
++    end
++  end
++
++  defp validate_decimal_option!(_key, :infinity), do: :infinity
++  defp validate_decimal_option!(_key, value) when is_integer(value) and value >= 0, do: value
++
++  defp validate_decimal_option!(key, value) do
++    raise ArgumentError,
++          "#{inspect(key)} must be a non-negative integer or :infinity, got: #{inspect(value)}"
++  end
+ 
+   defp cast_boolean(term) when term in ~w(true 1), do: {:ok, true}
+   defp cast_boolean(term) when term in ~w(false 0), do: {:ok, false}
+diff --git a/lib/ecto/type/parameterized_decimal.ex b/lib/ecto/type/parameterized_decimal.ex
+new file mode 100644
+index 0000000..2ab83f2
+--- /dev/null
++++ b/lib/ecto/type/parameterized_decimal.ex
+@@ -0,0 +1,30 @@
++defmodule Ecto.Type.ParameterizedDecimal do
++  @moduledoc false
++
++  use Ecto.ParameterizedType
++
++  @impl true
++  def init(opts) do
++    opts
++    |> Keyword.drop([:field, :schema])
++    |> Ecto.Type.validate_decimal_options!()
++  end
++
++  @impl true
++  def type(_params), do: :decimal
++
++  @impl true
++  def cast(term, params), do: Ecto.Type.cast_decimal(term, params)
++
++  @impl true
++  def load(value, _loader, _params), do: Ecto.Type.load(:decimal, value)
++
++  @impl true
++  def dump(value, _dumper, _params), do: Ecto.Type.dump(:decimal, value)
++
++  @impl true
++  def equal?(term1, term2, _params), do: Ecto.Type.equal?(:decimal, term1, term2)
++
++  @impl true
++  def format(_params), do: ":decimal"
++end
+diff --git a/test/ecto/type/decimal_options_test.exs b/test/ecto/type/decimal_options_test.exs
+new file mode 100644
+index 0000000..24567a6
+--- /dev/null
++++ b/test/ecto/type/decimal_options_test.exs
+@@ -0,0 +1,135 @@
++defmodule Ecto.Type.DecimalOptionsTest do
++  use ExUnit.Case, async: false
++
++  import Ecto.Type
++
++  @decimal_cast_options :decimal_cast_options
++  @bounded_decimal_cast Code.ensure_loaded?(Decimal) and
++                          (function_exported?(Decimal, :cast, 2) or
++                             function_exported?(Decimal, :parse, 2))
++
++  defmodule Schema do
++    use Ecto.Schema
++
++    schema "decimal_options" do
++      field :decimal, :decimal, max_digits: 3, max_exponent: 2
++      field :decimals, {:array, :decimal}, max_digits: 3, max_exponent: 2
++      field :global_decimal, :decimal
++    end
++  end
++
++  setup do
++    previous = Application.get_env(:ecto, @decimal_cast_options, :__not_set__)
++
++    on_exit(fn ->
++      case previous do
++        :__not_set__ -> Application.delete_env(:ecto, @decimal_cast_options)
++        previous -> Application.put_env(:ecto, @decimal_cast_options, previous)
++      end
++    end)
++
++    :ok
++  end
++
++  test "decimal field options initialize a decimal parameterized type" do
++    type = Schema.__schema__(:type, :decimal)
++
++    assert Ecto.Type.parameterized?(type, Ecto.Type.ParameterizedDecimal)
++    assert Ecto.Type.type(type) == :decimal
++  end
++
++  test "global decimal options must be valid" do
++    Application.put_env(:ecto, @decimal_cast_options, max_digits: -1)
++
++    assert_raise ArgumentError, ~r/:max_digits must be a non-negative integer or :infinity/, fn ->
++      cast(:decimal, "1")
++    end
++  end
++
++  if @bounded_decimal_cast do
++    test "decimal casting uses Postgrex-compatible limits by default" do
++      Application.delete_env(:ecto, @decimal_cast_options)
++
++      assert cast(:decimal, "1e131071") == {:ok, Decimal.new("1e131071")}
++      assert cast(:decimal, "1e131072") == :error
++      assert cast(:decimal, String.duplicate("1", 147_456)) == :error
++    end
++
++    test "decimal casting uses global configured limits" do
++      Application.put_env(:ecto, @decimal_cast_options, max_digits: 3, max_exponent: 2)
++
++      assert cast(:decimal, "123") == {:ok, Decimal.new("123")}
++      assert cast(:decimal, "1234") == :error
++      assert cast(:decimal, "0001") == :error
++      assert cast(:decimal, "1e2") == {:ok, Decimal.new("1e2")}
++      assert cast(:decimal, "1e3") == :error
++    end
++
++    test "decimal casting limits exponent after fractional digits are accounted for" do
++      Application.put_env(:ecto, @decimal_cast_options, max_digits: 10, max_exponent: 0)
++
++      assert cast(:decimal, "1.23e2") == {:ok, Decimal.new("1.23e2")}
++      assert cast(:decimal, "1.23e3") == :error
++      assert cast(:decimal, "0.1") == :error
++    end
++
++    test "decimal field options override global configured limits" do
++      Application.put_env(:ecto, @decimal_cast_options, max_digits: 2, max_exponent: 1)
++
++      type = Schema.__schema__(:type, :decimal)
++
++      assert cast(type, "123") == {:ok, Decimal.new("123")}
++      assert cast(type, "1234") == :error
++      assert cast(type, "1e2") == {:ok, Decimal.new("1e2")}
++      assert cast(type, "1e3") == :error
++
++      assert cast(:decimal, "123") == :error
++    end
++
++    test "decimal field options apply to composite decimal types" do
++      Application.put_env(:ecto, @decimal_cast_options, max_digits: 2, max_exponent: 1)
++
++      assert {:array, type} = Schema.__schema__(:type, :decimals)
++      assert Ecto.Type.type(type) == :decimal
++
++      assert cast({:array, type}, ["123", "1e2"]) ==
++               {:ok, [Decimal.new("123"), Decimal.new("1e2")]}
++
++      assert cast({:array, type}, ["1234"]) == :error
++      assert cast({:array, type}, ["1e3"]) == :error
++    end
++  else
++    test "decimal options preserve compatibility without bounded Decimal APIs" do
++      Application.put_env(:ecto, @decimal_cast_options, max_digits: 3, max_exponent: 2)
++
++      assert cast(:decimal, "1234") == {:ok, Decimal.new("1234")}
++
++      type = Schema.__schema__(:type, :decimal)
++      assert cast(type, "1234") == {:ok, Decimal.new("1234")}
++    end
++  end
++
++  test "decimal field options must be valid" do
++    assert_raise ArgumentError, ~r/:max_digits must be a non-negative integer or :infinity/, fn ->
++      defmodule InvalidDecimalOptions do
++        use Ecto.Schema
++
++        schema "invalid_decimal_options" do
++          field :decimal, :decimal, max_digits: -1
++        end
++      end
++    end
++  end
++
++  test "decimal options are not accepted by non-decimal fields" do
++    assert_raise ArgumentError, ~r/invalid option :max_digits for field\/3/, fn ->
++      defmodule InvalidNonDecimalOptions do
++        use Ecto.Schema
++
++        schema "invalid_non_decimal_options" do
++          field :string, :string, max_digits: 3
++        end
++      end
++    end
++  end
++end

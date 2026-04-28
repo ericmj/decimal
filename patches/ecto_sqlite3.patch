@@ -1,0 +1,225 @@
+diff --git a/lib/ecto/adapters/sqlite3.ex b/lib/ecto/adapters/sqlite3.ex
+index d4ed0a6..4f1a756 100644
+--- a/lib/ecto/adapters/sqlite3.ex
++++ b/lib/ecto/adapters/sqlite3.ex
+@@ -61,6 +61,9 @@ defmodule Ecto.Adapters.SQLite3 do
+       stored in the database. The allowed values are `:iso8601` and `:text_datetime`.
+       `:iso8601` corresponds to a string of the form `YYYY-MM-DDThh:mm:ss` and
+       `:text_datetime` corresponds to a string of the form `YYYY-MM-DD hh:mm:ss`
++    * `:decimal_max_output_digits` - Defaults to `100_000`. Maximum number of digit
++      characters allowed when rendering decimals in normal notation. Set to `:infinity`
++      to disable the adapter limit.
+     * `:load_extensions` - list of paths identifying extensions to load. Defaults to `[]`.
+        The provided list will be merged with the global extensions list, set on
+        `:exqlite, :load_extensions`. Be aware that the path should handle pointing to a
+diff --git a/lib/ecto/adapters/sqlite3/codec.ex b/lib/ecto/adapters/sqlite3/codec.ex
+index 09af914..2d09c8e 100644
+--- a/lib/ecto/adapters/sqlite3/codec.ex
++++ b/lib/ecto/adapters/sqlite3/codec.ex
+@@ -1,6 +1,8 @@
+ defmodule Ecto.Adapters.SQLite3.Codec do
+   @moduledoc false
+ 
++  @default_decimal_max_output_digits 100_000
++
+   def bool_decode(0), do: {:ok, false}
+   def bool_decode("0"), do: {:ok, false}
+   def bool_decode("FALSE"), do: {:ok, false}
+@@ -107,7 +109,22 @@ defmodule Ecto.Adapters.SQLite3.Codec do
+   def decimal_encode(nil), do: {:ok, nil}
+ 
+   def decimal_encode(%Decimal{} = x) do
+-    {:ok, Decimal.to_string(x, :normal)}
++    decimal_to_string(x)
++  end
++
++  def decimal_to_string(%Decimal{} = decimal) do
++    max_digits = decimal_max_output_digits!()
++
++    if function_exported?(Decimal, :to_string, 3) do
++      try do
++        {:ok,
++         apply(Decimal, :to_string, [decimal, :normal, [max_output_digits: max_digits]])}
++      rescue
++        ArgumentError -> :error
++      end
++    else
++      {:ok, Decimal.to_string(decimal, :normal)}
++    end
+   end
+ 
+   def time_encode(value) do
+@@ -147,4 +164,22 @@ defmodule Ecto.Adapters.SQLite3.Codec do
+     raise ArgumentError,
+           "expected datetime type to be either `:iso8601` or `:text_datetime`, but received `#{inspect(type)}`"
+   end
++
++  defp decimal_max_output_digits! do
++    case Application.get_env(
++           :ecto_sqlite3,
++           :decimal_max_output_digits,
++           @default_decimal_max_output_digits
++         ) do
++      :infinity ->
++        :infinity
++
++      limit when is_integer(limit) and limit >= 0 ->
++        limit
++
++      value ->
++        raise ArgumentError,
++              "expected :decimal_max_output_digits to be a non-negative integer or :infinity, got: #{inspect(value)}"
++    end
++  end
+ end
+diff --git a/lib/ecto/adapters/sqlite3/connection.ex b/lib/ecto/adapters/sqlite3/connection.ex
+index bb469d4..aad1a28 100644
+--- a/lib/ecto/adapters/sqlite3/connection.ex
++++ b/lib/ecto/adapters/sqlite3/connection.ex
+@@ -3,6 +3,7 @@ defmodule Ecto.Adapters.SQLite3.Connection do
+ 
+   @behaviour Ecto.Adapters.SQL.Connection
+ 
++  alias Ecto.Adapters.SQLite3.Codec
+   alias Ecto.Adapters.SQL
+   alias Ecto.Migration.Constraint
+   alias Ecto.Migration.Index
+@@ -1493,8 +1494,17 @@ defmodule Ecto.Adapters.SQLite3.Connection do
+       message: "Array literals are not supported by SQLite3"
+   end
+ 
+-  defp expr(%Decimal{} = decimal, _sources, _query) do
+-    Decimal.to_string(decimal, :normal)
++  defp expr(%Decimal{} = decimal, _sources, query) do
++    case Codec.decimal_to_string(decimal) do
++      {:ok, string} ->
++        string
++
++      :error ->
++        raise Ecto.QueryError,
++          query: query,
++          message:
++            "cannot render decimal literal because its normal representation exceeds the configured :decimal_max_output_digits"
++    end
+   end
+ 
+   defp expr(%Ecto.Query.Tagged{value: binary, type: :binary}, _sources, _query)
+diff --git a/test/ecto/adapters/sqlite3/codec_test.exs b/test/ecto/adapters/sqlite3/codec_test.exs
+index aa40b1e..c1a0d90 100644
+--- a/test/ecto/adapters/sqlite3/codec_test.exs
++++ b/test/ecto/adapters/sqlite3/codec_test.exs
+@@ -90,6 +90,48 @@ defmodule Ecto.Adapters.SQLite3.CodecTest do
+       decimal = Decimal.new("2.5")
+       {:ok, "2.5"} = Codec.decimal_encode(decimal)
+     end
++
++    test "decimal with expanded normal output at the adapter limit" do
++      decimal = Decimal.new(1, 1, 99_999)
++
++      assert {:ok, string} = Codec.decimal_encode(decimal)
++      assert byte_size(string) == 100_000
++      assert string == "1" <> String.duplicate("0", 99_999)
++    end
++
++    test "uses Decimal output limit for expanded positive exponent when available" do
++      decimal = Decimal.new(1, 1, 100_000)
++
++      if decimal_output_limits?() do
++        assert :error = Codec.decimal_encode(decimal)
++      else
++        assert {:ok, string} = Codec.decimal_encode(decimal)
++        assert byte_size(string) == 100_001
++      end
++    end
++
++    test "uses Decimal output limit for expanded negative exponent when available" do
++      decimal = Decimal.new(1, 1, -100_000)
++
++      if decimal_output_limits?() do
++        assert :error = Codec.decimal_encode(decimal)
++      else
++        assert {:ok, string} = Codec.decimal_encode(decimal)
++        assert byte_size(string) == 100_002
++      end
++    end
++
++    test "uses Decimal output limit for too many coefficient digits when available" do
++      coef = String.to_integer("1" <> String.duplicate("0", 100_000))
++      decimal = Decimal.new(1, coef, 0)
++
++      if decimal_output_limits?() do
++        assert :error = Codec.decimal_encode(decimal)
++      else
++        assert {:ok, string} = Codec.decimal_encode(decimal)
++        assert byte_size(string) == 100_001
++      end
++    end
+   end
+ 
+   describe ".time_decode/1" do
+@@ -228,4 +270,8 @@ defmodule Ecto.Adapters.SQLite3.CodecTest do
+         Codec.blob_encode(<<0xDE, 0xAD, 0xBE, 0xEF>>)
+     end
+   end
++
++  defp decimal_output_limits? do
++    function_exported?(Decimal, :to_string, 3)
++  end
+ end
+diff --git a/test/ecto/adapters/sqlite3/connection/select_test.exs b/test/ecto/adapters/sqlite3/connection/select_test.exs
+index 358e4b6..88799c9 100644
+--- a/test/ecto/adapters/sqlite3/connection/select_test.exs
++++ b/test/ecto/adapters/sqlite3/connection/select_test.exs
+@@ -269,6 +269,34 @@ defmodule Ecto.Adapters.SQLite3.Connection.SelectTest do
+       assert ~s{SELECT 1 FROM "schema" AS s0 WHERE (s0."foo" = CAST(123.0 AS REAL))} ==
+                all(query)
+     end
++
++    test "puts decimal" do
++      query =
++        "schema"
++        |> where(foo: 1)
++        |> select([], true)
++        |> plan()
++        |> put_decimal_where_literal(Decimal.new("2.5"))
++
++      assert ~s{SELECT 1 FROM "schema" AS s0 WHERE (s0."foo" = 2.5)} == all(query)
++    end
++
++    test "uses Decimal output limit for decimal literals when available" do
++      query =
++        "schema"
++        |> where(foo: 1)
++        |> select([], true)
++        |> plan()
++        |> put_decimal_where_literal(Decimal.new(1, 1, 100_000))
++
++      if decimal_output_limits?() do
++        assert_raise Ecto.QueryError,
++                     ~r/cannot render decimal literal because its normal representation exceeds/,
++                     fn -> all(query) end
++      else
++        assert all(query) =~ ~s{s0."foo" = 1}
++      end
++    end
+   end
+ 
+   test "aliasing a selected value with selected_as/2" do
+@@ -288,6 +316,17 @@ defmodule Ecto.Adapters.SQLite3.Connection.SelectTest do
+              all(query)
+   end
+ 
++  defp put_decimal_where_literal(query, decimal) do
++    [where] = query.wheres
++    {:==, meta, [left, _right]} = where.expr
++    where = %{where | expr: {:==, meta, [left, decimal]}}
++    %{query | wheres: [where]}
++  end
++
++  defp decimal_output_limits? do
++    function_exported?(Decimal, :to_string, 3)
++  end
++
+   test "is_nil" do
+     query =
+       Schema

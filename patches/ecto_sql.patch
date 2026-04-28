@@ -1,0 +1,337 @@
+diff --git a/lib/ecto/adapters/myxql/connection.ex b/lib/ecto/adapters/myxql/connection.ex
+index c560d3b..73a13c5 100644
+--- a/lib/ecto/adapters/myxql/connection.ex
++++ b/lib/ecto/adapters/myxql/connection.ex
+@@ -5,6 +5,9 @@ if Code.ensure_loaded?(MyXQL) do
+ 
+     @behaviour Ecto.Adapters.SQL.Connection
+ 
++    @decimal_precision 65
++    @decimal_scale 30
++
+     ## Connection
+ 
+     @impl true
+@@ -858,8 +861,13 @@ if Code.ensure_loaded?(MyXQL) do
+       error!(query, "Array type is not supported by MySQL")
+     end
+ 
+-    defp expr(%Decimal{} = decimal, _sources, _query) do
+-      Decimal.to_string(decimal, :normal)
++    defp expr(%Decimal{coef: coef} = decimal, _sources, query) when is_integer(coef) do
++      validate_decimal!(decimal, query)
++      decimal_to_string(decimal, query)
++    end
++
++    defp expr(%Decimal{} = decimal, _sources, query) do
++      decimal_to_string(decimal, query)
+     end
+ 
+     defp expr(%Ecto.Query.Tagged{value: binary, type: :binary}, _sources, _query)
+@@ -1614,6 +1622,23 @@ if Code.ensure_loaded?(MyXQL) do
+       |> :binary.replace("\"", "\\\\\"", [:global])
+     end
+ 
++    defp validate_decimal!(%Decimal{exp: exp}, query) do
++      scale = max(-exp, 0)
++
++      if scale > @decimal_scale do
++        error!(
++          query,
++          "MySQL DECIMAL literal exceeds the maximum scale of #{@decimal_scale}"
++        )
++      end
++    end
++
++    defp decimal_to_string(decimal, query) do
++      SQL.Decimal.normal_string(decimal, @decimal_precision)
++    rescue
++      e in ArgumentError -> error!(query, Exception.message(e))
++    end
++
+     defp ecto_cast_to_db(:id, _query), do: "unsigned"
+     defp ecto_cast_to_db(:integer, _query), do: "signed"
+     defp ecto_cast_to_db(:string, _query), do: "char"
+diff --git a/lib/ecto/adapters/postgres/connection.ex b/lib/ecto/adapters/postgres/connection.ex
+index f5d3faf..1e734fb 100644
+--- a/lib/ecto/adapters/postgres/connection.ex
++++ b/lib/ecto/adapters/postgres/connection.ex
+@@ -2,9 +2,13 @@ if Code.ensure_loaded?(Postgrex) do
+   defmodule Ecto.Adapters.Postgres.Connection do
+     @moduledoc false
+ 
++    alias Ecto.Adapters.SQL
++
+     @default_port 5432
+     @behaviour Ecto.Adapters.SQL.Connection
+     @explain_prepared_statement_name "ecto_explain_statement"
++    @numeric_integer_digits 131_072
++    @numeric_fractional_digits 16_383
+ 
+     ## Module and Options
+ 
+@@ -1090,8 +1094,13 @@ if Code.ensure_loaded?(Postgrex) do
+       ["ARRAY[", Enum.map_intersperse(list, ?,, &expr(&1, sources, query)), ?]]
+     end
+ 
+-    defp expr(%Decimal{} = decimal, _sources, _query) do
+-      Decimal.to_string(decimal, :normal)
++    defp expr(%Decimal{coef: coef} = decimal, _sources, query) when is_integer(coef) do
++      validate_decimal!(decimal, query)
++      decimal_to_string(decimal, query)
++    end
++
++    defp expr(%Decimal{} = decimal, _sources, query) do
++      decimal_to_string(decimal, query)
+     end
+ 
+     defp expr(%Ecto.Query.Tagged{value: binary, type: :binary}, _sources, _query)
+@@ -2058,6 +2067,23 @@ if Code.ensure_loaded?(Postgrex) do
+       escape_json(other)
+     end
+ 
++    defp validate_decimal!(%Decimal{exp: exp}, query) do
++      scale = max(-exp, 0)
++
++      if scale > @numeric_fractional_digits do
++        error!(
++          query,
++          "PostgreSQL numeric literal exceeds the maximum of #{@numeric_fractional_digits} fractional digits"
++        )
++      end
++    end
++
++    defp decimal_to_string(decimal, query) do
++      SQL.Decimal.normal_string(decimal, @numeric_integer_digits + @numeric_fractional_digits)
++    rescue
++      e in ArgumentError -> error!(query, Exception.message(e))
++    end
++
+     defp ecto_to_db({:array, t}), do: [ecto_to_db(t), ?[, ?]]
+     defp ecto_to_db(:id), do: "integer"
+     defp ecto_to_db(:identity), do: "bigint"
+diff --git a/lib/ecto/adapters/sql/decimal.ex b/lib/ecto/adapters/sql/decimal.ex
+new file mode 100644
+index 0000000..b4d31b3
+--- /dev/null
++++ b/lib/ecto/adapters/sql/decimal.ex
+@@ -0,0 +1,11 @@
++defmodule Ecto.Adapters.SQL.Decimal do
++  @moduledoc false
++
++  def normal_string(%Decimal{} = decimal, max_output_digits) do
++    if function_exported?(Decimal, :to_string, 3) do
++      apply(Decimal, :to_string, [decimal, :normal, [max_output_digits: max_output_digits]])
++    else
++      Decimal.to_string(decimal, :normal)
++    end
++  end
++end
+diff --git a/lib/ecto/adapters/tds/connection.ex b/lib/ecto/adapters/tds/connection.ex
+index be1cf22..5b86017 100644
+--- a/lib/ecto/adapters/tds/connection.ex
++++ b/lib/ecto/adapters/tds/connection.ex
+@@ -7,6 +7,9 @@ if Code.ensure_loaded?(Tds) do
+ 
+     @behaviour Ecto.Adapters.SQL.Connection
+ 
++    @decimal_precision 38
++    @decimal_output_digits @decimal_precision + 1
++
+     @impl true
+     def child_spec(opts) do
+       opts
+@@ -902,7 +905,9 @@ if Code.ensure_loaded?(Tds) do
+       "N'#{escape_string(string)}'"
+     end
+ 
+-    defp expr(%Decimal{exp: exp} = decimal, _sources, _query) do
++    defp expr(%Decimal{coef: coef} = decimal, _sources, query) when is_integer(coef) do
++      scale = validate_decimal!(decimal, query)
++
+       # this should help gaining precision for decimals values embedded in query
+       # but this is still not good enough, for instance:
+       #
+@@ -919,8 +924,17 @@ if Code.ensure_loaded?(Tds) do
+       # value could be truncated
+       [
+         "CAST(",
+-        Decimal.to_string(decimal, :normal),
+-        " as decimal(38, #{abs(exp)})",
++        decimal_to_string(decimal, query),
++        " as decimal(#{@decimal_precision}, #{scale})",
++        ?)
++      ]
++    end
++
++    defp expr(%Decimal{} = decimal, _sources, query) do
++      [
++        "CAST(",
++        decimal_to_string(decimal, query),
++        " as decimal(#{@decimal_precision}, 0)",
+         ?)
+       ]
+     end
+@@ -1809,6 +1823,25 @@ if Code.ensure_loaded?(Tds) do
+       value |> :binary.replace("'", "''", [:global])
+     end
+ 
++    defp validate_decimal!(%Decimal{exp: exp}, query) do
++      scale = max(-exp, 0)
++
++      if scale > @decimal_precision do
++        error!(
++          query,
++          "SQL Server decimal literal exceeds the maximum scale of #{@decimal_precision}"
++        )
++      end
++
++      scale
++    end
++
++    defp decimal_to_string(decimal, query) do
++      SQL.Decimal.normal_string(decimal, @decimal_output_digits)
++    rescue
++      e in ArgumentError -> error!(query, Exception.message(e))
++    end
++
+     defp ecto_to_db(type, size, precision, scale, query \\ nil)
+ 
+     defp ecto_to_db({:array, _}, _, _, _, query),
+diff --git a/test/ecto/adapters/myxql_test.exs b/test/ecto/adapters/myxql_test.exs
+index b062d7b..b15c935 100644
+--- a/test/ecto/adapters/myxql_test.exs
++++ b/test/ecto/adapters/myxql_test.exs
+@@ -56,6 +56,14 @@ defmodule Ecto.Adapters.MyXQLTest do
+   defp delete_all(query), do: query |> SQL.delete_all() |> IO.iodata_to_binary()
+   defp execute_ddl(query), do: query |> SQL.execute_ddl() |> Enum.map(&IO.iodata_to_binary/1)
+ 
++  defp decimal_literal_query(decimal) do
++    query = "schema" |> where(foo: 0) |> select([], true) |> plan()
++    [where] = query.wheres
++    {:==, meta, [left, _right]} = where.expr
++
++    %{query | wheres: [%{where | expr: {:==, meta, [left, decimal]}}]}
++  end
++
+   defp insert(prefx, table, header, rows, on_conflict, returning, opts \\ []) do
+     IO.iodata_to_binary(SQL.insert(prefx, table, header, rows, on_conflict, returning, [], opts))
+   end
+@@ -704,6 +712,25 @@ defmodule Ecto.Adapters.MyXQLTest do
+ 
+     query = "schema" |> where(foo: 123.0) |> select([], true) |> plan()
+     assert all(query) == ~s{SELECT TRUE FROM `schema` AS s0 WHERE (s0.`foo` = (0 + 123.0))}
++
++    query = decimal_literal_query(Decimal.new("123.45"))
++    assert all(query) == ~s{SELECT TRUE FROM `schema` AS s0 WHERE (s0.`foo` = 123.45)}
++  end
++
++  test "decimal literals reject values outside MySQL DECIMAL range" do
++    if function_exported?(Decimal, :to_string, 3) do
++      assert_raise Ecto.QueryError, ~r/configured maximum/, fn ->
++        %Decimal{sign: 1, coef: 1, exp: 1_000_000}
++        |> decimal_literal_query()
++        |> all()
++      end
++    end
++
++    assert_raise Ecto.QueryError, ~r/maximum scale of 30/, fn ->
++      %Decimal{sign: 1, coef: 1, exp: -1_000_000}
++      |> decimal_literal_query()
++      |> all()
++    end
+   end
+ 
+   test "aliasing a selected value with selected_as/2" do
+diff --git a/test/ecto/adapters/postgres_test.exs b/test/ecto/adapters/postgres_test.exs
+index e588b29..a9f0c56 100644
+--- a/test/ecto/adapters/postgres_test.exs
++++ b/test/ecto/adapters/postgres_test.exs
+@@ -61,6 +61,14 @@ defmodule Ecto.Adapters.PostgresTest do
+   defp delete_all(query), do: query |> SQL.delete_all() |> IO.iodata_to_binary()
+   defp execute_ddl(query), do: query |> SQL.execute_ddl() |> Enum.map(&IO.iodata_to_binary/1)
+ 
++  defp decimal_literal_query(decimal) do
++    query = "schema" |> where(foo: 0) |> select([], true) |> plan()
++    [where] = query.wheres
++    {:==, meta, [left, _right]} = where.expr
++
++    %{query | wheres: [%{where | expr: {:==, meta, [left, decimal]}}]}
++  end
++
+   defp insert(prefix, table, header, rows, on_conflict, returning, placeholders \\ []) do
+     IO.iodata_to_binary(
+       SQL.insert(prefix, table, header, rows, on_conflict, returning, placeholders)
+@@ -889,6 +897,25 @@ defmodule Ecto.Adapters.PostgresTest do
+ 
+     query = "schema" |> where(foo: 123.0) |> select([], true) |> plan()
+     assert all(query) == ~s{SELECT TRUE FROM "schema" AS s0 WHERE (s0."foo" = 123.0::float)}
++
++    query = decimal_literal_query(Decimal.new("123.45"))
++    assert all(query) == ~s{SELECT TRUE FROM "schema" AS s0 WHERE (s0."foo" = 123.45)}
++  end
++
++  test "decimal literals reject values outside PostgreSQL numeric range" do
++    if function_exported?(Decimal, :to_string, 3) do
++      assert_raise Ecto.QueryError, ~r/configured maximum/, fn ->
++        %Decimal{sign: 1, coef: 1, exp: 1_000_000}
++        |> decimal_literal_query()
++        |> all()
++      end
++    end
++
++    assert_raise Ecto.QueryError, ~r/maximum of 16383 fractional digits/, fn ->
++      %Decimal{sign: 1, coef: 1, exp: -1_000_000}
++      |> decimal_literal_query()
++      |> all()
++    end
+   end
+ 
+   test "aliasing a selected value with selected_as/2" do
+diff --git a/test/ecto/adapters/tds_test.exs b/test/ecto/adapters/tds_test.exs
+index 9341314..0906eec 100644
+--- a/test/ecto/adapters/tds_test.exs
++++ b/test/ecto/adapters/tds_test.exs
+@@ -62,6 +62,14 @@ defmodule Ecto.Adapters.TdsTest do
+   defp delete_all(query), do: query |> SQL.delete_all() |> IO.iodata_to_binary()
+   defp execute_ddl(query), do: query |> SQL.execute_ddl() |> Enum.map(&IO.iodata_to_binary/1)
+ 
++  defp decimal_literal_query(decimal) do
++    query = "schema" |> where(foo: 0) |> select([], true) |> plan()
++    [where] = query.wheres
++    {:==, meta, [left, _right]} = where.expr
++
++    %{query | wheres: [%{where | expr: {:==, meta, [left, decimal]}}]}
++  end
++
+   defp insert(prefx, table, header, rows, on_conflict, returning, placeholders \\ []) do
+     IO.iodata_to_binary(
+       SQL.insert(prefx, table, header, rows, on_conflict, returning, placeholders)
+@@ -747,6 +755,27 @@ defmodule Ecto.Adapters.TdsTest do
+ 
+     query = "schema" |> where(foo: 123.0) |> select([], true) |> plan()
+     assert all(query) == ~s{SELECT CAST(1 as bit) FROM [schema] AS s0 WHERE (s0.[foo] = 123.0)}
++
++    query = decimal_literal_query(Decimal.new("123.45"))
++
++    assert all(query) ==
++             ~s{SELECT CAST(1 as bit) FROM [schema] AS s0 WHERE (s0.[foo] = CAST(123.45 as decimal(38, 2)))}
++  end
++
++  test "decimal literals reject values outside SQL Server decimal range" do
++    if function_exported?(Decimal, :to_string, 3) do
++      assert_raise Ecto.QueryError, ~r/configured maximum/, fn ->
++        %Decimal{sign: 1, coef: 1, exp: 1_000_000}
++        |> decimal_literal_query()
++        |> all()
++      end
++    end
++
++    assert_raise Ecto.QueryError, ~r/maximum scale of 38/, fn ->
++      %Decimal{sign: 1, coef: 1, exp: -1_000_000}
++      |> decimal_literal_query()
++      |> all()
++    end
+   end
+ 
+   test "aliasing a selected value with selected_as/2" do

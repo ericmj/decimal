@@ -1,0 +1,410 @@
+diff --git a/lib/postgrex/extensions/numeric.ex b/lib/postgrex/extensions/numeric.ex
+index 098d6ef..1223579 100644
+--- a/lib/postgrex/extensions/numeric.ex
++++ b/lib/postgrex/extensions/numeric.ex
+@@ -3,6 +3,12 @@ defmodule Postgrex.Extensions.Numeric do
+   import Postgrex.BinaryUtils, warn: false
+   use Postgrex.BinaryExtension, send: "numeric_send"
+ 
++  @max_integer_digits 131_072
++  @max_scale 16_383
++  @max_integer_groups div(@max_integer_digits, 4)
++  @max_numeric_digits @max_integer_groups + div(@max_scale + 3, 4)
++  @max_output_digits @max_integer_digits + @max_scale
++
+   def encode(_) do
+     quote location: :keep, generated: true do
+       %Decimal{} = decimal ->
+@@ -41,59 +47,151 @@ defmodule Postgrex.Extensions.Numeric do
+     <<0::int16(), 0::int16(), 0xF000::uint16(), 0::int16()>>
+   end
+ 
+-  def encode_numeric(%Decimal{sign: sign, coef: coef, exp: exp}) do
++  def encode_numeric(%Decimal{sign: sign, coef: coef, exp: exp} = decimal) do
+     sign = encode_sign(sign)
+-    scale = -exp
++    scale = max(-exp, 0)
++
++    validate_encode_scale!(scale)
+ 
+-    {integer, float, scale} = split_parts(coef, scale)
+-    integer_digits = encode_digits(integer, [])
+-    float_digits = encode_float(float, scale)
+-    digits = integer_digits ++ float_digits
++    if coef == 0 do
++      <<0::uint16(), 0::int16(), sign::uint16(), scale::uint16()>>
++    else
++      {integer_digits, fractional_digits} = normal_digits(decimal)
++      validate_encode_digits!(integer_digits)
+ 
+-    num_digits = length(digits)
+-    weight = max(length(integer_digits) - 1, 0)
++      {digits, weight} = encode_decimal_digits(integer_digits, fractional_digits)
++      num_digits = length(digits)
+ 
+-    bin = for digit <- digits, into: "", do: <<digit::uint16()>>
+-    [<<num_digits::int16(), weight::int16(), sign::uint16(), scale::int16()>> | bin]
++      if num_digits > @max_numeric_digits do
++        raise_encode_error(
++          "numeric has #{num_digits} base-10000 digits, maximum is #{@max_numeric_digits}"
++        )
++      end
++
++      bin = for digit <- digits, into: "", do: <<digit::uint16()>>
++      [<<num_digits::uint16(), weight::int16(), sign::uint16(), scale::uint16()>> | bin]
++    end
+   end
+ 
+   defp encode_sign(1), do: 0x0000
+   defp encode_sign(-1), do: 0x4000
+ 
+-  defp split_parts(coef, scale) when scale >= 0 do
+-    integer_base = pow10(scale)
+-    {div(coef, integer_base), rem(coef, integer_base), scale}
++  defp validate_encode_scale!(scale) when scale <= @max_scale, do: :ok
++
++  defp validate_encode_scale!(scale) do
++    raise_encode_error("numeric scale #{scale} exceeds maximum scale #{@max_scale}")
++  end
++
++  defp normal_digits(decimal) do
++    decimal
++    |> decimal_to_string()
++    |> split_normal_digits()
++  end
++
++  defp decimal_to_string(decimal) do
++    if function_exported?(Decimal, :to_string, 3) do
++      apply(Decimal, :to_string, [decimal, :normal, [max_output_digits: @max_output_digits]])
++    else
++      Decimal.to_string(decimal, :normal)
++    end
++  rescue
++    e in ArgumentError -> raise_encode_error(Exception.message(e))
++  end
++
++  defp split_normal_digits("-" <> string), do: split_normal_digits(string)
++
++  defp split_normal_digits(string) do
++    case :binary.split(string, ".") do
++      [integer_digits] ->
++        {trim_leading_zeroes(integer_digits), ""}
++
++      [integer_digits, fractional_digits] ->
++        {trim_leading_zeroes(integer_digits), fractional_digits}
++    end
++  end
++
++  defp trim_leading_zeroes(""), do: ""
++  defp trim_leading_zeroes("0"), do: ""
++  defp trim_leading_zeroes("0" <> rest), do: trim_leading_zeroes(rest)
++  defp trim_leading_zeroes(digits), do: digits
++
++  defp validate_encode_digits!(integer_digits) do
++    integer_digits = byte_size(integer_digits)
++
++    if integer_digits > @max_integer_digits do
++      raise_encode_error(
++        "numeric has #{integer_digits} digits before the decimal point, maximum is #{@max_integer_digits}"
++      )
++    end
++  end
++
++  defp encode_decimal_digits(integer_digits, fractional_digits) do
++    integer_groups = integer_groups(integer_digits)
++    fractional_groups = fractional_groups(fractional_digits)
++
++    if integer_groups == [] do
++      {fractional_groups, weight} = trim_leading_fractional_zeroes(fractional_groups, -1)
++      {trim_trailing_zeroes(fractional_groups), weight}
++    else
++      {trim_trailing_zeroes(integer_groups ++ fractional_groups), length(integer_groups) - 1}
++    end
++  end
++
++  defp zeroes(0), do: ""
++  defp zeroes(count), do: :binary.copy("0", count)
++
++  defp integer_groups(""), do: []
++
++  defp integer_groups(digits) do
++    size = byte_size(digits)
++    first_size = rem(size, 4)
++    first_size = if first_size == 0, do: 4, else: first_size
++    <<first::binary-size(first_size), rest::binary>> = digits
++    groups_of_4(rest, [:erlang.binary_to_integer(first)])
++  end
++
++  defp fractional_groups(""), do: []
++
++  defp fractional_groups(digits) do
++    digits =
++      case rem(byte_size(digits), 4) do
++        0 -> digits
++        rem -> IO.iodata_to_binary([digits, zeroes(4 - rem)])
++      end
++
++    groups_of_4(digits, [])
+   end
+ 
+-  defp split_parts(coef, scale) when scale < 0 do
+-    integer_base = pow10(-scale)
+-    {coef * integer_base, 0, 0}
++  defp groups_of_4("", acc), do: :lists.reverse(acc)
++
++  defp groups_of_4(<<digits::binary-size(4), rest::binary>>, acc) do
++    groups_of_4(rest, [:erlang.binary_to_integer(digits) | acc])
+   end
+ 
+-  defp encode_float(float, scale) do
+-    pending = pending_scale(float, scale)
+-    float_prefix = div(pending, 4)
+-    float_suffix = 4 - rem(scale, 4)
+-    float = float * pow10(float_suffix)
+-    List.duplicate(0, float_prefix) ++ encode_digits(float, [])
++  defp trim_leading_fractional_zeroes([0 | rest], weight) do
++    trim_leading_fractional_zeroes(rest, weight - 1)
+   end
+ 
+-  defp pending_scale(0, scale), do: scale
+-  defp pending_scale(num, scale), do: pending_scale(div(num, 10), scale - 1)
++  defp trim_leading_fractional_zeroes(digits, weight), do: {digits, weight}
+ 
+-  defp encode_digits(coef, digits) when coef < 10_000 do
+-    [coef | digits]
++  defp trim_trailing_zeroes(digits) do
++    digits
++    |> :lists.reverse()
++    |> drop_zeroes()
++    |> :lists.reverse()
+   end
+ 
+-  defp encode_digits(coef, digits) do
+-    digit = rem(coef, 10_000)
+-    coef = div(coef, 10_000)
+-    encode_digits(coef, [digit | digits])
++  defp drop_zeroes([0 | rest]), do: drop_zeroes(rest)
++  defp drop_zeroes(rest), do: rest
++
++  defp raise_encode_error(message) do
++    raise DBConnection.EncodeError, "Postgrex cannot encode Decimal as numeric: " <> message
+   end
+ 
+   def decode_numeric(
+-        <<ndigits::int16(), weight::int16(), sign::uint16(), scale::int16(), tail::binary>>
++        <<ndigits::uint16(), weight::int16(), sign::uint16(), scale::uint16(), tail::binary>>
+       ) do
++    validate_decode_header!(ndigits, weight, sign, scale, tail)
+     decode_numeric(ndigits, weight, sign, scale, tail)
+   end
+ 
+@@ -113,31 +211,109 @@ defmodule Postgrex.Extensions.Numeric do
+     @negative_inf
+   end
+ 
+-  defp decode_numeric(_num_digits, weight, sign, scale, bin) do
+-    {value, weight} = decode_numeric_int(bin, weight, 0)
++  defp decode_numeric(0, _weight, sign, scale, "") do
++    sign = decode_sign(sign)
++    Decimal.new(sign, 0, -scale)
++  end
++
++  defp decode_numeric(num_digits, weight, sign, scale, bin) do
+     sign = decode_sign(sign)
+-    coef = scale(value, (weight + 1) * 4 + scale)
++    {digits, non_zero?} = decode_numeric_digits(bin, [])
++
++    coef =
++      if non_zero? do
++        digits
++        |> IO.iodata_to_binary()
++        |> adjust_decoded_digits((weight - num_digits + 1) * 4 + scale)
++      else
++        0
++      end
++
+     Decimal.new(sign, coef, -scale)
+   end
+ 
++  defp validate_decode_header!(ndigits, _weight, sign, scale, tail)
++       when sign in [0xC000, 0xD000, 0xF000] do
++    cond do
++      scale > @max_scale ->
++        raise ArgumentError, "numeric scale #{scale} exceeds maximum scale #{@max_scale}"
++
++      ndigits != 0 or tail != "" ->
++        raise ArgumentError, "invalid numeric special value"
++
++      true ->
++        :ok
++    end
++  end
++
++  defp validate_decode_header!(ndigits, weight, sign, scale, tail)
++       when sign in [0x0000, 0x4000] do
++    cond do
++      byte_size(tail) != ndigits * 2 ->
++        raise ArgumentError, "invalid numeric digit length"
++
++      scale > @max_scale ->
++        raise ArgumentError, "numeric scale #{scale} exceeds maximum scale #{@max_scale}"
++
++      ndigits > @max_numeric_digits ->
++        raise ArgumentError,
++              "numeric has #{ndigits} base-10000 digits, maximum is #{@max_numeric_digits}"
++
++      ndigits > 0 and weight >= @max_integer_groups ->
++        raise ArgumentError,
++              "numeric has more than #{@max_integer_digits} digits before the decimal point"
++
++      ndigits > 0 and weight - ndigits + 1 < -div(scale + 3, 4) ->
++        raise ArgumentError, "numeric has more fractional digits than its scale allows"
++
++      true ->
++        :ok
++    end
++  end
++
++  defp validate_decode_header!(_ndigits, _weight, _sign, _scale, _tail) do
++    raise ArgumentError, "invalid numeric sign"
++  end
++
+   defp decode_sign(0x0000), do: 1
+   defp decode_sign(0x4000), do: -1
+ 
+-  defp scale(coef, 0), do: coef
+-  defp scale(coef, diff) when diff < 0, do: div(coef, pow10(-diff))
+-  defp scale(coef, diff) when diff > 0, do: coef * pow10(diff)
++  defp decode_numeric_digits(bin, acc) do
++    decode_numeric_digits(bin, acc, false)
++  end
++
++  defp decode_numeric_digits("", acc, non_zero?), do: {:lists.reverse(acc), non_zero?}
+ 
+-  Enum.reduce(0..100, 1, fn x, acc ->
+-    defp pow10(unquote(x)), do: unquote(acc)
+-    acc * 10
+-  end)
++  defp decode_numeric_digits(<<digit::uint16(), tail::binary>>, acc, non_zero?)
++       when digit <= 9999 do
++    decode_numeric_digits(tail, [base10000_to_decimal(digit) | acc], non_zero? or digit != 0)
++  end
++
++  defp decode_numeric_digits(<<digit::uint16(), _tail::binary>>, _acc, _non_zero?) do
++    raise ArgumentError, "invalid numeric base-10000 digit #{digit}"
++  end
++
++  defp base10000_to_decimal(digit) do
++    thousands = div(digit, 1000)
++    hundreds = div(rem(digit, 1000), 100)
++    tens = div(rem(digit, 100), 10)
++    ones = rem(digit, 10)
++    <<thousands + ?0, hundreds + ?0, tens + ?0, ones + ?0>>
++  end
++
++  defp adjust_decoded_digits(digits, 0), do: :erlang.binary_to_integer(digits)
+ 
+-  defp pow10(num) when num > 100, do: pow10(100) * pow10(num - 100)
++  defp adjust_decoded_digits(digits, diff) when diff > 0 do
++    :erlang.binary_to_integer(IO.iodata_to_binary([digits, zeroes(diff)]))
++  end
+ 
+-  defp decode_numeric_int("", weight, acc), do: {acc, weight}
++  defp adjust_decoded_digits(digits, diff) do
++    keep = byte_size(digits) + diff
+ 
+-  defp decode_numeric_int(<<digit::int16(), tail::binary>>, weight, acc) do
+-    acc = acc * 10_000 + digit
+-    decode_numeric_int(tail, weight - 1, acc)
++    if keep <= 0 do
++      0
++    else
++      :erlang.binary_to_integer(binary_part(digits, 0, keep))
++    end
+   end
+ end
+diff --git a/test/numeric_test.exs b/test/numeric_test.exs
+new file mode 100644
+index 0000000..fe8aaf4
+--- /dev/null
++++ b/test/numeric_test.exs
+@@ -0,0 +1,79 @@
++defmodule Postgrex.Extensions.NumericTest do
++  use ExUnit.Case, async: true
++
++  alias Postgrex.Extensions.Numeric
++
++  @max_integer_digits 131_072
++  @max_scale 16_383
++  @max_integer_groups div(@max_integer_digits, 4)
++  @max_fractional_groups div(@max_scale + 3, 4)
++  @max_numeric_digits @max_integer_groups + @max_fractional_groups
++  @max_weight @max_integer_groups - 1
++
++  test "encode and decode PostgreSQL maximum numeric shape" do
++    decimal = decimal_with_digits(@max_integer_digits + @max_scale, -@max_scale)
++
++    encoded = Numeric.encode_numeric(decimal) |> IO.iodata_to_binary()
++
++    assert <<@max_numeric_digits::16, @max_weight::signed-16, 0::16, @max_scale::16, _::binary>> =
++             encoded
++
++    assert Numeric.decode_numeric(encoded) == decimal
++  end
++
++  test "encode and decode compact maximum integer shape" do
++    decimal = Decimal.new(1, 1, @max_integer_digits - 1)
++
++    encoded = Numeric.encode_numeric(decimal) |> IO.iodata_to_binary()
++    assert <<1::16, @max_weight::signed-16, 0::16, 0::16, 1000::16>> = encoded
++
++    assert Decimal.equal?(Numeric.decode_numeric(encoded), decimal)
++  end
++
++  test "encode and decode maximum scale" do
++    decimal = Decimal.new(1, 1, -@max_scale)
++    weight = -@max_fractional_groups
++
++    encoded = Numeric.encode_numeric(decimal) |> IO.iodata_to_binary()
++    assert <<1::16, ^weight::signed-16, 0::16, @max_scale::16, 10::16>> = encoded
++
++    assert Numeric.decode_numeric(encoded) == decimal
++  end
++
++  test "encode rejects numeric values beyond PostgreSQL limits" do
++    assert_raise DBConnection.EncodeError, ~r/maximum scale #{@max_scale}/, fn ->
++      Numeric.encode_numeric(Decimal.new(1, 1, -(@max_scale + 1)))
++    end
++
++    assert_raise DBConnection.EncodeError, ~r/maximum is #{@max_integer_digits}/, fn ->
++      Numeric.encode_numeric(Decimal.new(1, 1, @max_integer_digits))
++    end
++  end
++
++  test "decode rejects numeric values beyond PostgreSQL limits" do
++    over_max_scale = @max_scale + 1
++
++    assert_raise ArgumentError, ~r/maximum scale #{@max_scale}/, fn ->
++      Numeric.decode_numeric(<<0::16, 0::signed-16, 0::16, over_max_scale::16>>)
++    end
++
++    over_max_digits = @max_numeric_digits + 1
++    over_max_digits_bin = :binary.copy(<<0::16>>, over_max_digits)
++
++    assert_raise ArgumentError, ~r/maximum is #{@max_numeric_digits}/, fn ->
++      Numeric.decode_numeric(
++        <<over_max_digits::16, 0::signed-16, 0::16, 0::16, over_max_digits_bin::binary>>
++      )
++    end
++
++    assert_raise ArgumentError, ~r/more fractional digits/, fn ->
++      Numeric.decode_numeric(
++        <<1::16, -(@max_fractional_groups + 1)::signed-16, 0::16, @max_scale::16, 1::16>>
++      )
++    end
++  end
++
++  defp decimal_with_digits(digits, exp) do
++    Decimal.new(1, String.duplicate("9", digits) |> :erlang.binary_to_integer(), exp)
++  end
++end

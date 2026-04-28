@@ -1,0 +1,482 @@
+diff --git a/lib/tds/types.ex b/lib/tds/types.ex
+index 8fa72c6..71c3473 100644
+--- a/lib/tds/types.ex
++++ b/lib/tds/types.ex
+@@ -11,6 +11,12 @@ defmodule Tds.Types do
+   @secs_in_min 60
+   @secs_in_hour 60 * @secs_in_min
+   @max_time_scale 7
++  @max_decimal_precision 38
++  @decimal_coef_limit Integer.pow(10, @max_decimal_precision)
++  @decimal_powers_of_10 List.to_tuple(
++                          for exp <- 0..(@max_decimal_precision - 1),
++                              do: Integer.pow(10, exp)
++                        )
+ 
+   # Zero Length Data Types
+   @tds_data_type_null 0x1F
+@@ -687,6 +693,9 @@ defmodule Tds.Types do
+ 
+   # Decimal
+   def decode_decimal(precision, scale, <<sign::int8(), value::binary>>) do
++    validate_decimal_type_shape!(precision, scale)
++    validate_decimal_sign!(sign)
++    validate_decimal_data_length!(precision, value)
+     set_decimal_precision(precision)
+ 
+     size = byte_size(value)
+@@ -695,7 +704,6 @@ defmodule Tds.Types do
+     case sign do
+       0 -> Decimal.new(-1, value, -scale)
+       1 -> Decimal.new(1, value, -scale)
+-      _ -> raise ArgumentError, "Sign value out of range. Expected 0 or 1, got #{inspect(sign)}"
+     end
+   end
+ 
+@@ -879,38 +887,16 @@ defmodule Tds.Types do
+   def encode_decimal_type(%Parameter{value: value}) do
+     set_decimal_precision(38)
+ 
+-    value_list =
+-      value
+-      |> Decimal.abs()
+-      |> Decimal.to_string(:normal)
+-      |> String.split(".")
+-
+-    {precision, scale} =
+-      case value_list do
+-        [p, s] ->
+-          {String.length(p) + String.length(s), String.length(s)}
+-
+-        [p] ->
+-          {String.length(p), 0}
+-      end
+-
+-    dec_abs =
+-      value
+-      |> Decimal.abs()
++    {precision, scale} = decimal_precision_scale!(value)
+ 
+     value =
+-      dec_abs.coef
++      value
++      |> decimal_coefficient()
+       |> :binary.encode_unsigned(:little)
+ 
+     value_size = byte_size(value)
+ 
+-    len =
+-      cond do
+-        precision <= 9 -> 4
+-        precision <= 19 -> 8
+-        precision <= 28 -> 12
+-        precision <= 38 -> 16
+-      end
++    len = decimal_data_length!(precision)
+ 
+     padding = len - value_size
+     value_size = value_size + padding + 1
+@@ -932,27 +918,11 @@ defmodule Tds.Types do
+   def encode_float_type(%Parameter{value: %Decimal{} = value}) do
+     set_decimal_precision(38)
+ 
+-    value_list =
+-      value
+-      |> Decimal.abs()
+-      |> Decimal.to_string(:normal)
+-      |> String.split(".")
+-
+-    {precision, scale} =
+-      case value_list do
+-        [p, s] ->
+-          {String.length(p) + String.length(s), String.length(s)}
+-
+-        [p] ->
+-          {String.length(p), 0}
+-      end
+-
+-    dec_abs =
+-      value
+-      |> Decimal.abs()
++    {precision, scale} = decimal_precision_scale!(value)
+ 
+     value =
+-      dec_abs.coef
++      value
++      |> decimal_coefficient()
+       |> :binary.encode_unsigned(:little)
+ 
+     value_size = byte_size(value)
+@@ -1121,20 +1091,7 @@ defmodule Tds.Types do
+   def encode_decimal_descriptor(%Parameter{value: %Decimal{} = dec}) do
+     set_decimal_precision(38)
+ 
+-    value_list =
+-      dec
+-      |> Decimal.abs()
+-      |> Decimal.to_string(:normal)
+-      |> String.split(".")
+-
+-    {precision, scale} =
+-      case value_list do
+-        [p, s] ->
+-          {String.length(p) + String.length(s), String.length(s)}
+-
+-        [p] ->
+-          {String.length(p), 0}
+-      end
++    {precision, scale} = decimal_precision_scale!(dec)
+ 
+     "decimal(#{precision}, #{scale})"
+   end
+@@ -1246,68 +1203,30 @@ defmodule Tds.Types do
+   end
+ 
+   def encode_data(@tds_data_type_floatn, value, _) do
+-    # d_ctx = Decimal.Context.get()
+-    # d_ctx = %{d_ctx | precision: 38}
+-    # Decimal.Context.set(d_ctx)
+-
+-    # value_list =
+-    #   value
+-    #   |> Decimal.new()
+-    #   |> Decimal.abs()
+-    #   |> Decimal.to_string(:scientific)
+-    #   |> String.split(".")
+-
+-    # precision =
+-    #   case value_list do
+-    #     [p, s] ->
+-    #       String.length(p) + String.length(s)
+-
+-    #     [p] ->
+-    #       String.length(p)
+-    #   end
+-
+-    # if precision <= 7 + 1 do
+-    #   <<0x04, value::little-float-32>>
+-    # else
+     # up to 15 digits of precision
+     # https://docs.microsoft.com/en-us/sql/t-sql/data-types/float-and-real-transact-sql
+     <<0x08, value::little-float-64>>
+-    # end
+   end
+ 
+   # decimal
+   def encode_data(@tds_data_type_decimaln, %Decimal{} = value, attr) do
+     set_decimal_precision(38)
+     precision = attr[:precision]
++    scale = attr[:scale] || 0
+ 
+-    d =
+-      value
+-      |> Decimal.to_string()
+-      |> Decimal.new()
++    validate_decimal_type_shape!(precision, scale)
++    validate_decimal_value!(value)
+ 
+-    sign =
+-      case d.sign do
+-        1 -> 1
+-        -1 -> 0
+-      end
++    sign = decimal_sign(value)
+ 
+     value_binary =
+       value
+-      |> Decimal.abs()
+-      |> Decimal.to_string(:normal)
+-      |> String.replace(".", "")
+-      |> String.to_integer()
++      |> decimal_scaled_integer()
+       |> :binary.encode_unsigned(:little)
+ 
+     value_size = byte_size(value_binary)
+ 
+-    len =
+-      cond do
+-        precision <= 9 -> 4
+-        precision <= 19 -> 8
+-        precision <= 28 -> 12
+-        precision <= 38 -> 16
+-      end
++    len = decimal_data_length!(precision)
+ 
+     padding = len - value_size
+     byte_len = len + 1
+@@ -1875,6 +1794,143 @@ defmodule Tds.Types do
+     {type, data, scale: 7}
+   end
+ 
++  defp decimal_precision_scale!(%Decimal{coef: coef, exp: exp}) do
++    digits = decimal_coefficient_digits!(coef)
++    {precision, scale} = decimal_precision_scale!(digits, exp)
++
++    validate_decimal_type_shape!(precision, scale)
++
++    {precision, scale}
++  end
++
++  defp decimal_precision_scale!(_digits, exp)
++       when is_integer(exp) and exp >= @max_decimal_precision do
++    raise_decimal_precision_overflow!()
++  end
++
++  defp decimal_precision_scale!(digits, exp) when is_integer(exp) and exp >= 0 do
++    {digits + exp, 0}
++  end
++
++  defp decimal_precision_scale!(_digits, exp)
++       when is_integer(exp) and exp < -@max_decimal_precision do
++    raise_decimal_precision_overflow!()
++  end
++
++  defp decimal_precision_scale!(digits, exp) when is_integer(exp) do
++    scale = -exp
++    precision = max(digits, scale)
++
++    {precision, scale}
++  end
++
++  defp decimal_precision_scale!(_digits, _exp) do
++    raise ArgumentError, "decimal exponent must be an integer"
++  end
++
++  defp decimal_coefficient(%Decimal{coef: coef}), do: coef
++
++  defp validate_decimal_value!(%Decimal{} = value) do
++    _ = decimal_precision_scale!(value)
++    :ok
++  end
++
++  defp decimal_coefficient_digits!(coef)
++       when is_integer(coef) and coef >= 0 and coef < @decimal_coef_limit do
++    coef
++    |> Integer.to_string()
++    |> byte_size()
++  end
++
++  defp decimal_coefficient_digits!(coef) when is_integer(coef) and coef >= @decimal_coef_limit do
++    raise_decimal_precision_overflow!()
++  end
++
++  defp decimal_coefficient_digits!(_coef) do
++    raise ArgumentError, "decimal values must be finite"
++  end
++
++  defp decimal_scaled_integer(%Decimal{coef: coef, exp: exp}) when exp > 0 do
++    decimal_coefficient_digits!(coef)
++    coef * decimal_power_of_10(exp)
++  end
++
++  defp decimal_scaled_integer(%Decimal{coef: coef}) do
++    decimal_coefficient_digits!(coef)
++    coef
++  end
++
++  defp decimal_power_of_10(exp) when exp >= 0 and exp < @max_decimal_precision do
++    elem(@decimal_powers_of_10, exp)
++  end
++
++  defp decimal_power_of_10(_exp) do
++    raise_decimal_precision_overflow!()
++  end
++
++  defp decimal_sign(%Decimal{sign: -1}), do: 0
++  defp decimal_sign(%Decimal{sign: 1}), do: 1
++
++  defp decimal_sign(%Decimal{}) do
++    raise ArgumentError, "decimal sign must be 1 or -1"
++  end
++
++  defp decimal_data_length!(precision) do
++    validate_decimal_type_shape!(precision, 0)
++
++    cond do
++      precision <= 9 -> 4
++      precision <= 19 -> 8
++      precision <= 28 -> 12
++      precision <= @max_decimal_precision -> 16
++    end
++  end
++
++  defp validate_decimal_type_shape!(precision, scale)
++       when is_integer(precision) and is_integer(scale) do
++    cond do
++      precision < 1 ->
++        raise ArgumentError,
++              "SQL Server decimal precision must be between 1 and #{@max_decimal_precision}"
++
++      precision > @max_decimal_precision ->
++        raise_decimal_precision_overflow!()
++
++      scale < 0 ->
++        raise ArgumentError, "SQL Server decimal scale must be between 0 and the precision"
++
++      scale > precision ->
++        raise ArgumentError, "SQL Server decimal scale cannot exceed precision"
++
++      true ->
++        :ok
++    end
++  end
++
++  defp validate_decimal_type_shape!(_precision, _scale) do
++    raise ArgumentError, "SQL Server decimal precision and scale must be integers"
++  end
++
++  defp validate_decimal_sign!(sign) when sign in [0, 1], do: :ok
++
++  defp validate_decimal_sign!(sign) do
++    raise ArgumentError, "Sign value out of range. Expected 0 or 1, got #{inspect(sign)}"
++  end
++
++  defp validate_decimal_data_length!(precision, value) do
++    max_size = decimal_data_length!(precision)
++
++    if byte_size(value) > max_size do
++      raise ArgumentError,
++            "SQL Server decimal payload exceeds #{max_size} bytes for precision #{precision}"
++    end
++  end
++
++  defp raise_decimal_precision_overflow! do
++    raise ArgumentError,
++          "SQL Server decimal precision exceeds maximum of #{@max_decimal_precision}"
++  end
++
+   defp set_decimal_precision(precision) do
+     Decimal.Context.get()
+     |> Map.put(:precision, precision)
+diff --git a/test/types/types_test.exs b/test/types/types_test.exs
+index 100ee1b..9217fb3 100644
+--- a/test/types/types_test.exs
++++ b/test/types/types_test.exs
+@@ -149,6 +149,127 @@ defmodule Tds.TypesTest do
+       assert sign == 1
+       assert :binary.decode_unsigned(value_binary, :little) == 1
+     end
++
++    test "encodes decimal at SQL Server maximum precision", _context do
++      value = Decimal.new("99999999999999999999999999999999999999")
++      attr = [precision: 38, scale: 0]
++
++      assert <<byte_len>> <> <<sign>> <> value_binary =
++               Tds.Types.encode_data(@tds_data_type_decimaln, value, attr)
++
++      assert byte_len == 17
++      assert sign == 1
++
++      assert :binary.decode_unsigned(value_binary, :little) ==
++               String.to_integer(String.duplicate("9", 38))
++    end
++
++    test "encodes decimal at SQL Server maximum scale", _context do
++      value = Decimal.new("1E-38")
++      attr = [precision: 38, scale: 38]
++
++      assert <<byte_len>> <> <<sign>> <> value_binary =
++               Tds.Types.encode_data(@tds_data_type_decimaln, value, attr)
++
++      assert byte_len == 17
++      assert sign == 1
++      assert :binary.decode_unsigned(value_binary, :little) == 1
++    end
++
++    test "rejects decimals over SQL Server maximum precision before encoding", _context do
++      value = Decimal.new("1E+38")
++      attr = [precision: 38, scale: 0]
++
++      assert_raise ArgumentError, ~r/SQL Server decimal precision/, fn ->
++        Tds.Types.encode_data(@tds_data_type_decimaln, value, attr)
++      end
++    end
++
++    test "rejects invalid decimal metadata before encoding", _context do
++      value = Decimal.new("1")
++
++      assert_raise ArgumentError, ~r/SQL Server decimal precision/, fn ->
++        Tds.Types.encode_data(@tds_data_type_decimaln, value, precision: 39, scale: 0)
++      end
++
++      assert_raise ArgumentError, ~r/SQL Server decimal scale cannot exceed precision/, fn ->
++        Tds.Types.encode_data(@tds_data_type_decimaln, value, precision: 38, scale: 39)
++      end
++    end
++  end
++
++  describe "encode_param_descriptor/1 for decimal values" do
++    test "keeps boundary descriptors for valid decimal values" do
++      assert Tds.Types.encode_param_descriptor(%Parameter{
++               name: "@1",
++               type: :decimal,
++               value: Decimal.new("1E+37")
++             }) == "@1 decimal(38, 0)"
++
++      assert Tds.Types.encode_param_descriptor(%Parameter{
++               name: "@1",
++               type: :decimal,
++               value: Decimal.new("1E-37")
++             }) == "@1 decimal(38, 37)"
++
++      assert Tds.Types.encode_param_descriptor(%Parameter{
++               name: "@1",
++               type: :decimal,
++               value: Decimal.new("1E-38")
++             }) == "@1 decimal(38, 38)"
++
++      assert Tds.Types.encode_param_descriptor(%Parameter{
++               name: "@1",
++               type: :decimal,
++               value: Decimal.new("0.0001")
++             }) == "@1 decimal(4, 4)"
++    end
++
++    test "rejects decimal and numeric descriptors over SQL Server maximum precision" do
++      for type <- [:decimal, :numeric] do
++        assert_raise ArgumentError, ~r/SQL Server decimal precision/, fn ->
++          Tds.Types.encode_param_descriptor(%Parameter{
++            name: "@1",
++            type: type,
++            value: Decimal.new("1E+5000")
++          })
++        end
++      end
++    end
++
++    test "rejects decimal and numeric data types over SQL Server maximum precision" do
++      for type <- [:decimal, :numeric] do
++        assert_raise ArgumentError, ~r/SQL Server decimal precision/, fn ->
++          Tds.Types.encode_data_type(%Parameter{
++            name: "@1",
++            type: type,
++            value: Decimal.new("1E+5000")
++          })
++        end
++      end
++    end
++  end
++
++  describe "decode_decimal/3" do
++    test "decodes SQL Server maximum scale boundary" do
++      assert Tds.Types.decode_decimal(38, 38, <<1, 1>>) == Decimal.new("1E-38")
++    end
++
++    test "rejects decimal metadata outside SQL Server limits" do
++      assert_raise ArgumentError, ~r/SQL Server decimal precision/, fn ->
++        Tds.Types.decode_decimal(39, 0, <<1, 0>>)
++      end
++
++      assert_raise ArgumentError, ~r/SQL Server decimal scale cannot exceed precision/, fn ->
++        Tds.Types.decode_decimal(38, 39, <<1, 0>>)
++      end
++    end
++
++    test "rejects decimal data over the byte length for the precision" do
++      assert_raise ArgumentError, ~r/SQL Server decimal payload exceeds 4 bytes/, fn ->
++        Tds.Types.decode_decimal(9, 0, <<1, 0::size(5)-unit(8)>>)
++      end
++    end
+   end
+ 
+   describe "inserting decimal values into the database" do

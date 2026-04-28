@@ -1,0 +1,299 @@
+diff --git a/lib/myxql/protocol/values.ex b/lib/myxql/protocol/values.ex
+index 29369bf..da2d7f0 100644
+--- a/lib/myxql/protocol/values.ex
++++ b/lib/myxql/protocol/values.ex
+@@ -5,6 +5,19 @@ defmodule MyXQL.Protocol.Values do
+   import MyXQL.Protocol.Types
+   import MyXQL.Protocol.Records, only: [column_def: 1]
+ 
++  @decimal_max_precision 65
++  @decimal_max_scale 30
++  @decimal_max_text_bytes @decimal_max_precision + 2
++  @decimal_to_string_opts [max_output_digits: @decimal_max_precision]
++  @decimal_max_coefficient :erlang.binary_to_integer(
++                             "1" <> String.duplicate("0", @decimal_max_precision)
++                           )
++
++  defguardp common_mysql_decimal?(sign, coef, exp)
++            when (sign == 1 or sign == -1) and is_integer(coef) and coef >= 0 and
++                   is_integer(exp) and exp >= -@decimal_max_scale and exp <= 0 and
++                   coef < @decimal_max_coefficient
++
+   # Text & Binary row value encoding/decoding
+   #
+   # https://dev.mysql.com/doc/internals/en/com-query-response.html#packet-Protocol::ColumnType
+@@ -138,7 +151,7 @@ defmodule MyXQL.Protocol.Values do
+ 
+   # Note: MySQL implements `NUMERIC` as `DECIMAL`s
+   def decode_text_value(value, :decimal) do
+-    Decimal.new(value)
++    decode_decimal(value)
+   end
+ 
+   def decode_text_value("0000-00-00", :date) do
+@@ -199,10 +212,7 @@ defmodule MyXQL.Protocol.Values do
+   end
+ 
+   def encode_binary_value(%Decimal{} = value) do
+-    string = Decimal.to_string(value, :normal)
+-    # per manual "The maximum number of digits for DECIMAL is 65" so we can
+-    # encode this directly instead of going through encode_string_lenenc/1
+-    {:mysql_type_newdecimal, <<byte_size(string), string::binary>>}
++    encode_decimal(value)
+   end
+ 
+   def encode_binary_value(%Date{year: year, month: month, day: day}) do
+@@ -462,10 +472,148 @@ defmodule MyXQL.Protocol.Values do
+   defp decode_double(<<v::64-signed-little-float, r::bits>>, null_bitmap, t, acc),
+     do: decode_binary_row(r, null_bitmap >>> 1, t, [v | acc])
+ 
+-  # in theory it's supposed to be a `string_lenenc` field. However since MySQL decimals
+-  # maximum precision is 65 digits, the size of the string will always fir on one byte.
++  # In theory this is a `string_lenenc` field. Since MySQL decimals have a
++  # bounded text representation, the size of the string always fits in one byte.
+   defp decode_decimal(<<n::uint1(), string::string(n), r::bits>>, null_bitmap, t, acc),
+-    do: decode_binary_row(r, null_bitmap >>> 1, t, [Decimal.new(string) | acc])
++    do: decode_binary_row(r, null_bitmap >>> 1, t, [decode_decimal(string) | acc])
++
++  ## Decimal
++
++  defp encode_decimal(%Decimal{sign: sign, coef: coef, exp: exp} = value)
++       when (sign == 1 or sign == -1) and is_integer(coef) and coef >= 0 and is_integer(exp) do
++    if exp < -@decimal_max_scale do
++      decimal_scale_error!(exp, "cannot encode MySQL DECIMAL")
++    end
++
++    string = decimal_to_string(value)
++    validate_decimal_string!(string, "cannot encode MySQL DECIMAL")
++
++    # MySQL DECIMAL stores up to 65 digits, plus an optional sign and decimal
++    # point in the text protocol representation, so one length byte is enough.
++    {:mysql_type_newdecimal, <<byte_size(string), string::binary>>}
++  end
++
++  defp encode_decimal(%Decimal{}) do
++    raise ArgumentError,
++          "cannot encode MySQL DECIMAL: expected a finite decimal with an integer " <>
++            "coefficient and exponent"
++  end
++
++  defp decimal_to_string(value) do
++    if function_exported?(Decimal, :to_string, 3) do
++      apply(Decimal, :to_string, [value, :normal, @decimal_to_string_opts])
++    else
++      Decimal.to_string(value, :normal)
++    end
++  rescue
++    _ in ArgumentError ->
++      raise ArgumentError, "cannot encode MySQL DECIMAL: precision exceeds maximum 65"
++  end
++
++  defp validate_decimal_string!(string, message) do
++    {integer_digits, scale} = decimal_string_shape(string)
++    precision = integer_digits + scale
++
++    cond do
++      scale > @decimal_max_scale ->
++        decimal_scale_error!(-scale, message)
++
++      precision > @decimal_max_precision ->
++        raise ArgumentError, "#{message}: precision exceeds maximum 65"
++
++      byte_size(string) > @decimal_max_text_bytes ->
++        raise ArgumentError,
++              "#{message}: text representation is #{byte_size(string)} bytes, " <>
++                "but the maximum is #{@decimal_max_text_bytes} bytes"
++
++      true ->
++        :ok
++    end
++  end
++
++  defp decimal_string_shape("-" <> string), do: decimal_string_shape(string)
++
++  defp decimal_string_shape(string) do
++    case :binary.split(string, ".") do
++      [integer] ->
++        {integer_digit_count(integer), 0}
++
++      [integer, fractional] ->
++        {integer_digit_count(integer), byte_size(fractional)}
++    end
++  end
++
++  defp integer_digit_count("0"), do: 0
++  defp integer_digit_count(integer), do: byte_size(integer)
++
++  defp validate_decimal!(%Decimal{sign: sign, coef: coef, exp: exp}, _message)
++       when common_mysql_decimal?(sign, coef, exp) do
++    :ok
++  end
++
++  defp validate_decimal!(%Decimal{sign: sign, coef: coef, exp: exp}, message)
++       when (sign == 1 or sign == -1) and is_integer(coef) and coef >= 0 and is_integer(exp) do
++    cond do
++      exp < -@decimal_max_scale ->
++        decimal_scale_error!(exp, message)
++
++      exp < 0 and coef < @decimal_max_coefficient ->
++        :ok
++
++      exp >= 0 and exp < @decimal_max_precision and coef < decimal_max_coefficient(exp) ->
++        :ok
++
++      true ->
++        raise ArgumentError, "#{message}: precision exceeds maximum 65"
++    end
++  end
++
++  defp validate_decimal!(%Decimal{}, message) do
++    raise ArgumentError,
++          "#{message}: expected a finite decimal with an integer " <>
++            "coefficient and exponent"
++  end
++
++  for exp <- 0..(@decimal_max_precision - 1) do
++    max = :erlang.binary_to_integer("1" <> String.duplicate("0", @decimal_max_precision - exp))
++
++    defp decimal_max_coefficient(unquote(exp)) do
++      unquote(max)
++    end
++  end
++
++  defp decode_decimal(string) do
++    if byte_size(string) > @decimal_max_text_bytes do
++      raise ArgumentError,
++            "cannot decode MySQL DECIMAL: text representation is #{byte_size(string)} bytes, " <>
++              "but the maximum is #{@decimal_max_text_bytes} bytes"
++    end
++
++    case decimal_new(string) do
++      %Decimal{sign: sign, coef: coef, exp: exp} = decimal
++      when common_mysql_decimal?(sign, coef, exp) ->
++        decimal
++
++      %Decimal{} = decimal ->
++        validate_decimal!(decimal, "cannot decode MySQL DECIMAL")
++        decimal
++    end
++  end
++
++  defp decimal_new(string) do
++    Decimal.new(string)
++  rescue
++    _ in Decimal.Error ->
++      raise ArgumentError, "cannot decode MySQL DECIMAL: invalid text representation"
++  end
++
++  defp decimal_scale_error!(exp, message) when exp >= -1000 do
++    raise ArgumentError, "#{message}: scale #{-exp} exceeds maximum #{@decimal_max_scale}"
++  end
++
++  defp decimal_scale_error!(_exp, message) do
++    raise ArgumentError, "#{message}: scale exceeds maximum #{@decimal_max_scale}"
++  end
+ 
+   defp decode_date(
+          <<4, year::uint2(), month::uint1(), day::uint1(), r::bits>>,
+diff --git a/test/myxql/protocol/decimal_values_test.exs b/test/myxql/protocol/decimal_values_test.exs
+new file mode 100644
+index 0000000..88b6a06
+--- /dev/null
++++ b/test/myxql/protocol/decimal_values_test.exs
+@@ -0,0 +1,96 @@
++defmodule MyXQL.Protocol.DecimalValuesTest do
++  use ExUnit.Case, async: true
++
++  import MyXQL.Protocol.Records, only: [column_def: 1]
++
++  alias MyXQL.Protocol.Values
++
++  @max_decimal String.duplicate("9", 35) <> "." <> String.duplicate("9", 30)
++  @max_integer String.duplicate("9", 65)
++  @max_scale "0." <> String.duplicate("0", 29) <> "1"
++
++  test "encodes valid MySQL DECIMAL boundary values" do
++    assert Values.encode_binary_value(Decimal.new(@max_integer)) ==
++             {:mysql_type_newdecimal, <<65, @max_integer::binary>>}
++
++    assert Values.encode_binary_value(Decimal.new(@max_decimal)) ==
++             {:mysql_type_newdecimal, <<66, @max_decimal::binary>>}
++
++    assert Values.encode_binary_value(Decimal.new(@max_scale)) ==
++             {:mysql_type_newdecimal, <<32, @max_scale::binary>>}
++
++    max_positive_exponent = "1" <> String.duplicate("0", 64)
++
++    assert Values.encode_binary_value(Decimal.new("1e64")) ==
++             {:mysql_type_newdecimal, <<65, max_positive_exponent::binary>>}
++
++    negative = "-" <> @max_decimal
++
++    assert Values.encode_binary_value(Decimal.new(negative)) ==
++             {:mysql_type_newdecimal, <<67, negative::binary>>}
++  end
++
++  test "rejects unsupported MySQL DECIMAL encode shapes" do
++    assert_decimal_encode_error(Decimal.new("1e65"), ~r/precision/)
++    assert_decimal_encode_error(Decimal.new("1e-31"), ~r/scale 31/)
++    assert_decimal_encode_error(Decimal.new("NaN"), ~r/expected a finite decimal/)
++    assert_decimal_encode_error(Decimal.new("Inf"), ~r/expected a finite decimal/)
++
++    if decimal_output_limits?() do
++      assert_decimal_encode_error(%Decimal{sign: 1, coef: 1, exp: 1_000_000}, ~r/precision/)
++    end
++  end
++
++  test "decodes valid MySQL DECIMAL boundary values" do
++    assert Values.decode_text_value(@max_decimal, :decimal) == Decimal.new(@max_decimal)
++    assert Values.decode_text_value(@max_integer, :decimal) == Decimal.new(@max_integer)
++    assert Values.decode_text_value(@max_scale, :decimal) == Decimal.new(@max_scale)
++    assert Values.decode_text_value("1e64", :decimal) == Decimal.new("1e64")
++
++    assert Values.decode_binary_row(decimal_binary_row(@max_decimal), decimal_column_defs()) == [
++             Decimal.new(@max_decimal)
++           ]
++
++    negative = "-" <> @max_decimal
++    assert Values.decode_text_value(negative, :decimal) == Decimal.new(negative)
++
++    assert Values.decode_binary_row(decimal_binary_row(negative), decimal_column_defs()) == [
++             Decimal.new(negative)
++           ]
++  end
++
++  test "rejects over-limit and invalid MySQL DECIMAL decode values" do
++    assert_decimal_decode_error(String.duplicate("9", 66), ~r/precision/)
++    assert_decimal_decode_error("0." <> String.duplicate("1", 31), ~r/scale 31/)
++    assert_decimal_decode_error("NaN", ~r/expected a finite decimal/)
++    assert_decimal_decode_error(String.duplicate("0", 68), ~r/68 bytes/)
++  end
++
++  defp assert_decimal_encode_error(decimal, message) do
++    assert_raise ArgumentError, message, fn ->
++      Values.encode_binary_value(decimal)
++    end
++  end
++
++  defp assert_decimal_decode_error(string, message) do
++    assert_raise ArgumentError, message, fn ->
++      Values.decode_text_value(string, :decimal)
++    end
++
++    assert_raise ArgumentError, message, fn ->
++      Values.decode_binary_row(decimal_binary_row(string), decimal_column_defs())
++    end
++  end
++
++  defp decimal_binary_row(string) do
++    <<0, 0, byte_size(string), string::binary>>
++  end
++
++  defp decimal_column_defs do
++    [column_def(type: :mysql_type_newdecimal)]
++  end
++
++  defp decimal_output_limits? do
++    function_exported?(Decimal, :to_string, 3)
++  end
++end

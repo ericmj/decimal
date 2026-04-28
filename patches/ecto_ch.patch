@@ -1,0 +1,245 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 5a1dccb..b2242d9 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,5 +1,9 @@
+ # Changelog
+ 
++## Unreleased
++
++- Validate `Decimal` precision and scale against ClickHouse limits and emit `Decimal(precision, scale)` parameter types sized to the value instead of always `Decimal64(scale)`
++
+ ## 0.8.6 (2026-02-11)
+ 
+ - Fix invalid `Array(Nothing)` param type for params like for `[[]]` https://github.com/plausible/ecto_ch/pull/264
+diff --git a/lib/ecto/adapters/clickhouse/connection.ex b/lib/ecto/adapters/clickhouse/connection.ex
+index 1350076..b55b262 100644
+--- a/lib/ecto/adapters/clickhouse/connection.ex
++++ b/lib/ecto/adapters/clickhouse/connection.ex
+@@ -860,9 +860,7 @@ defmodule Ecto.Adapters.ClickHouse.Connection do
+     [?[, intersperse_map(list, ?,, &expr(&1, sources, params, query)), ?]]
+   end
+ 
+-  defp expr(%Decimal{} = decimal, _sources, _params, _query) do
+-    Decimal.to_string(decimal, :normal)
+-  end
++  defp expr(%Decimal{} = decimal, _sources, _params, _query), do: decimal_to_string(decimal)
+ 
+   defp expr(%Tagged{value: value, type: :any}, sources, params, query) do
+     expr(value, sources, params, query)
+@@ -997,6 +995,10 @@ defmodule Ecto.Adapters.ClickHouse.Connection do
+ 
+   @inline_tag :__ecto_ch_inline__
+ 
++  @max_decimal_precision 76
++  @max_decimal_output_digits @max_decimal_precision + 1
++  @max_decimal_coefficient Integer.pow(10, @max_decimal_precision)
++
+   @doc false
+   def mark_inline(param), do: {@inline_tag, param}
+ 
+@@ -1168,7 +1170,7 @@ defmodule Ecto.Adapters.ClickHouse.Connection do
+     [?', Date.to_string(date), suffix]
+   end
+ 
+-  defp inline_param(%Decimal{} = dec), do: Decimal.to_string(dec, :normal)
++  defp inline_param(%Decimal{} = dec), do: decimal_to_string(dec)
+ 
+   defp inline_param(a) when is_list(a) do
+     [?[, Enum.map_intersperse(a, ?,, &inline_param/1), ?]]
+@@ -1223,10 +1225,9 @@ defmodule Ecto.Adapters.ClickHouse.Connection do
+   # TODO Date32
+   defp param_type(%Date{}), do: "Date"
+ 
+-  defp param_type(%Decimal{exp: exp}) do
+-    # TODO use sizes 128 and 256 as well if needed
+-    scale = if exp < 0, do: abs(exp), else: 0
+-    ["Decimal64(", Integer.to_string(scale), ?)]
++  defp param_type(%Decimal{} = decimal) do
++    {precision, scale} = decimal_precision_and_scale!(decimal)
++    ["Decimal(", Integer.to_string(precision), ?,, Integer.to_string(scale), ?)]
+   end
+ 
+   # context: https://github.com/plausible/analytics/pull/6049#issuecomment-3850062609
+@@ -1258,4 +1259,63 @@ defmodule Ecto.Adapters.ClickHouse.Connection do
+         "Map(Nothing,Nothing)"
+     end
+   end
++
++  defp decimal_to_string(decimal) do
++    decimal_precision_and_scale!(decimal)
++
++    if function_exported?(Decimal, :to_string, 3) do
++      apply(Decimal, :to_string, [
++        decimal,
++        :normal,
++        [max_output_digits: @max_decimal_output_digits]
++      ])
++    else
++      Decimal.to_string(decimal, :normal)
++    end
++  end
++
++  defp decimal_precision_and_scale!(%Decimal{coef: coef}) when coef in [:NaN, :inf] do
++    raise ArgumentError, "ClickHouse Decimal values must be finite"
++  end
++
++  defp decimal_precision_and_scale!(%Decimal{coef: coef, exp: exp})
++       when is_integer(coef) and coef >= 0 and is_integer(exp) do
++    scale = if exp < 0, do: -exp, else: 0
++
++    if scale > @max_decimal_precision do
++      raise ArgumentError,
++            "ClickHouse Decimal scale #{scale} exceeds maximum #{@max_decimal_precision}"
++    end
++
++    if coef >= @max_decimal_coefficient do
++      raise ArgumentError,
++            "ClickHouse Decimal precision exceeds maximum #{@max_decimal_precision}"
++    end
++
++    coefficient_digits = decimal_coefficient_digits(coef)
++
++    precision =
++      if exp >= 0 do
++        coefficient_digits + exp
++      else
++        max(coefficient_digits, scale)
++      end
++
++    if precision > @max_decimal_precision do
++      raise ArgumentError,
++            "ClickHouse Decimal precision #{precision} exceeds maximum #{@max_decimal_precision}"
++    end
++
++    {precision, scale}
++  end
++
++  defp decimal_precision_and_scale!(%Decimal{}) do
++    raise ArgumentError, "invalid Decimal struct"
++  end
++
++  defp decimal_coefficient_digits(coef) do
++    # The coefficient is already bounded to ClickHouse Decimal256 precision, so
++    # this allocates at most 76 bytes and keeps type inference straightforward.
++    coef |> Integer.to_string() |> byte_size()
++  end
+ end
+diff --git a/test/ecto/adapters/clickhouse/connection_test.exs b/test/ecto/adapters/clickhouse/connection_test.exs
+index ac52d66..94b79bd 100644
+--- a/test/ecto/adapters/clickhouse/connection_test.exs
++++ b/test/ecto/adapters/clickhouse/connection_test.exs
+@@ -3467,6 +3467,113 @@ defmodule Ecto.Adapters.ClickHouse.ConnectionTest do
+              "1,'a',true,'2024-04-12'::date,'2024-04-12 09:55:54.329788'::DateTime64(6,'Etc/UTC'),'2024-04-12 09:55:54'::DateTime('Etc/UTC')"
+   end
+ 
++  test "decimal parameter boundaries" do
++    param = fn value ->
++      to_string(Connection.build_params(_ix = 0, _len = 1, [value]))
++    end
++
++    inline_param = fn value ->
++      to_string(Connection.build_params(_ix = 0, _len = 1, [Connection.mark_inline(value)]))
++    end
++
++    max_integer = String.duplicate("9", 76)
++    max_scale = "0." <> String.duplicate("0", 75) <> "1"
++
++    assert param.(Decimal.new("1.23")) == "{$0:Decimal(3,2)}"
++    assert inline_param.(Decimal.new("1.23")) == "1.23"
++
++    assert param.(Decimal.new("-1.23")) == "{$0:Decimal(3,2)}"
++    assert inline_param.(Decimal.new("-1.23")) == "-1.23"
++
++    assert param.(Decimal.new(max_integer)) == "{$0:Decimal(76,0)}"
++    assert inline_param.(Decimal.new(max_integer)) == max_integer
++
++    assert param.(Decimal.new(1, 1, -76)) == "{$0:Decimal(76,76)}"
++    assert inline_param.(Decimal.new(1, 1, -76)) == max_scale
++  end
++
++  test "decimal literal boundaries" do
++    literal = fn decimal ->
++      {query, params} = plan("schema" |> select([], true), :all)
++      query = %{query | select: %{query.select | fields: [decimal]}}
++
++      query
++      |> Connection.all(params)
++      |> IO.iodata_to_binary()
++    end
++
++    max_integer = String.duplicate("9", 76)
++    max_scale = "0." <> String.duplicate("0", 75) <> "1"
++
++    assert literal.(Decimal.new(max_integer)) == ~s[SELECT #{max_integer} FROM "schema" AS s0]
++    assert literal.(Decimal.new(1, 1, -76)) == ~s[SELECT #{max_scale} FROM "schema" AS s0]
++  end
++
++  test "decimal parameters reject over-limit values before rendering" do
++    param = fn value ->
++      to_string(Connection.build_params(_ix = 0, _len = 1, [value]))
++    end
++
++    inline_param = fn value ->
++      to_string(Connection.build_params(_ix = 0, _len = 1, [Connection.mark_inline(value)]))
++    end
++
++    assert_raise ArgumentError, ~r/precision 77 exceeds maximum 76/, fn ->
++      param.(Decimal.new(1, 1, 76))
++    end
++
++    assert_raise ArgumentError, ~r/scale 77 exceeds maximum 76/, fn ->
++      param.(Decimal.new(1, 1, -77))
++    end
++
++    assert_raise ArgumentError, ~r/precision exceeds maximum 76/, fn ->
++      param.(Decimal.new(String.duplicate("9", 77)))
++    end
++
++    assert_raise ArgumentError, ~r/precision 77 exceeds maximum 76/, fn ->
++      inline_param.(Decimal.new(1, 1, 76))
++    end
++
++    assert_raise ArgumentError, ~r/scale 77 exceeds maximum 76/, fn ->
++      inline_param.(Decimal.new(1, 1, -77))
++    end
++
++    assert_raise ArgumentError, ~r/ClickHouse Decimal values must be finite/, fn ->
++      inline_param.(Decimal.new("NaN"))
++    end
++
++    assert_raise ArgumentError, ~r/ClickHouse Decimal values must be finite/, fn ->
++      param.(Decimal.new("NaN"))
++    end
++
++    assert_raise ArgumentError, ~r/ClickHouse Decimal values must be finite/, fn ->
++      param.(Decimal.new("Infinity"))
++    end
++
++    assert_raise ArgumentError, ~r/ClickHouse Decimal values must be finite/, fn ->
++      inline_param.(Decimal.new("Infinity"))
++    end
++  end
++
++  test "decimal literals reject over-limit values before rendering" do
++    literal = fn decimal ->
++      {query, params} = plan("schema" |> select([], true), :all)
++      query = %{query | select: %{query.select | fields: [decimal]}}
++
++      query
++      |> Connection.all(params)
++      |> IO.iodata_to_binary()
++    end
++
++    assert_raise ArgumentError, ~r/precision 77 exceeds maximum 76/, fn ->
++      literal.(Decimal.new(1, 1, 76))
++    end
++
++    assert_raise ArgumentError, ~r/scale 77 exceeds maximum 76/, fn ->
++      literal.(Decimal.new(1, 1, -77))
++    end
++  end
++
+   # https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
+   test "integer boundaries" do
+     import Bitwise
