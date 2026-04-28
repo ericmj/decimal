@@ -1,3 +1,49 @@
+From 271fcf46eef43443fddb79091c33a2dbfda50a5a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Eric=20Meadows-J=C3=B6nsson?=
+ <eric.meadows.jonsson@gmail.com>
+Date: Tue, 28 Apr 2026 22:31:54 +0200
+Subject: [PATCH] Bound decimal casting to mitigate exponent amplification
+
+Mitigates GHSA-rhv4-8758-jx7v ("decimal exponent amplification"), where
+compact inputs like `1e1000000` could force the Decimal library into
+multi-second expansions during arithmetic, parsing, normalization, and
+formatting. Ecto guards its cast boundary so untrusted input can no
+longer materialize pathological decimals via changesets.
+
+`Ecto.Type.cast/2` for `:decimal` now delegates through a private
+`cast_decimal/2` helper that, when the upstream Decimal library exports
+the bounded `cast/2` and `parse/2` APIs, threads `:max_digits` and
+`:max_exponent` into the parser. When the running Decimal version
+predates those APIs, casting falls back to the previous unbounded
+behaviour so existing deployments keep working.
+
+Defaults to Postgrex-compatible limits (`max_digits: 147_455`,
+`max_exponent: 131_071`). Operators can override globally via:
+
+    config :ecto, :decimal_cast_options, max_digits: ..., max_exponent: ...
+
+Schema fields can opt into per-field limits with the new `:max_digits`
+and `:max_exponent` field options on `:decimal` columns. When set, the
+field is compiled into a private `Ecto.Type.ParameterizedDecimal`
+parameterized type whose `type/1` reports `:decimal` and which
+delegates `load`, `dump`, and `equal?` to the built-in decimal type;
+this works transparently inside `{:array, :decimal}` and other
+composites. Decimal options are validated at compile time (and at cast
+time for the global config) and must be non-negative integers or
+`:infinity`; supplying them on non-decimal fields raises as before.
+
+Inputs that exceed the configured limits cast to `:error` rather than
+returning an over-large `Decimal`, matching Ecto's existing convention
+for invalid casts.
+---
+ lib/ecto/schema.ex                      |  30 +++++-
+ lib/ecto/type.ex                        |  84 ++++++++++++++-
+ lib/ecto/type/parameterized_decimal.ex  |  30 ++++++
+ test/ecto/type/decimal_options_test.exs | 135 ++++++++++++++++++++++++
+ 4 files changed, 275 insertions(+), 4 deletions(-)
+ create mode 100644 lib/ecto/type/parameterized_decimal.ex
+ create mode 100644 test/ecto/type/decimal_options_test.exs
+
 diff --git a/lib/ecto/schema.ex b/lib/ecto/schema.ex
 index 53ab8fc..20779d3 100644
 --- a/lib/ecto/schema.ex
@@ -367,3 +413,6 @@ index 0000000..24567a6
 +    end
 +  end
 +end
+-- 
+2.53.0
+

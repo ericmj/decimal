@@ -1,3 +1,45 @@
+From 6ceff9325e5e87ed986017f61efe62c056d3e20c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Eric=20Meadows-J=C3=B6nsson?=
+ <eric.meadows.jonsson@gmail.com>
+Date: Tue, 28 Apr 2026 22:32:21 +0200
+Subject: [PATCH] Validate MySQL DECIMAL bounds in protocol encode/decode
+
+Mitigates the Decimal exponent-amplification advisory
+(GHSA-rhv4-8758-jx7v): a hostile decimal coefficient or exponent
+flowing through MyXQL's wire protocol could otherwise force Decimal
+into multi-second expansions when rendered or parsed.
+
+This patch tightens the DECIMAL boundary in MyXQL.Protocol.Values to
+match MySQL's documented limits (precision 65, scale 30):
+
+* `encode_binary_value/1` for `%Decimal{}` now goes through a shared
+  `encode_decimal/1` helper that rejects non-finite decimals, scales
+  beyond 30, and precisions beyond 65 with `ArgumentError`. When
+  available it calls `Decimal.to_string/3` with
+  `max_output_digits: 65` so a compact `1e<huge>` input cannot
+  materialize a giant string; on older Decimal versions it falls
+  back to `Decimal.to_string/2` and post-validates the rendered text.
+* `decode_text_value/2` and the binary-row decimal path now go
+  through `decode_decimal/1`, which caps the inbound text at 67
+  bytes (65 digits + sign + decimal point), validates the resulting
+  `%Decimal{}` against the precision/scale bounds, and turns malformed
+  input into `ArgumentError` instead of leaking `Decimal.Error`.
+* A `common_mysql_decimal?/3` guard plus a compile-time
+  `decimal_max_coefficient/1` lookup keep the in-bounds fast path
+  allocation-free.
+
+No new public API or option is exposed; callers see the same
+`encode_binary_value/1` and `decode_*` functions, but out-of-range
+or non-finite decimals now raise `ArgumentError` with a descriptive
+message instead of being sent to / accepted from the server. New
+tests in `test/myxql/protocol/decimal_values_test.exs` cover the
+boundary values and each rejection path for both encode and decode.
+---
+ lib/myxql/protocol/values.ex                | 164 +++++++++++++++++++-
+ test/myxql/protocol/decimal_values_test.exs |  96 ++++++++++++
+ 2 files changed, 252 insertions(+), 8 deletions(-)
+ create mode 100644 test/myxql/protocol/decimal_values_test.exs
+
 diff --git a/lib/myxql/protocol/values.ex b/lib/myxql/protocol/values.ex
 index 29369bf..da2d7f0 100644
 --- a/lib/myxql/protocol/values.ex
@@ -297,3 +339,6 @@ index 0000000..88b6a06
 +    function_exported?(Decimal, :to_string, 3)
 +  end
 +end
+-- 
+2.53.0
+

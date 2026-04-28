@@ -1,3 +1,46 @@
+From 27f5d5804f7f83182cc0dd9bdb3181adca63da0b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Eric=20Meadows-J=C3=B6nsson?=
+ <eric.meadows.jonsson@gmail.com>
+Date: Tue, 28 Apr 2026 22:31:58 +0200
+Subject: [PATCH] Bound decimal SQL literal rendering against exponent
+ amplification
+
+Renders %Decimal{} values into SQL through a shared helper that caps the
+output digit count, mitigating GHSA-rhv4-8758-jx7v ("decimal exponent
+amplification") where compact decimals such as `1e1000000` could force
+multi-second expansions when stringified or compared.
+
+Each adapter now validates and renders decimals at its own backend
+boundary:
+
+* Postgres caps fractional digits at 16383 and total digits at
+  131072 + 16383 (Postgres NUMERIC limits); scales beyond 16383 raise
+  Ecto.QueryError before any expansion happens.
+* MyXQL caps scale at 30 and total digits at 65 (MySQL DECIMAL limits).
+* Tds caps scale at 38 (SQL Server DECIMAL precision) and emits
+  CAST(... as decimal(38, scale)) using the validated scale instead of
+  the raw `abs(exp)`. Non-finite decimals fall back to scale 0.
+
+A new private module Ecto.Adapters.SQL.Decimal centralizes the call to
+Decimal.to_string/3 with `:max_output_digits`, falling back to
+Decimal.to_string/2 on older Decimal versions that do not expose the
+option. ArgumentError raised by Decimal when the cap is exceeded is
+converted into Ecto.QueryError tied to the originating query.
+
+No new public option or API surface is exposed to callers; the limits
+are fixed per adapter to match the underlying database's documented
+decimal range.
+---
+ lib/ecto/adapters/myxql/connection.ex    | 29 ++++++++++++++++--
+ lib/ecto/adapters/postgres/connection.ex | 30 ++++++++++++++++--
+ lib/ecto/adapters/sql/decimal.ex         | 11 +++++++
+ lib/ecto/adapters/tds/connection.ex      | 39 ++++++++++++++++++++++--
+ test/ecto/adapters/myxql_test.exs        | 27 ++++++++++++++++
+ test/ecto/adapters/postgres_test.exs     | 27 ++++++++++++++++
+ test/ecto/adapters/tds_test.exs          | 29 ++++++++++++++++++
+ 7 files changed, 185 insertions(+), 7 deletions(-)
+ create mode 100644 lib/ecto/adapters/sql/decimal.ex
+
 diff --git a/lib/ecto/adapters/myxql/connection.ex b/lib/ecto/adapters/myxql/connection.ex
 index c560d3b..73a13c5 100644
 --- a/lib/ecto/adapters/myxql/connection.ex
@@ -335,3 +378,6 @@ index 9341314..0906eec 100644
    end
  
    test "aliasing a selected value with selected_as/2" do
+-- 
+2.53.0
+

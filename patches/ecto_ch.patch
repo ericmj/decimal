@@ -1,3 +1,42 @@
+From abb945d5bd2bd31540bd3ee7b28a990f4fb879d6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Eric=20Meadows-J=C3=B6nsson?=
+ <eric.meadows.jonsson@gmail.com>
+Date: Tue, 28 Apr 2026 22:32:37 +0200
+Subject: [PATCH] Bound Decimal rendering to ClickHouse precision limits
+
+Mitigates GHSA-rhv4-8758-jx7v (decimal exponent amplification) at the
+ClickHouse adapter's SQL rendering boundary, so compact Decimal values
+like 1e1000000 cannot be expanded into multi-megabyte coefficient
+strings on the way to ClickHouse.
+
+The adapter previously emitted Decimal64(scale) for every Decimal
+parameter regardless of value size and rendered the coefficient with
+Decimal.to_string/2 verbatim. Both the inline literal path (expr/4) and
+the parameter type path (param_type/1) are now guarded by a shared
+decimal_precision_and_scale!/1 helper that:
+
+- rejects non-finite values (NaN, Infinity) with ArgumentError
+- rejects scale > 76 with ArgumentError
+- rejects coefficients with more than 76 digits with ArgumentError
+- rejects computed precision > 76 with ArgumentError
+
+param_type/1 now emits Decimal(precision, scale) sized to the actual
+value (up to ClickHouse's Decimal256 ceiling of precision 76) instead
+of always Decimal64(scale). Rendering goes through a new
+decimal_to_string/1 helper that, when the upstream Decimal library
+exposes Decimal.to_string/3 with :max_output_digits, caps output at
+77 digits and otherwise falls back to Decimal.to_string/2.
+
+Behavioral change for callers: Decimal parameters and inlined Decimal
+literals that exceed ClickHouse's Decimal limits, or that are NaN or
+Infinity, now raise ArgumentError at render time instead of silently
+producing malformed SQL. No new public option or API surface is added.
+---
+ CHANGELOG.md                                  |   4 +
+ lib/ecto/adapters/clickhouse/connection.ex    |  76 +++++++++++--
+ .../adapters/clickhouse/connection_test.exs   | 107 ++++++++++++++++++
+ 3 files changed, 179 insertions(+), 8 deletions(-)
+
 diff --git a/CHANGELOG.md b/CHANGELOG.md
 index 5a1dccb..b2242d9 100644
 --- a/CHANGELOG.md
@@ -243,3 +282,6 @@ index ac52d66..94b79bd 100644
    # https://clickhouse.com/docs/en/sql-reference/data-types/int-uint
    test "integer boundaries" do
      import Bitwise
+-- 
+2.53.0
+

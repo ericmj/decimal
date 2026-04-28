@@ -1,3 +1,54 @@
+From a56dced82cc3e23ccc8a3cd05a9053f61a24f981 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Eric=20Meadows-J=C3=B6nsson?=
+ <eric.meadows.jonsson@gmail.com>
+Date: Tue, 28 Apr 2026 22:32:37 +0200
+Subject: [PATCH] Bound decimal encode/decode against amplification attacks
+
+Mitigates GHSA-rhv4-8758-jx7v ("decimal exponent amplification"), where a
+compact Decimal value carrying a very large or very negative exponent could
+force multi-second expansions when TDS rendered it through Decimal.to_string/1
+or scaled it via string manipulation while encoding TDS DECIMAL/NUMERIC wire
+payloads.
+
+The TDS DECIMAL/NUMERIC wire format is itself bounded to precision 38, so the
+encode and decode paths now enforce that limit at the boundary instead of
+trusting the caller-supplied Decimal:
+
+  * decode_decimal/3 validates that the wire-supplied precision and scale fall
+    within SQL Server's 1..38 / 0..precision range, that the sign byte is 0 or
+    1, and that the coefficient payload does not exceed the 4/8/12/16-byte
+    bucket implied by the precision. Malformed packets raise ArgumentError
+    instead of building a Decimal from arbitrary bytes.
+
+  * encode_decimal_type/1, encode_float_type/1 (Decimal arm),
+    encode_decimal_descriptor/1, and encode_data/3 for DECIMALN now derive
+    precision and scale directly from the Decimal struct's coef and exp via
+    integer arithmetic and a precomputed power-of-ten table, rather than
+    formatting the value with Decimal.to_string(:normal) and splitting on ".".
+    A Decimal whose exponent would push precision past 38 (or whose
+    coefficient is non-finite) is rejected with ArgumentError before any
+    expansion happens, so values like 1E+5000 or 1E+38 can no longer be
+    materialized into a multi-megabyte coefficient string on the encode path.
+
+  * encode_data/3 for DECIMALN additionally validates the caller-supplied
+    precision/scale attrs and the Decimal value up front, and computes the
+    scaled coefficient as coef * 10^exp using the bounded power-of-ten table
+    instead of stringifying and parsing the Decimal twice.
+
+No new public options or API are exposed; all new helpers are private. The
+observable behavioral change is that previously-accepted but out-of-range
+decimal inputs (precision > 38, scale > precision, non-finite coefficient,
+oversized wire payload, bad sign byte) now raise ArgumentError at the
+encode/decode boundary instead of silently producing malformed TDS frames or
+spending unbounded CPU. Tests cover the 38-precision and 38-scale boundaries,
+oversized inputs (1E+38, 1E+5000), invalid precision/scale metadata for both
+:decimal and :numeric parameter types, and decode-side rejection of
+out-of-range precision, scale, and payload length.
+---
+ lib/tds/types.ex          | 264 +++++++++++++++++++++++---------------
+ test/types/types_test.exs | 121 +++++++++++++++++
+ 2 files changed, 281 insertions(+), 104 deletions(-)
+
 diff --git a/lib/tds/types.ex b/lib/tds/types.ex
 index 8fa72c6..71c3473 100644
 --- a/lib/tds/types.ex
@@ -480,3 +531,6 @@ index 100ee1b..9217fb3 100644
    end
  
    describe "inserting decimal values into the database" do
+-- 
+2.53.0
+

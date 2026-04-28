@@ -1,3 +1,52 @@
+From b0105d3829448da98bf8cb6963bf53f5fb927fb4 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Eric=20Meadows-J=C3=B6nsson?=
+ <eric.meadows.jonsson@gmail.com>
+Date: Tue, 28 Apr 2026 22:32:07 +0200
+Subject: [PATCH] Bound numeric encoding/decoding against decimal exponent
+ amplification
+
+Mitigates GHSA-rhv4-8758-jx7v ("decimal exponent amplification") at the
+PostgreSQL numeric wire-format boundary so a malicious Decimal value or
+crafted server response cannot force Postgrex into a multi-second
+expansion of an aligned coefficient.
+
+Changes to lib/postgrex/extensions/numeric.ex:
+
+* Encoding now renders the Decimal via Decimal.to_string/3 with
+  :max_output_digits set to PostgreSQL's numeric envelope
+  (131_072 integer digits + 16_383 fractional digits), then groups the
+  resulting digit string into base-10000 limbs without ever materializing
+  pow10(scale). When Decimal exposes the bounded to_string/3, ArgumentError
+  is converted into DBConnection.EncodeError; older Decimals fall back to
+  the unbounded Decimal.to_string/2.
+* Encoding rejects values exceeding PostgreSQL's documented limits with
+  DBConnection.EncodeError: scale > 16_383, more than 131_072 integer
+  digits, or a total base-10000 digit count above the numeric maximum.
+* Decoding validates the wire header before any work: it bounds ndigits,
+  scale, weight, and the implied fractional length against the same
+  PostgreSQL limits, checks the digit payload length, rejects unknown
+  signs, and rejects out-of-range base-10000 digits, raising ArgumentError
+  in each case. NaN/+Inf/-Inf headers are still accepted but must have
+  zero digits and a valid scale.
+* Decoding builds the coefficient through digit-string concatenation and
+  binary_to_integer rather than repeated pow10 multiplications, and
+  short-circuits all-zero payloads.
+* Wire-format header fields num_digits and scale are now treated as
+  uint16 on both encode and decode to match the PostgreSQL protocol.
+
+Adds test/numeric_test.exs covering round-trips at the maximum numeric
+shape, the maximum compact integer, the maximum scale, and the encode/
+decode rejection paths for over-limit scale, integer digits, total
+digits, and fractional length.
+
+No new public option surface: the bounds are fixed to PostgreSQL's
+numeric limits and not user-configurable.
+---
+ lib/postgrex/extensions/numeric.ex | 268 ++++++++++++++++++++++++-----
+ test/numeric_test.exs              |  79 +++++++++
+ 2 files changed, 301 insertions(+), 46 deletions(-)
+ create mode 100644 test/numeric_test.exs
+
 diff --git a/lib/postgrex/extensions/numeric.ex b/lib/postgrex/extensions/numeric.ex
 index 098d6ef..1223579 100644
 --- a/lib/postgrex/extensions/numeric.ex
@@ -408,3 +457,6 @@ index 0000000..fe8aaf4
 +    Decimal.new(1, String.duplicate("9", digits) |> :erlang.binary_to_integer(), exp)
 +  end
 +end
+-- 
+2.53.0
+

@@ -1,3 +1,39 @@
+From 4f34647e0c3d0d84c9c785b56e858d49ff1ea8ab Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Eric=20Meadows-J=C3=B6nsson?=
+ <eric.meadows.jonsson@gmail.com>
+Date: Tue, 28 Apr 2026 22:32:28 +0200
+Subject: [PATCH] Bound decimal rendering to mitigate exponent amplification
+
+The Decimal advisory GHSA-rhv4-8758-jx7v shows that compact inputs such as
+1e1000000 can force the Decimal library into multi-second expansions when
+rendered in normal notation, which the SQLite adapter does both when
+encoding parameters and when inlining decimal literals into SQL.
+
+Cap the size of rendered decimals before they reach SQLite. A new shared
+Codec.decimal_to_string/1 helper looks up the configured limit and, when
+running against a Decimal that supports it, calls Decimal.to_string/3
+with :max_output_digits, returning :error if the value would exceed the
+budget. Decimal parameter encoding turns that error into a codec error,
+and the connection's literal expression renderer raises Ecto.QueryError
+so a pathological literal cannot be silently truncated or inlined.
+
+Configuration surface added to callers:
+
+  * :ecto_sqlite3, :decimal_max_output_digits application env, defaulting
+    to 100_000. Accepts a non-negative integer or :infinity to disable
+    the adapter-side cap. Documented on Ecto.Adapters.SQLite3.
+
+The limit is only enforced when the installed Decimal exports
+to_string/3; older Decimal versions retain the previous unbounded
+behaviour so the adapter keeps working without a forced upgrade.
+---
+ lib/ecto/adapters/sqlite3.ex                  |  3 ++
+ lib/ecto/adapters/sqlite3/codec.ex            | 37 ++++++++++++++-
+ lib/ecto/adapters/sqlite3/connection.ex       | 14 +++++-
+ test/ecto/adapters/sqlite3/codec_test.exs     | 46 +++++++++++++++++++
+ .../sqlite3/connection/select_test.exs        | 39 ++++++++++++++++
+ 5 files changed, 136 insertions(+), 3 deletions(-)
+
 diff --git a/lib/ecto/adapters/sqlite3.ex b/lib/ecto/adapters/sqlite3.ex
 index d4ed0a6..4f1a756 100644
 --- a/lib/ecto/adapters/sqlite3.ex
@@ -223,3 +259,6 @@ index 358e4b6..88799c9 100644
    test "is_nil" do
      query =
        Schema
+-- 
+2.53.0
+
