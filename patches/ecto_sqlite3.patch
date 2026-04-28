@@ -1,4 +1,4 @@
-From 4f34647e0c3d0d84c9c785b56e858d49ff1ea8ab Mon Sep 17 00:00:00 2001
+From 0189c393dadc16214c306a103bf5ad5e01ddd23f Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Eric=20Meadows-J=C3=B6nsson?=
  <eric.meadows.jonsson@gmail.com>
 Date: Tue, 28 Apr 2026 22:32:28 +0200
@@ -12,7 +12,7 @@ encoding parameters and when inlining decimal literals into SQL.
 Cap the size of rendered decimals before they reach SQLite. A new shared
 Codec.decimal_to_string/1 helper looks up the configured limit and, when
 running against a Decimal that supports it, calls Decimal.to_string/3
-with :max_output_digits, returning :error if the value would exceed the
+with :max_digits, returning :error if the value would exceed the
 budget. Decimal parameter encoding turns that error into a codec error,
 and the connection's literal expression renderer raises Ecto.QueryError
 so a pathological literal cannot be silently truncated or inlined.
@@ -49,7 +49,7 @@ index d4ed0a6..4f1a756 100644
         The provided list will be merged with the global extensions list, set on
         `:exqlite, :load_extensions`. Be aware that the path should handle pointing to a
 diff --git a/lib/ecto/adapters/sqlite3/codec.ex b/lib/ecto/adapters/sqlite3/codec.ex
-index 09af914..2d09c8e 100644
+index 09af914..6071e46 100644
 --- a/lib/ecto/adapters/sqlite3/codec.ex
 +++ b/lib/ecto/adapters/sqlite3/codec.ex
 @@ -1,6 +1,8 @@
@@ -75,7 +75,7 @@ index 09af914..2d09c8e 100644
 +    if function_exported?(Decimal, :to_string, 3) do
 +      try do
 +        {:ok,
-+         apply(Decimal, :to_string, [decimal, :normal, [max_output_digits: max_digits]])}
++         apply(Decimal, :to_string, [decimal, :normal, [max_digits: max_digits]])}
 +      rescue
 +        ArgumentError -> :error
 +      end

@@ -1,4 +1,4 @@
-From b0105d3829448da98bf8cb6963bf53f5fb927fb4 Mon Sep 17 00:00:00 2001
+From d76ebd0d1e5223c32ab0a40411516c9a8405e111 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Eric=20Meadows-J=C3=B6nsson?=
  <eric.meadows.jonsson@gmail.com>
 Date: Tue, 28 Apr 2026 22:32:07 +0200
@@ -13,7 +13,7 @@ expansion of an aligned coefficient.
 Changes to lib/postgrex/extensions/numeric.ex:
 
 * Encoding now renders the Decimal via Decimal.to_string/3 with
-  :max_output_digits set to PostgreSQL's numeric envelope
+  :max_digits set to PostgreSQL's numeric envelope
   (131_072 integer digits + 16_383 fractional digits), then groups the
   resulting digit string into base-10000 limbs without ever materializing
   pow10(scale). When Decimal exposes the bounded to_string/3, ArgumentError
@@ -48,7 +48,7 @@ numeric limits and not user-configurable.
  create mode 100644 test/numeric_test.exs
 
 diff --git a/lib/postgrex/extensions/numeric.ex b/lib/postgrex/extensions/numeric.ex
-index 098d6ef..1223579 100644
+index 098d6ef..aeb974b 100644
 --- a/lib/postgrex/extensions/numeric.ex
 +++ b/lib/postgrex/extensions/numeric.ex
 @@ -3,6 +3,12 @@ defmodule Postgrex.Extensions.Numeric do
@@ -124,7 +124,7 @@ index 098d6ef..1223579 100644
 +
 +  defp decimal_to_string(decimal) do
 +    if function_exported?(Decimal, :to_string, 3) do
-+      apply(Decimal, :to_string, [decimal, :normal, [max_output_digits: @max_output_digits]])
++      apply(Decimal, :to_string, [decimal, :normal, [max_digits: @max_output_digits]])
 +    else
 +      Decimal.to_string(decimal, :normal)
 +    end

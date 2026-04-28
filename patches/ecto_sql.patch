@@ -1,4 +1,4 @@
-From 27f5d5804f7f83182cc0dd9bdb3181adca63da0b Mon Sep 17 00:00:00 2001
+From eb518c17987a9697f41ae3acc87db59a5323dbf8 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Eric=20Meadows-J=C3=B6nsson?=
  <eric.meadows.jonsson@gmail.com>
 Date: Tue, 28 Apr 2026 22:31:58 +0200
@@ -22,7 +22,7 @@ boundary:
   the raw `abs(exp)`. Non-finite decimals fall back to scale 0.
 
 A new private module Ecto.Adapters.SQL.Decimal centralizes the call to
-Decimal.to_string/3 with `:max_output_digits`, falling back to
+Decimal.to_string/3 with `:max_digits`, falling back to
 Decimal.to_string/2 on older Decimal versions that do not expose the
 option. ArgumentError raised by Decimal when the cap is exceeded is
 converted into Ecto.QueryError tied to the originating query.
@@ -155,16 +155,16 @@ index f5d3faf..1e734fb 100644
      defp ecto_to_db(:identity), do: "bigint"
 diff --git a/lib/ecto/adapters/sql/decimal.ex b/lib/ecto/adapters/sql/decimal.ex
 new file mode 100644
-index 0000000..b4d31b3
+index 0000000..07f4ddf
 --- /dev/null
 +++ b/lib/ecto/adapters/sql/decimal.ex
 @@ -0,0 +1,11 @@
 +defmodule Ecto.Adapters.SQL.Decimal do
 +  @moduledoc false
 +
-+  def normal_string(%Decimal{} = decimal, max_output_digits) do
++  def normal_string(%Decimal{} = decimal, max_digits) do
 +    if function_exported?(Decimal, :to_string, 3) do
-+      apply(Decimal, :to_string, [decimal, :normal, [max_output_digits: max_output_digits]])
++      apply(Decimal, :to_string, [decimal, :normal, [max_digits: max_digits]])
 +    else
 +      Decimal.to_string(decimal, :normal)
 +    end

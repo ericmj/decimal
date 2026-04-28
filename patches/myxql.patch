@@ -1,4 +1,4 @@
-From 6ceff9325e5e87ed986017f61efe62c056d3e20c Mon Sep 17 00:00:00 2001
+From 368a27c8243eb34a82dc4e150c8168c3831250ac Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Eric=20Meadows-J=C3=B6nsson?=
  <eric.meadows.jonsson@gmail.com>
 Date: Tue, 28 Apr 2026 22:32:21 +0200
@@ -16,7 +16,7 @@ match MySQL's documented limits (precision 65, scale 30):
   `encode_decimal/1` helper that rejects non-finite decimals, scales
   beyond 30, and precisions beyond 65 with `ArgumentError`. When
   available it calls `Decimal.to_string/3` with
-  `max_output_digits: 65` so a compact `1e<huge>` input cannot
+  `max_digits: 65` so a compact `1e<huge>` input cannot
   materialize a giant string; on older Decimal versions it falls
   back to `Decimal.to_string/2` and post-validates the rendered text.
 * `decode_text_value/2` and the binary-row decimal path now go
@@ -41,7 +41,7 @@ boundary values and each rejection path for both encode and decode.
  create mode 100644 test/myxql/protocol/decimal_values_test.exs
 
 diff --git a/lib/myxql/protocol/values.ex b/lib/myxql/protocol/values.ex
-index 29369bf..da2d7f0 100644
+index 29369bf..1313fe8 100644
 --- a/lib/myxql/protocol/values.ex
 +++ b/lib/myxql/protocol/values.ex
 @@ -5,6 +5,19 @@ defmodule MyXQL.Protocol.Values do
@@ -51,7 +51,7 @@ index 29369bf..da2d7f0 100644
 +  @decimal_max_precision 65
 +  @decimal_max_scale 30
 +  @decimal_max_text_bytes @decimal_max_precision + 2
-+  @decimal_to_string_opts [max_output_digits: @decimal_max_precision]
++  @decimal_to_string_opts [max_digits: @decimal_max_precision]
 +  @decimal_max_coefficient :erlang.binary_to_integer(
 +                             "1" <> String.duplicate("0", @decimal_max_precision)
 +                           )

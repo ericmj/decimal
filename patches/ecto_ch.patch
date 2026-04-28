@@ -1,4 +1,4 @@
-From abb945d5bd2bd31540bd3ee7b28a990f4fb879d6 Mon Sep 17 00:00:00 2001
+From 861e4ba14004bc83e6bf543796ecc9fa02c0bd98 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Eric=20Meadows-J=C3=B6nsson?=
  <eric.meadows.jonsson@gmail.com>
 Date: Tue, 28 Apr 2026 22:32:37 +0200
@@ -24,7 +24,7 @@ param_type/1 now emits Decimal(precision, scale) sized to the actual
 value (up to ClickHouse's Decimal256 ceiling of precision 76) instead
 of always Decimal64(scale). Rendering goes through a new
 decimal_to_string/1 helper that, when the upstream Decimal library
-exposes Decimal.to_string/3 with :max_output_digits, caps output at
+exposes Decimal.to_string/3 with :max_digits, caps output at
 77 digits and otherwise falls back to Decimal.to_string/2.
 
 Behavioral change for callers: Decimal parameters and inlined Decimal
@@ -52,7 +52,7 @@ index 5a1dccb..b2242d9 100644
  
  - Fix invalid `Array(Nothing)` param type for params like for `[[]]` https://github.com/plausible/ecto_ch/pull/264
 diff --git a/lib/ecto/adapters/clickhouse/connection.ex b/lib/ecto/adapters/clickhouse/connection.ex
-index 1350076..b55b262 100644
+index 1350076..d76364b 100644
 --- a/lib/ecto/adapters/clickhouse/connection.ex
 +++ b/lib/ecto/adapters/clickhouse/connection.ex
 @@ -860,9 +860,7 @@ defmodule Ecto.Adapters.ClickHouse.Connection do
@@ -112,7 +112,7 @@ index 1350076..b55b262 100644
 +      apply(Decimal, :to_string, [
 +        decimal,
 +        :normal,
-+        [max_output_digits: @max_decimal_output_digits]
++        [max_digits: @max_decimal_output_digits]
 +      ])
 +    else
 +      Decimal.to_string(decimal, :normal)
