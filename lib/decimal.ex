@@ -1453,6 +1453,8 @@ defmodule Decimal do
       iex> Decimal.new("2.22507385850720139e-308")
       Decimal.new("2.22507385850720139e-308")
 
+      iex> Decimal.new("1.01234567890123457890123457890123456789", max_digits: 39)
+      Decimal.new("1.01234567890123457890123457890123456789", max_digits: 39)
   """
   @spec new(decimal) :: t
   def new(%Decimal{sign: sign, coef: coef, exp: exp} = num)
@@ -1463,8 +1465,8 @@ defmodule Decimal do
   def new(int) when is_integer(int),
     do: %Decimal{sign: if(int < 0, do: -1, else: 1), coef: Kernel.abs(int)}
 
-  def new(binary) when is_binary(binary) do
-    case parse(binary) do
+  def new(binary, opts \\ []) when is_binary(binary) and is_list(opts) do
+    case parse(binary, opts) do
       {decimal, ""} -> decimal
       _ -> raise Error, reason: "number parsing syntax: #{inspect(binary)}"
     end
