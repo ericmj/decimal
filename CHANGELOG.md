@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Enhancements
+
+* `Decimal.new/2` now accepts an optional `opts` keyword list and
+  forwards it to `Decimal.parse/2`, allowing callers to override
+  `:max_digits` and `:max_exponent` when constructing a decimal from
+  a string.
+
 ### Bug fixes
 
 * Fix infinite loop in `Decimal.to_integer/1` when the coefficient is
