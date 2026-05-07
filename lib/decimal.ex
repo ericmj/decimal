@@ -2319,6 +2319,8 @@ defmodule Decimal do
 
   defp do_normalize(coef, exp), do: do_normalize_one(coef, exp)
 
+  defp do_normalize_one(0, _exp), do: %Decimal{coef: 0, exp: 0}
+
   defp do_normalize_one(coef, exp) when Kernel.rem(coef, 10) == 0 do
     do_normalize_one(Kernel.div(coef, 10), exp + 1)
   end

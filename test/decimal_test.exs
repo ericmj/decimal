@@ -646,6 +646,12 @@ defmodule DecimalTest do
     assert Decimal.normalize(~d"nan") == d(1, :NaN, 0)
   end
 
+  test "normalize/1 with zero coefficient and non-zero exponent" do
+    assert Decimal.normalize(%Decimal{sign: 1, coef: 0, exp: -5}) == d(1, 0, 0)
+    assert Decimal.normalize(%Decimal{sign: -1, coef: 0, exp: -5_000}) == d(-1, 0, 0)
+    assert Decimal.normalize(%Decimal{sign: 1, coef: 0, exp: 5}) == d(1, 0, 0)
+  end
+
   test "normalize/1 strips many trailing zeros without expansion" do
     coef = :erlang.binary_to_integer("123" <> String.duplicate("0", 5_000))
     assert Decimal.normalize(%Decimal{sign: 1, coef: coef, exp: 0}) == d(1, 123, 5_000)
