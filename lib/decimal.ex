@@ -2337,6 +2337,8 @@ defmodule Decimal do
 
   defp strip_trailing_zeros(coef, exp), do: strip_trailing_zeros_one(coef, exp)
 
+  defp strip_trailing_zeros_one(0, _exp), do: {0, 0}
+
   defp strip_trailing_zeros_one(coef, exp) when Kernel.rem(coef, 10) == 0 do
     strip_trailing_zeros_one(Kernel.div(coef, 10), exp + 1)
   end

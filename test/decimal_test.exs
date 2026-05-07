@@ -841,6 +841,13 @@ defmodule DecimalTest do
     end)
   end
 
+  test "to_integer/1 with zero coefficient and negative exponent" do
+    assert Decimal.to_integer(~d"0.0") == 0
+    assert Decimal.to_integer(~d"0.000") == 0
+    assert Decimal.to_integer(~d"-0.0") == 0
+    assert Decimal.to_integer(%Decimal{sign: 1, coef: 0, exp: -5_000}) == 0
+  end
+
   test "to_integer/1 with very large positive exponent" do
     assert Decimal.to_integer(%Decimal{sign: 1, coef: 7, exp: 5_000}) ==
              7 * :erlang.binary_to_integer("1" <> String.duplicate("0", 5_000))
