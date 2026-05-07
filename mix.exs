@@ -1,7 +1,7 @@
 defmodule Decimal.Mixfile do
   use Mix.Project
 
-  @version "2.4.0"
+  @version "3.0.0"
   @source_url "https://github.com/ericmj/decimal"
 
   def project() do

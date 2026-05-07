@@ -1,5 +1,43 @@
 # CHANGELOG
 
+## v3.0.0 (2026-05-07)
+
+### Note on the new defaults
+
+The new decimal128 defaults are more than sufficient for currency and
+other real-world numeric use cases. With `precision: 34` and a scale of
+2 (two digits after the decimal point for cents), values from `0.00` up
+to roughly `99_999_999_999_999_999_999_999_999_999_999.99` (~10³², 100
+nonillion) round-trip without rounding. Most upgrades from 2.x require
+no code changes.
+
+### Security
+
+* Make the v2.4.0 mitigations for CVE-2026-32686 the default. The
+  default `Decimal.Context` and the public parse, cast, and to_string
+  functions now follow IEEE 754 decimal128 limits, rejecting inputs
+  such as `1e1000000000` without materializing them.
+
+### Breaking changes
+
+* `Decimal.Context` defaults change from precision `28` and unbounded
+  `emax`/`emin` to decimal128 values: `precision: 34`, `emax: 6_144`,
+  `emin: -6_143`. Operation results whose adjusted exponent leaves that
+  band signal overflow or underflow.
+* `Decimal.parse/1` and `Decimal.cast/1` reject inputs whose digit count
+  exceeds `34` (decimal128 precision) or whose absolute exponent exceeds
+  `6_144` (decimal128 emax). Use `parse/2` / `cast/2` with
+  `max_digits: :infinity` and `max_exponent: :infinity` to restore
+  unbounded behavior.
+* `Decimal.parse/2` and `Decimal.cast/2` default `:max_digits` to `34`
+  and `:max_exponent` to `6_144` when not specified.
+* `Decimal.to_string/2` and `Decimal.to_string/3` raise `ArgumentError`
+  when the rendered output would exceed `6_178` digit characters
+  (precision + emax — the worst-case `:normal` width of any in-range
+  decimal128 value). `Inspect`, `String.Chars`, and `JSON.Encoder`
+  protocol implementations pass `max_digits: :infinity` so debug output
+  always succeeds.
+
 ## v2.4.0 (2026-05-07)
 
 ### Security
