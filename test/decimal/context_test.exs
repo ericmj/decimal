@@ -97,23 +97,26 @@ defmodule Decimal.ContextTest do
           floor: d(1, 100, 99_998),
           ceiling: d(1, 101, 99_998)
         ] do
-      Context.with(%Context{precision: 3, rounding: rounding}, fn ->
-        assert Decimal.add(num, one) == result
-        assert :inexact in Context.get().flags
-        assert :rounded in Context.get().flags
-      end)
+      Context.with(
+        %Context{precision: 3, rounding: rounding, emax: :infinity, emin: :infinity},
+        fn ->
+          assert Decimal.add(num, one) == result
+          assert :inexact in Context.get().flags
+          assert :rounded in Context.get().flags
+        end
+      )
     end
   end
 
   test "with_context/2: large exponent gap addition with zero" do
     num = d(1, 1, 100_000)
 
-    Context.with(%Context{precision: 3}, fn ->
+    Context.with(%Context{precision: 3, emax: :infinity, emin: :infinity}, fn ->
       assert Decimal.add(d(1, 0, -100_000), num) == d(1, 100, 99_998)
       assert Context.get().flags == [:rounded]
     end)
 
-    Context.with(%Context{precision: 3}, fn ->
+    Context.with(%Context{precision: 3, emax: :infinity, emin: :infinity}, fn ->
       assert Decimal.add(d(1, 0, 100_000), d(1, 1, 0)) == d(1, 1, 0)
       assert Context.get().flags == []
     end)
@@ -132,11 +135,14 @@ defmodule Decimal.ContextTest do
           floor: d(1, 999, 99_997),
           ceiling: d(1, 1000, 99_997)
         ] do
-      Context.with(%Context{precision: 3, rounding: rounding}, fn ->
-        assert Decimal.sub(num, one) == result
-        assert :inexact in Context.get().flags
-        assert :rounded in Context.get().flags
-      end)
+      Context.with(
+        %Context{precision: 3, rounding: rounding, emax: :infinity, emin: :infinity},
+        fn ->
+          assert Decimal.sub(num, one) == result
+          assert :inexact in Context.get().flags
+          assert :rounded in Context.get().flags
+        end
+      )
     end
   end
 
@@ -145,13 +151,13 @@ defmodule Decimal.ContextTest do
     num = %Decimal{sign: 1, coef: 1, exp: @bounded_smoke_exp}
     one = d(1, 1, 0)
 
-    Context.with(%Context{precision: 3}, fn ->
+    Context.with(%Context{precision: 3, emax: :infinity, emin: :infinity}, fn ->
       assert_runs_quickly("add/2 large exponent gap", fn ->
         assert Decimal.add(num, one) == %Decimal{sign: 1, coef: 100, exp: @bounded_smoke_exp - 2}
       end)
     end)
 
-    Context.with(%Context{precision: 3}, fn ->
+    Context.with(%Context{precision: 3, emax: :infinity, emin: :infinity}, fn ->
       assert_runs_quickly("sub/2 large exponent gap", fn ->
         assert Decimal.sub(num, one) == %Decimal{sign: 1, coef: 1000, exp: @bounded_smoke_exp - 3}
       end)
@@ -163,7 +169,7 @@ defmodule Decimal.ContextTest do
     zero = %Decimal{sign: 1, coef: 0, exp: -@bounded_smoke_exp}
     num = %Decimal{sign: 1, coef: 1, exp: @bounded_smoke_exp}
 
-    Context.with(%Context{precision: 3}, fn ->
+    Context.with(%Context{precision: 3, emax: :infinity, emin: :infinity}, fn ->
       assert_runs_quickly("add/2 large exponent gap with zero", fn ->
         assert Decimal.add(zero, num) == %Decimal{sign: 1, coef: 100, exp: @bounded_smoke_exp - 2}
       end)
@@ -184,10 +190,8 @@ defmodule Decimal.ContextTest do
     Context.with(%Context{precision: 111}, fn ->
       assert [] = Context.get().flags
 
-      Decimal.div(
-        ~d"10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-        ~d"17"
-      )
+      coef = :erlang.binary_to_integer("1" <> String.duplicate("0", 106))
+      Decimal.div(Decimal.new(1, coef, 0), ~d"17")
 
       assert [:rounded] = Context.get().flags
     end)

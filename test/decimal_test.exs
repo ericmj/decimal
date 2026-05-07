@@ -117,36 +117,39 @@ defmodule DecimalTest do
     end)
   end
 
-  test "parse/1 with very long digit strings" do
+  test "parse/2 with very long digit strings under explicit limits" do
     digits = String.duplicate("9", 50_000)
     coef = :erlang.binary_to_integer(digits)
-    assert Decimal.parse(digits) == {%Decimal{coef: coef, exp: 0}, ""}
+    opts = [max_digits: :infinity, max_exponent: :infinity]
 
-    assert Decimal.parse("0." <> digits) == {%Decimal{coef: coef, exp: -50_000}, ""}
+    assert Decimal.parse(digits, opts) == {%Decimal{coef: coef, exp: 0}, ""}
+
+    assert Decimal.parse("0." <> digits, opts) == {%Decimal{coef: coef, exp: -50_000}, ""}
 
     int = String.duplicate("1", 30_000)
     frac = String.duplicate("5", 20_000)
     expected_coef = :erlang.binary_to_integer(int <> frac)
-    assert Decimal.parse(int <> "." <> frac) == {%Decimal{coef: expected_coef, exp: -20_000}, ""}
 
-    # Trailing non-digit boundary still parses correctly.
-    assert Decimal.parse(digits <> "x") == {%Decimal{coef: coef, exp: 0}, "x"}
+    assert Decimal.parse(int <> "." <> frac, opts) ==
+             {%Decimal{coef: expected_coef, exp: -20_000}, ""}
+
+    assert Decimal.parse(digits <> "x", opts) == {%Decimal{coef: coef, exp: 0}, "x"}
   end
 
   test "parse/2 enforces digit count on very long strings" do
     digits = String.duplicate("9", 50_000)
 
-    assert Decimal.parse(digits, max_digits: 50_000) ==
+    assert Decimal.parse(digits, max_digits: 50_000, max_exponent: :infinity) ==
              {%Decimal{coef: :erlang.binary_to_integer(digits), exp: 0}, ""}
 
-    assert Decimal.parse(digits, max_digits: 49_999) == :error
+    assert Decimal.parse(digits, max_digits: 49_999, max_exponent: :infinity) == :error
 
     fractional = "0." <> digits
 
-    assert Decimal.parse(fractional, max_digits: 50_001) ==
+    assert Decimal.parse(fractional, max_digits: 50_001, max_exponent: :infinity) ==
              {%Decimal{coef: :erlang.binary_to_integer("0" <> digits), exp: -50_000}, ""}
 
-    assert Decimal.parse(fractional, max_digits: 50_000) == :error
+    assert Decimal.parse(fractional, max_digits: 50_000, max_exponent: :infinity) == :error
   end
 
   test "nan?/1" do
@@ -336,7 +339,7 @@ defmodule DecimalTest do
 
     assert Decimal.compare("Inf", "Inf") == :eq
 
-    assert Decimal.compare(~d"5e10000000000", ~d"0") == :gt
+    assert Decimal.compare(Decimal.new(1, 5, 10_000_000_000), ~d"0") == :gt
 
     assert_raise Error, fn ->
       Decimal.compare(~d"nan", ~d"0")
@@ -713,20 +716,30 @@ defmodule DecimalTest do
     assert Decimal.to_string(~d"-inf", :raw) == "-Infinity"
   end
 
-  test "to_string/2 with large coefficients" do
+  test "to_string/3 with large coefficients under explicit max_digits" do
     digits = String.duplicate("9", 2_500)
     coef = String.to_integer(digits)
 
-    assert Decimal.to_string(%Decimal{sign: 1, coef: coef, exp: 0}, :normal) == digits
+    assert Decimal.to_string(%Decimal{sign: 1, coef: coef, exp: 0}, :normal, max_digits: 2_500) ==
+             digits
 
-    assert Decimal.to_string(%Decimal{sign: -1, coef: coef, exp: -2_500}, :normal) ==
-             "-0." <> digits
+    assert Decimal.to_string(
+             %Decimal{sign: -1, coef: coef, exp: -2_500},
+             :normal,
+             max_digits: 2_501
+           ) == "-0." <> digits
 
-    assert Decimal.to_string(%Decimal{sign: 1, coef: coef, exp: -2_499}, :scientific) ==
-             "9." <> String.duplicate("9", 2_499)
+    assert Decimal.to_string(
+             %Decimal{sign: 1, coef: coef, exp: -2_499},
+             :scientific,
+             max_digits: 2_500
+           ) == "9." <> String.duplicate("9", 2_499)
 
-    assert Decimal.to_string(%Decimal{sign: 1, coef: coef, exp: -1}, :raw) ==
-             digits <> "E-1"
+    assert Decimal.to_string(
+             %Decimal{sign: 1, coef: coef, exp: -1},
+             :raw,
+             max_digits: 2_501
+           ) == digits <> "E-1"
   end
 
   test "to_string/2 xsd" do
@@ -758,7 +771,9 @@ defmodule DecimalTest do
     assert Decimal.to_string(~d"123", :scientific, max_digits: 3) == "123"
     assert Decimal.to_string(~d"1e2", :normal, max_digits: 3) == "100"
     assert Decimal.to_string(~d"1e2", :xsd, max_digits: 4) == "100.0"
-    assert Decimal.to_string(~d"1e100000", :scientific, max_digits: 7) == "1E+100000"
+
+    assert Decimal.to_string(Decimal.new(1, 1, 100_000), :scientific, max_digits: 7) ==
+             "1E+100000"
 
     assert_raise ArgumentError, ~r/:scientific representation requires 3 digits/, fn ->
       Decimal.to_string(~d"123", :scientific, max_digits: 2)
@@ -773,11 +788,11 @@ defmodule DecimalTest do
     end
 
     assert_raise ArgumentError, ~r/:normal representation requires 100001 digits/, fn ->
-      Decimal.to_string(~d"1e100000", :normal, max_digits: 1_000)
+      Decimal.to_string(Decimal.new(1, 1, 100_000), :normal, max_digits: 1_000)
     end
 
     assert_raise ArgumentError, ~r/:xsd representation requires 100002 digits/, fn ->
-      Decimal.to_string(~d"1e100000", :xsd, max_digits: 1_000)
+      Decimal.to_string(Decimal.new(1, 1, 100_000), :xsd, max_digits: 1_000)
     end
   end
 
@@ -1256,13 +1271,17 @@ defmodule DecimalTest do
     assert_raise Decimal.Error,
                  ": number bigger than DBL_MAX: Decimal.new(\"9.999999999999999999E+1000000000000000000000017\")",
                  fn ->
-                   Decimal.to_float(Decimal.new("9999999999999999999e999999999999999999999999"))
+                   Decimal.to_float(
+                     Decimal.new(1, 9_999_999_999_999_999_999, 999_999_999_999_999_999_999_999)
+                   )
                  end
 
     assert_raise Decimal.Error,
                  ": number smaller than DBL_MIN: Decimal.new(\"9.9999999999999E-999999999999999999999986\")",
                  fn ->
-                   Decimal.to_float(Decimal.new("99999999999999e-999999999999999999999999"))
+                   Decimal.to_float(
+                     Decimal.new(1, 99_999_999_999_999, -999_999_999_999_999_999_999_999)
+                   )
                  end
   end
 

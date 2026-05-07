@@ -6,14 +6,14 @@ defmodule Decimal.Context do
   The context is kept in the process dictionary. It can be accessed with
   `get/0` and `set/1`.
 
-  The default context has a precision of 28, the rounding algorithm is
-  `:half_up`, and unbounded `emax` and `emin`. The set trap enablers are
-  `:invalid_operation` and `:division_by_zero`.
+  The default context follows IEEE 754 decimal128: precision is 34, `emax` is
+  6 144, and `emin` is -6 143. The rounding algorithm is `:half_up` and the
+  set trap enablers are `:invalid_operation` and `:division_by_zero`.
 
-  Finite `emax` and `emin` values limit operation results. They do not validate
-  values that have already been created, so applications that parse untrusted
-  input should still use `Decimal.parse/2` or `Decimal.cast/2` with
-  `:max_digits` and `:max_exponent`.
+  `emax` and `emin` limit operation results. They do not validate values that
+  have already been created, so applications that parse untrusted input should
+  still rely on the default `Decimal.parse/2` and `Decimal.cast/2` limits or
+  pass explicit `:max_digits` and `:max_exponent` options.
 
   ## Fields
 
@@ -86,10 +86,10 @@ defmodule Decimal.Context do
           traps: [Decimal.signal()]
         }
 
-  defstruct precision: 28,
+  defstruct precision: 34,
             rounding: :half_up,
-            emax: :infinity,
-            emin: :infinity,
+            emax: 6_144,
+            emin: -6_143,
             flags: [],
             traps: [:invalid_operation, :division_by_zero]
 

@@ -35,28 +35,24 @@ defmodule Decimal do
   10 ^ exponent` and will refer to the sign in documentation as either *positive*
   or *negative*.
 
-  By default there is no maximum or minimum value for the exponent because
-  `Decimal.Context` defaults `emax` and `emin` to `:infinity`. Because of that
-  all numbers are "normal". This means that when an operation should, according
-  to the specification, return a number that "underflows" 0 is returned instead
-  of Etiny. This may happen when dividing a number with infinity. When `emax`
-  or `emin` are finite, overflow and underflow may be signalled. Clamped is
-  still not signalled.
+  The default `Decimal.Context` follows IEEE 754 decimal128: `precision` is
+  34, `emax` is 6 144, and `emin` is -6 143. Operation results whose adjusted
+  exponent leaves that band signal overflow or underflow. Clamped is still
+  not signalled.
 
   ## Large exponents and untrusted input
 
   Decimal can represent compact values with very large exponents, such as
   `1e1000000`. These values are valid decimals, but some APIs may need memory
-  or CPU proportional to the expanded size of the number. This is especially
-  important for decimals parsed from user input, JSON payloads, form fields,
-  database fields, or other external data.
+  or CPU proportional to the expanded size of the number.
 
-  Use `parse/2` or `cast/2` with `:max_digits` and `:max_exponent` when parsing
-  untrusted input. Use `to_string/3` with `:max_digits` when rendering output
-  formats that may expand the exponent, such as `:normal` or `:xsd`.
-  Finite `Decimal.Context` `emax` and `emin` values can limit operation
-  results, but they do not validate already-created decimals and should not
-  replace parse/cast limits for untrusted input.
+  `parse/1`, `parse/2`, `cast/1`, `cast/2`, `to_string/2`, and `to_string/3`
+  apply IEEE 754 decimal128 limits by default: `:max_digits` of 34,
+  `:max_exponent` of 6 144, and a `:max_digits` for output of 6 178
+  (precision + emax — large enough to render any in-range decimal128 in any
+  format). These defaults reject the pathological inputs described in
+  CVE-2026-32686 without materializing them. Pass options on the explicit
+  arities to override; pass `:infinity` to disable a limit entirely.
 
   ## Protocol Implementations
 
@@ -163,6 +159,14 @@ defmodule Decimal do
 
   @type to_string_option ::
           {:max_digits, non_neg_integer | :infinity}
+
+  # IEEE 754 decimal128 defaults: precision = 34, emax = 6_144, emin = -6_143.
+  # The to_string default is precision + emax (34 + 6_144), which is the
+  # worst-case `:normal` digit-character count for any in-range decimal128
+  # value.
+  @default_max_digits 34
+  @default_max_exponent 6_144
+  @default_to_string_max_digits 6_178
 
   # Below 10^2000 the BIF `:erlang.integer_to_binary/1` is fast enough; for
   # larger integers `integer_to_decimal_iodata/3` recursively splits on a
@@ -1538,18 +1542,7 @@ defmodule Decimal do
 
   """
   @spec cast(term) :: {:ok, t} | :error
-  def cast(integer) when is_integer(integer), do: {:ok, Decimal.new(integer)}
-  def cast(%Decimal{} = decimal), do: {:ok, decimal}
-  def cast(float) when is_float(float), do: {:ok, from_float(float)}
-
-  def cast(binary) when is_binary(binary) do
-    case parse(binary) do
-      {decimal, ""} -> {:ok, decimal}
-      _ -> :error
-    end
-  end
-
-  def cast(_), do: :error
+  def cast(term), do: cast_with_limits(term, default_parse_limits())
 
   @doc """
   Creates a new decimal number from an integer, string, float, or existing decimal
@@ -1560,8 +1553,10 @@ defmodule Decimal do
   doc_since("2.4.0")
   @spec cast(term, [parse_option]) :: {:ok, t} | :error
   def cast(term, opts) when is_list(opts) do
-    limits = parse_limits!(opts)
+    cast_with_limits(term, parse_limits!(opts))
+  end
 
+  defp cast_with_limits(term, limits) do
     cond do
       is_integer(term) ->
         decimal = Decimal.new(term)
@@ -1591,6 +1586,10 @@ defmodule Decimal do
   If successful, returns a tuple in the form of `{decimal, remainder_of_binary}`,
   otherwise `:error`.
 
+  Inputs whose digit count or exponent magnitude exceed the default limits
+  (`#{@default_max_digits}` digits, `#{@default_max_exponent}` absolute
+  exponent) return `:error`. Use `parse/2` to override the limits.
+
   ## Examples
 
       iex> Decimal.parse("3.14")
@@ -1607,34 +1606,21 @@ defmodule Decimal do
 
   """
   @spec parse(binary()) :: {t(), binary()} | :error
-  def parse("+" <> rest) do
-    parse_unsign(rest)
-  end
-
-  def parse("-" <> rest) do
-    case parse_unsign(rest) do
-      {%Decimal{} = num, rest} -> {%{num | sign: -1}, rest}
-      :error -> :error
-    end
-  end
-
   def parse(binary) when is_binary(binary) do
-    parse_unsign(binary)
+    parse_with_limits(binary, default_parse_limits())
   end
 
   @doc """
-  Parses a binary into a decimal with optional limits.
-
-  Use this function instead of `parse/1` for untrusted input. Without explicit
-  limits, decimal parsing accepts any exponent and digit count for backwards
-  compatibility.
+  Parses a binary into a decimal with explicit limits.
 
   The following options are supported:
 
     * `:max_digits` - maximum number of decimal digits consumed from the input,
-      including leading and trailing zeros.
+      including leading and trailing zeros. Defaults to `#{@default_max_digits}`.
+      Pass `:infinity` to disable.
     * `:max_exponent` - maximum absolute value of the parsed decimal exponent,
-      after fractional digits are accounted for.
+      after fractional digits are accounted for. Defaults to
+      `#{@default_max_exponent}`. Pass `:infinity` to disable.
 
   Returns `:error` when a parsed number exceeds the configured limits.
   """
@@ -1663,10 +1649,11 @@ defmodule Decimal do
   @doc """
   Converts given number to its string representation.
 
-  The default `:scientific` format is compact for large positive exponents.
-  The `:normal` and `:xsd` formats may allocate output proportional to the
-  expanded size of the decimal. Use `to_string/3` with `:max_digits` when
-  rendering decimals from untrusted input.
+  Output is bounded to `#{@default_to_string_max_digits}` digit characters by
+  default; pass options via `to_string/3` to override. `:scientific` is compact
+  for large positive exponents and rarely hits the limit; `:normal` and `:xsd`
+  expand proportional to the exponent and will raise `ArgumentError` when the
+  limit would be exceeded.
 
   ## Options
 
@@ -1696,15 +1683,21 @@ defmodule Decimal do
   @spec to_string(t, :scientific | :normal | :xsd | :raw) :: String.t()
   def to_string(num, type \\ :scientific)
 
-  def to_string(%Decimal{sign: sign, coef: :NaN}, _type) do
+  def to_string(%Decimal{} = num, type)
+      when type in [:scientific, :normal, :xsd, :raw] do
+    check_to_string_max_digits!(num, type, @default_to_string_max_digits)
+    do_to_string(num, type)
+  end
+
+  defp do_to_string(%Decimal{sign: sign, coef: :NaN}, _type) do
     if sign == 1, do: "NaN", else: "-NaN"
   end
 
-  def to_string(%Decimal{sign: sign, coef: :inf}, _type) do
+  defp do_to_string(%Decimal{sign: sign, coef: :inf}, _type) do
     if sign == 1, do: "Infinity", else: "-Infinity"
   end
 
-  def to_string(%Decimal{sign: sign, coef: coef, exp: exp}, :normal) do
+  defp do_to_string(%Decimal{sign: sign, coef: coef, exp: exp}, :normal) do
     digits = integer_to_decimal_binary(coef)
     length = byte_size(digits)
 
@@ -1725,7 +1718,7 @@ defmodule Decimal do
     IO.iodata_to_binary(iodata)
   end
 
-  def to_string(%Decimal{sign: sign, coef: coef, exp: exp}, :scientific) do
+  defp do_to_string(%Decimal{sign: sign, coef: coef, exp: exp}, :scientific) do
     digits = integer_to_decimal_binary(coef)
     length = byte_size(digits)
     adjusted = exp + length - 1
@@ -1762,7 +1755,7 @@ defmodule Decimal do
     IO.iodata_to_binary(iodata)
   end
 
-  def to_string(%Decimal{sign: sign, coef: coef, exp: exp}, :raw) do
+  defp do_to_string(%Decimal{sign: sign, coef: coef, exp: exp}, :raw) do
     str = integer_to_decimal_binary(coef)
     str = if sign == -1, do: [?- | str], else: str
     str = if exp != 0, do: [str, "E", :erlang.integer_to_binary(exp)], else: str
@@ -1770,8 +1763,8 @@ defmodule Decimal do
     IO.iodata_to_binary(str)
   end
 
-  def to_string(%Decimal{} = decimal, :xsd) do
-    decimal |> canonical_xsd() |> to_string(:normal)
+  defp do_to_string(%Decimal{} = decimal, :xsd) do
+    decimal |> canonical_xsd() |> do_to_string(:normal)
   end
 
   defp zeroes(0), do: ""
@@ -1845,25 +1838,25 @@ defmodule Decimal do
   defp byte_bit_length(_byte), do: 1
 
   @doc """
-  Converts given number to its string representation with optional limits.
-
-  Use this function when rendering decimals from untrusted input, especially
-  with `:normal` or `:xsd`, because those formats may otherwise allocate output
-  proportional to the expanded size of the decimal.
+  Converts given number to its string representation with explicit limits.
 
   The following options are supported:
 
     * `:max_digits` - maximum number of digit characters in the output. Sign,
-      decimal point, and exponent markers are not counted.
+      decimal point, and exponent markers are not counted. Defaults to
+      `#{@default_to_string_max_digits}`. Pass `:infinity` to disable.
 
   Raises `ArgumentError` when the configured limit would be exceeded.
   """
   doc_since("2.4.0")
   @spec to_string(t, :scientific | :normal | :xsd | :raw, [to_string_option]) :: String.t()
-  def to_string(%Decimal{} = num, type, opts) when is_list(opts) do
-    max_digits = limit!(:max_digits, Keyword.get(opts, :max_digits, :infinity))
+  def to_string(%Decimal{} = num, type, opts)
+      when is_list(opts) and type in [:scientific, :normal, :xsd, :raw] do
+    max_digits =
+      limit!(:max_digits, Keyword.get(opts, :max_digits, @default_to_string_max_digits))
+
     check_to_string_max_digits!(num, type, max_digits)
-    to_string(num, type)
+    do_to_string(num, type)
   end
 
   defp canonical_xsd(%Decimal{coef: 0} = decimal), do: %{decimal | exp: -1}
@@ -2566,16 +2559,24 @@ defmodule Decimal do
   ## PARSING ##
 
   defp parse_limits!(opts) do
-    Enum.reduce(opts, %{max_digits: :infinity, max_exponent: :infinity}, fn
-      {:max_digits, value}, acc ->
-        %{acc | max_digits: limit!(:max_digits, value)}
+    Enum.reduce(
+      opts,
+      %{max_digits: @default_max_digits, max_exponent: @default_max_exponent},
+      fn
+        {:max_digits, value}, acc ->
+          %{acc | max_digits: limit!(:max_digits, value)}
 
-      {:max_exponent, value}, acc ->
-        %{acc | max_exponent: limit!(:max_exponent, value)}
+        {:max_exponent, value}, acc ->
+          %{acc | max_exponent: limit!(:max_exponent, value)}
 
-      {key, _value}, _acc ->
-        raise ArgumentError, "unknown option #{inspect(key)}"
-    end)
+        {key, _value}, _acc ->
+          raise ArgumentError, "unknown option #{inspect(key)}"
+      end
+    )
+  end
+
+  defp default_parse_limits do
+    %{max_digits: @default_max_digits, max_exponent: @default_max_exponent}
   end
 
   defp limit!(_key, :infinity), do: :infinity
@@ -2587,65 +2588,11 @@ defmodule Decimal do
           "#{inspect(key)} must be a non-negative integer or :infinity, got: #{inspect(value)}"
   end
 
-  defp parse_unsign(<<first, remainder::size(7)-binary, rest::binary>>) when first in [?i, ?I] do
-    if String.downcase(remainder) == "nfinity" do
-      {%Decimal{coef: :inf}, rest}
-    else
-      :error
-    end
-  end
-
-  defp parse_unsign(<<first, remainder::size(2)-binary, rest::binary>>) when first in [?i, ?I] do
-    if String.downcase(remainder) == "nf" do
-      {%Decimal{coef: :inf}, rest}
-    else
-      :error
-    end
-  end
-
-  defp parse_unsign(<<first, remainder::size(2)-binary, rest::binary>>) when first in [?n, ?N] do
-    if String.downcase(remainder) == "an" do
-      {%Decimal{coef: :NaN}, rest}
-    else
-      :error
-    end
-  end
-
-  defp parse_unsign(bin) do
-    {int_rev, int_size, after_int} = parse_digits_count(bin, [], 0)
-
-    case after_int do
-      <<?., after_dot::binary>> ->
-        {coef_rev, total_size, after_float} = parse_digits_count(after_dot, int_rev, int_size)
-
-        if total_size == 0 do
-          :error
-        else
-          {exp, rest} = parse_exp(after_float)
-          coef = digits_acc_to_integer(coef_rev, total_size)
-          float_size = total_size - int_size
-          {%Decimal{coef: coef, exp: parse_exp_int(exp) - float_size}, rest}
-        end
-
-      _ ->
-        if int_size == 0 do
-          :error
-        else
-          {exp, rest} = parse_exp(after_int)
-          coef = digits_acc_to_integer(int_rev, int_size)
-          {%Decimal{coef: coef, exp: parse_exp_int(exp)}, rest}
-        end
-    end
-  end
-
   defp parse_digits_count(<<digit, rest::binary>>, acc, count) when digit in ?0..?9 do
     parse_digits_count(rest, [digit | acc], count + 1)
   end
 
   defp parse_digits_count(rest, acc, count), do: {acc, count, rest}
-
-  defp parse_exp_int([]), do: 0
-  defp parse_exp_int(chars), do: List.to_integer(chars)
 
   defp digits_acc_to_integer([], _size), do: 0
   defp digits_acc_to_integer(acc, _size), do: :erlang.list_to_integer(:lists.reverse(acc))
@@ -2876,13 +2823,13 @@ end
 
 defimpl Inspect, for: Decimal do
   def inspect(dec, _opts) do
-    "Decimal.new(\"" <> Decimal.to_string(dec) <> "\")"
+    "Decimal.new(\"" <> Decimal.to_string(dec, :scientific, max_digits: :infinity) <> "\")"
   end
 end
 
 defimpl String.Chars, for: Decimal do
   def to_string(dec) do
-    Decimal.to_string(dec)
+    Decimal.to_string(dec, :scientific, max_digits: :infinity)
   end
 end
 
@@ -2890,7 +2837,7 @@ end
 if Code.ensure_loaded?(JSON.Encoder) and function_exported?(JSON.Encoder, :encode, 2) do
   defimpl JSON.Encoder, for: Decimal do
     def encode(decimal, _encoder) do
-      [?", Decimal.to_string(decimal), ?"]
+      [?", Decimal.to_string(decimal, :scientific, max_digits: :infinity), ?"]
     end
   end
 end
