@@ -224,6 +224,27 @@ defmodule DecimalTest do
     end
   end
 
+  test "new/2 with opts" do
+    long = "1.01234567890123457890123457890123456789"
+
+    assert Decimal.new(long, max_digits: 39) ==
+             d(1, 101_234_567_890_123_457_890_123_457_890_123_456_789, -38)
+
+    assert_raise Error, fn ->
+      Decimal.new(long, max_digits: 38)
+    end
+
+    assert Decimal.new("1e10", max_exponent: 10) == d(1, 1, 10)
+
+    assert_raise Error, fn ->
+      Decimal.new("1e10", max_exponent: 9)
+    end
+
+    assert_raise ArgumentError, ~r/unknown option :unknown/, fn ->
+      Decimal.new("1", unknown: 1)
+    end
+  end
+
   test "from_float/1" do
     assert Decimal.from_float(123.0) == d(1, 1230, -1)
     assert Decimal.from_float(0.1) == d(1, 1, -1)
