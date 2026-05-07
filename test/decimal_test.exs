@@ -1,11 +1,15 @@
 defmodule DecimalTest do
   use ExUnit.Case, async: true
+  use ExUnitProperties
 
   import TestMacros
   alias Decimal.Context
   alias Decimal.Error
 
   require Decimal
+
+  @bounded_smoke_max_us 5_000_000
+  @bounded_smoke_timeout 15_000
 
   elixir_json_available? = Version.match?(System.version(), ">= 1.18.0-rc")
 
@@ -81,6 +85,68 @@ defmodule DecimalTest do
     assert Decimal.parse("e0") == :error
 
     assert Decimal.parse("1e-d") == {d(1, 1, 0), "e-d"}
+  end
+
+  test "parse/2 with limits" do
+    assert Decimal.parse("123", max_digits: 3) == {d(1, 123, 0), ""}
+    assert Decimal.parse("123", max_digits: 2) == :error
+
+    assert Decimal.parse("1e10", max_exponent: 10) == {d(1, 1, 10), ""}
+    assert Decimal.parse("1e10", max_exponent: 9) == :error
+
+    assert Decimal.parse("1.23e2", max_exponent: 0) == {d(1, 123, 0), ""}
+    assert Decimal.parse("1.23e3", max_exponent: 0) == :error
+    assert Decimal.parse("1e-10", max_exponent: 9) == :error
+    assert Decimal.parse("1e1000000000000000000000000", max_exponent: 9) == :error
+
+    assert_raise ArgumentError, ~r/:max_digits/, fn ->
+      Decimal.parse("1", max_digits: -1)
+    end
+
+    assert_raise ArgumentError, ~r/unknown option :unknown/, fn ->
+      Decimal.parse("1", unknown: 1)
+    end
+  end
+
+  @tag timeout: @bounded_smoke_timeout
+  test "parse/2 rejects very large exponents without materializing them" do
+    input = "1e" <> String.duplicate("9", 1_000_000)
+
+    assert_runs_quickly("parse/2 bounded exponent rejection", fn ->
+      assert Decimal.parse(input, max_exponent: 9) == :error
+    end)
+  end
+
+  test "parse/1 with very long digit strings" do
+    digits = String.duplicate("9", 50_000)
+    coef = :erlang.binary_to_integer(digits)
+    assert Decimal.parse(digits) == {%Decimal{coef: coef, exp: 0}, ""}
+
+    assert Decimal.parse("0." <> digits) == {%Decimal{coef: coef, exp: -50_000}, ""}
+
+    int = String.duplicate("1", 30_000)
+    frac = String.duplicate("5", 20_000)
+    expected_coef = :erlang.binary_to_integer(int <> frac)
+    assert Decimal.parse(int <> "." <> frac) == {%Decimal{coef: expected_coef, exp: -20_000}, ""}
+
+    # Trailing non-digit boundary still parses correctly.
+    assert Decimal.parse(digits <> "x") == {%Decimal{coef: coef, exp: 0}, "x"}
+  end
+
+  test "parse/2 enforces digit count on very long strings" do
+    digits = String.duplicate("9", 50_000)
+
+    assert Decimal.parse(digits, max_digits: 50_000) ==
+             {%Decimal{coef: :erlang.binary_to_integer(digits), exp: 0}, ""}
+
+    assert Decimal.parse(digits, max_digits: 49_999) == :error
+
+    fractional = "0." <> digits
+
+    assert Decimal.parse(fractional, max_digits: 50_001) ==
+             {%Decimal{coef: :erlang.binary_to_integer("0" <> digits), exp: -50_000}, ""}
+
+    assert Decimal.parse(fractional, max_digits: 50_000) == :error
   end
 
   test "nan?/1" do
@@ -171,6 +237,20 @@ defmodule DecimalTest do
     assert Decimal.cast("one two three") == :error
     assert Decimal.cast("e0") == :error
     assert Decimal.cast(:one_two_three) == :error
+  end
+
+  test "cast/2 with limits" do
+    assert Decimal.cast(123, max_digits: 3) == {:ok, d(1, 123, 0)}
+    assert Decimal.cast(123, max_digits: 2) == :error
+
+    assert Decimal.cast("123", max_digits: 3) == {:ok, d(1, 123, 0)}
+    assert Decimal.cast("123", max_digits: 2) == :error
+
+    assert Decimal.cast(d(1, 1, 10), max_exponent: 10) == {:ok, d(1, 1, 10)}
+    assert Decimal.cast(d(1, 1, 10), max_exponent: 9) == :error
+    assert Decimal.cast(d(1, 123, 0), max_digits: 3) == {:ok, d(1, 123, 0)}
+    assert Decimal.cast(d(1, 123, 0), max_digits: 2) == :error
+    assert Decimal.cast("1e1000000000000000000000000", max_exponent: 9) == :error
   end
 
   test "abs/1" do
@@ -563,6 +643,22 @@ defmodule DecimalTest do
     assert Decimal.normalize(~d"nan") == d(1, :NaN, 0)
   end
 
+  test "normalize/1 strips many trailing zeros without expansion" do
+    coef = :erlang.binary_to_integer("123" <> String.duplicate("0", 5_000))
+    assert Decimal.normalize(%Decimal{sign: 1, coef: coef, exp: 0}) == d(1, 123, 5_000)
+    assert Decimal.normalize(%Decimal{sign: 1, coef: coef, exp: -2_500}) == d(1, 123, 2_500)
+
+    # Boundary around the 16-digit chunk size.
+    coef_17 = :erlang.binary_to_integer("123" <> String.duplicate("0", 17))
+    assert Decimal.normalize(%Decimal{sign: 1, coef: coef_17, exp: 0}) == d(1, 123, 17)
+
+    coef_15 = :erlang.binary_to_integer("123" <> String.duplicate("0", 15))
+    assert Decimal.normalize(%Decimal{sign: 1, coef: coef_15, exp: 0}) == d(1, 123, 15)
+
+    coef_16 = :erlang.binary_to_integer("123" <> String.duplicate("0", 16))
+    assert Decimal.normalize(%Decimal{sign: 1, coef: coef_16, exp: 0}) == d(1, 123, 16)
+  end
+
   test "to_string/2 normal" do
     assert Decimal.to_string(~d"0", :normal) == "0"
     assert Decimal.to_string(~d"42", :normal) == "42"
@@ -617,6 +713,22 @@ defmodule DecimalTest do
     assert Decimal.to_string(~d"-inf", :raw) == "-Infinity"
   end
 
+  test "to_string/2 with large coefficients" do
+    digits = String.duplicate("9", 2_500)
+    coef = String.to_integer(digits)
+
+    assert Decimal.to_string(%Decimal{sign: 1, coef: coef, exp: 0}, :normal) == digits
+
+    assert Decimal.to_string(%Decimal{sign: -1, coef: coef, exp: -2_500}, :normal) ==
+             "-0." <> digits
+
+    assert Decimal.to_string(%Decimal{sign: 1, coef: coef, exp: -2_499}, :scientific) ==
+             "9." <> String.duplicate("9", 2_499)
+
+    assert Decimal.to_string(%Decimal{sign: 1, coef: coef, exp: -1}, :raw) ==
+             digits <> "E-1"
+  end
+
   test "to_string/2 xsd" do
     assert Decimal.to_string(~d"0", :xsd) == "0.0"
     assert Decimal.to_string(~d"0.0", :xsd) == "0.0"
@@ -640,6 +752,50 @@ defmodule DecimalTest do
     assert Decimal.to_string(~d"nan", :xsd) == "NaN"
     assert Decimal.to_string(~d"-nan", :xsd) == "-NaN"
     assert Decimal.to_string(~d"-inf", :xsd) == "-Infinity"
+  end
+
+  test "to_string/3 with limits" do
+    assert Decimal.to_string(~d"123", :scientific, max_digits: 3) == "123"
+    assert Decimal.to_string(~d"1e2", :normal, max_digits: 3) == "100"
+    assert Decimal.to_string(~d"1e2", :xsd, max_digits: 4) == "100.0"
+    assert Decimal.to_string(~d"1e100000", :scientific, max_digits: 7) == "1E+100000"
+
+    assert_raise ArgumentError, ~r/:scientific representation requires 3 digits/, fn ->
+      Decimal.to_string(~d"123", :scientific, max_digits: 2)
+    end
+
+    assert_raise ArgumentError, ~r/:normal representation requires 3 digits/, fn ->
+      Decimal.to_string(~d"1e2", :normal, max_digits: 2)
+    end
+
+    assert_raise ArgumentError, ~r/:xsd representation requires 4 digits/, fn ->
+      Decimal.to_string(~d"1e2", :xsd, max_digits: 3)
+    end
+
+    assert_raise ArgumentError, ~r/:normal representation requires 100001 digits/, fn ->
+      Decimal.to_string(~d"1e100000", :normal, max_digits: 1_000)
+    end
+
+    assert_raise ArgumentError, ~r/:xsd representation requires 100002 digits/, fn ->
+      Decimal.to_string(~d"1e100000", :xsd, max_digits: 1_000)
+    end
+  end
+
+  @tag timeout: @bounded_smoke_timeout
+  test "to_string/3 rejects huge expanded output before materializing it" do
+    num = %Decimal{sign: 1, coef: 1, exp: 10_000_000}
+
+    assert_runs_quickly("to_string/3 bounded normal output rejection", fn ->
+      assert_raise ArgumentError, ~r/:normal representation requires 10000001 digits/, fn ->
+        Decimal.to_string(num, :normal, max_digits: 1_000)
+      end
+    end)
+
+    assert_runs_quickly("to_string/3 bounded xsd output rejection", fn ->
+      assert_raise ArgumentError, ~r/:xsd representation requires 10000002 digits/, fn ->
+        Decimal.to_string(num, :xsd, max_digits: 1_000)
+      end
+    end)
   end
 
   test "to_integer/1" do
@@ -668,6 +824,36 @@ defmodule DecimalTest do
         Decimal.to_integer(d(1, :NaN, 0))
       end
     end)
+  end
+
+  test "to_integer/1 with very large positive exponent" do
+    assert Decimal.to_integer(%Decimal{sign: 1, coef: 7, exp: 5_000}) ==
+             7 * :erlang.binary_to_integer("1" <> String.duplicate("0", 5_000))
+
+    assert Decimal.to_integer(%Decimal{sign: -1, coef: 1, exp: 3}) == -1000
+  end
+
+  test "to_integer/1 with large negative exponent and trailing zeros" do
+    coef = :erlang.binary_to_integer("1" <> String.duplicate("0", 5_000))
+    assert Decimal.to_integer(%Decimal{sign: 1, coef: coef, exp: -5_000}) == 1
+    assert Decimal.to_integer(%Decimal{sign: -1, coef: coef, exp: -4_999}) == -10
+  end
+
+  test "to_integer/1 raises with normalized inspect" do
+    # Loss-of-precision error inspects the normalized form (1.1, not 1.10).
+    decimal = %Decimal{sign: 1, coef: 110, exp: -2}
+
+    assert_raise(
+      ArgumentError,
+      "cannot convert Decimal.new(\"1.1\") without losing precision. Use Decimal.round/3 first.",
+      fn -> Decimal.to_integer(decimal) end
+    )
+
+    assert_raise(
+      ArgumentError,
+      ~r/^cannot convert Decimal\.new\("0\.1"\)/,
+      fn -> Decimal.to_integer(%Decimal{sign: 1, coef: 100, exp: -3}) end
+    )
   end
 
   test "to_float/1" do
@@ -834,6 +1020,97 @@ defmodule DecimalTest do
     refute Decimal.integer?(~d"100e-5")
     refute Decimal.integer?(~d"inf")
     refute Decimal.integer?(~d"NaN")
+  end
+
+  test "integer?/1 with very large coefficients and exponents" do
+    huge_coef = :erlang.binary_to_integer("1" <> String.duplicate("0", 50_000))
+    assert Decimal.integer?(%Decimal{sign: 1, coef: huge_coef, exp: -50_000})
+    assert Decimal.integer?(%Decimal{sign: 1, coef: huge_coef, exp: -49_999})
+    refute Decimal.integer?(%Decimal{sign: 1, coef: huge_coef + 1, exp: -50_000})
+    refute Decimal.integer?(%Decimal{sign: 1, coef: 123, exp: -50_000})
+    assert Decimal.integer?(%Decimal{sign: 1, coef: 0, exp: -1_000_000})
+    assert Decimal.integer?(%Decimal{sign: 1, coef: 1, exp: 1_000_000})
+  end
+
+  @tag timeout: @bounded_smoke_timeout
+  test "compare/2 handles very large coefficients without quadratic walk" do
+    a = %Decimal{sign: 1, coef: :erlang.binary_to_integer(String.duplicate("9", 30_000)), exp: 0}
+    b = %Decimal{sign: 1, coef: :erlang.binary_to_integer(String.duplicate("8", 30_000)), exp: 0}
+
+    assert_runs_quickly("compare large coefs", fn ->
+      assert Decimal.compare(a, b) == :gt
+      assert Decimal.compare(b, a) == :lt
+      assert Decimal.compare(a, a) == :eq
+    end)
+  end
+
+  @tag timeout: @bounded_smoke_timeout
+  test "add/2 with huge exponent gap stays bounded" do
+    high = %Decimal{sign: 1, coef: 1, exp: 1_000_000}
+    low = %Decimal{sign: 1, coef: 1, exp: 0}
+
+    assert_runs_quickly("add huge exponent gap", fn ->
+      assert Decimal.add(high, low).coef != 0
+      assert Decimal.sub(high, low).coef != 0
+    end)
+  end
+
+  @tag timeout: @bounded_smoke_timeout
+  test "add/2 with very large coefficient and small addend" do
+    big = %Decimal{
+      sign: 1,
+      coef: :erlang.binary_to_integer(String.duplicate("9", 20_000)),
+      exp: 0
+    }
+
+    small = %Decimal{sign: 1, coef: 1, exp: -20}
+
+    assert_runs_quickly("add large coef + small", fn ->
+      result = Decimal.add(big, small)
+      assert result.sign == 1
+    end)
+  end
+
+  property "add/2 bounded path matches unbounded result for varied sign/exp pairs" do
+    check all(
+            sign1 <- one_of([constant(1), constant(-1)]),
+            sign2 <- one_of([constant(1), constant(-1)]),
+            coef1 <- positive_integer(),
+            coef2 <- positive_integer(),
+            exp1 <- integer(-50..50),
+            gap <- integer(10..80),
+            precision <- integer(2..7),
+            max_runs: 200
+          ) do
+      a = %Decimal{sign: sign1, coef: coef1, exp: exp1}
+      b = %Decimal{sign: sign2, coef: coef2, exp: exp1 + gap}
+
+      bounded =
+        Context.with(%Context{precision: precision, traps: []}, fn ->
+          Decimal.add(a, b)
+        end)
+
+      reference_precision = precision + gap + 10
+
+      reference =
+        Context.with(%Context{precision: reference_precision, traps: []}, fn ->
+          Decimal.add(a, b)
+        end)
+
+      rounded_reference =
+        Context.with(%Context{precision: precision, traps: []}, fn ->
+          Decimal.mult(reference, ~d"1")
+        end)
+
+      assert bounded == rounded_reference, """
+      bounded path diverged from unbounded reference
+        a:           #{inspect(a)}
+        b:           #{inspect(b)}
+        precision:   #{precision}
+        bounded:     #{inspect(bounded)}
+        reference:   #{inspect(rounded_reference)}
+      """
+    end
   end
 
   test "issue #13" do
@@ -1007,5 +1284,12 @@ defmodule DecimalTest do
 
       assert JSON.encode!(%{x: Decimal.new("1.0")}, encoder) == "{\"x\":1.0}"
     end
+  end
+
+  defp assert_runs_quickly(name, fun) do
+    {elapsed_us, _result} = :timer.tc(fun)
+
+    assert elapsed_us < @bounded_smoke_max_us,
+           "#{name} took #{elapsed_us}us, expected less than #{@bounded_smoke_max_us}us"
   end
 end

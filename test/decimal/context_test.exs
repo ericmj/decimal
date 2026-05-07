@@ -5,6 +5,10 @@ defmodule Decimal.ContextTest do
   alias Decimal.Context
   alias Decimal.Error
 
+  @bounded_smoke_exp 10_000_000
+  @bounded_smoke_max_us 5_000_000
+  @bounded_smoke_timeout 15_000
+
   test "with_context/2: down" do
     Context.with(%Context{precision: 2, rounding: :down}, fn ->
       assert Decimal.add(~d"0", ~d"1.02") == d(1, 10, -1)
@@ -80,6 +84,92 @@ defmodule Decimal.ContextTest do
     end)
   end
 
+  test "with_context/2: large exponent gap addition" do
+    num = d(1, 1, 100_000)
+    one = d(1, 1, 0)
+
+    for {rounding, result} <- [
+          down: d(1, 100, 99_998),
+          half_up: d(1, 100, 99_998),
+          half_even: d(1, 100, 99_998),
+          half_down: d(1, 100, 99_998),
+          up: d(1, 101, 99_998),
+          floor: d(1, 100, 99_998),
+          ceiling: d(1, 101, 99_998)
+        ] do
+      Context.with(%Context{precision: 3, rounding: rounding}, fn ->
+        assert Decimal.add(num, one) == result
+        assert :inexact in Context.get().flags
+        assert :rounded in Context.get().flags
+      end)
+    end
+  end
+
+  test "with_context/2: large exponent gap addition with zero" do
+    num = d(1, 1, 100_000)
+
+    Context.with(%Context{precision: 3}, fn ->
+      assert Decimal.add(d(1, 0, -100_000), num) == d(1, 100, 99_998)
+      assert Context.get().flags == [:rounded]
+    end)
+
+    Context.with(%Context{precision: 3}, fn ->
+      assert Decimal.add(d(1, 0, 100_000), d(1, 1, 0)) == d(1, 1, 0)
+      assert Context.get().flags == []
+    end)
+  end
+
+  test "with_context/2: large exponent gap subtraction" do
+    num = d(1, 1, 100_000)
+    one = d(1, 1, 0)
+
+    for {rounding, result} <- [
+          down: d(1, 999, 99_997),
+          half_up: d(1, 1000, 99_997),
+          half_even: d(1, 1000, 99_997),
+          half_down: d(1, 1000, 99_997),
+          up: d(1, 1000, 99_997),
+          floor: d(1, 999, 99_997),
+          ceiling: d(1, 1000, 99_997)
+        ] do
+      Context.with(%Context{precision: 3, rounding: rounding}, fn ->
+        assert Decimal.sub(num, one) == result
+        assert :inexact in Context.get().flags
+        assert :rounded in Context.get().flags
+      end)
+    end
+  end
+
+  @tag timeout: @bounded_smoke_timeout
+  test "with_context/2: large exponent gap arithmetic stays bounded" do
+    num = %Decimal{sign: 1, coef: 1, exp: @bounded_smoke_exp}
+    one = d(1, 1, 0)
+
+    Context.with(%Context{precision: 3}, fn ->
+      assert_runs_quickly("add/2 large exponent gap", fn ->
+        assert Decimal.add(num, one) == %Decimal{sign: 1, coef: 100, exp: @bounded_smoke_exp - 2}
+      end)
+    end)
+
+    Context.with(%Context{precision: 3}, fn ->
+      assert_runs_quickly("sub/2 large exponent gap", fn ->
+        assert Decimal.sub(num, one) == %Decimal{sign: 1, coef: 1000, exp: @bounded_smoke_exp - 3}
+      end)
+    end)
+  end
+
+  @tag timeout: @bounded_smoke_timeout
+  test "with_context/2: large exponent gap zero addition stays bounded" do
+    zero = %Decimal{sign: 1, coef: 0, exp: -@bounded_smoke_exp}
+    num = %Decimal{sign: 1, coef: 1, exp: @bounded_smoke_exp}
+
+    Context.with(%Context{precision: 3}, fn ->
+      assert_runs_quickly("add/2 large exponent gap with zero", fn ->
+        assert Decimal.add(zero, num) == %Decimal{sign: 1, coef: 100, exp: @bounded_smoke_exp - 2}
+      end)
+    end)
+  end
+
   test "with_context/2 set flags" do
     Context.with(%Context{precision: 2}, fn ->
       assert [] = Context.get().flags
@@ -119,5 +209,57 @@ defmodule Decimal.ContextTest do
       assert Decimal.div(~d"5", ~d"0") == d(1, :inf, 0)
       assert :division_by_zero in Context.get().flags
     end)
+  end
+
+  test "with_context/2 emax overflow" do
+    Context.with(%Context{precision: 3, emax: 2, traps: []}, fn ->
+      assert Decimal.mult(~d"9.99e2", 10) == d(1, :inf, 0)
+      assert :overflow in Context.get().flags
+      assert :inexact in Context.get().flags
+      assert :rounded in Context.get().flags
+    end)
+
+    Context.with(%Context{precision: 3, rounding: :down, emax: 2, traps: []}, fn ->
+      assert Decimal.mult(~d"9.99e2", 10) == d(1, 999, 0)
+      assert :overflow in Context.get().flags
+    end)
+  end
+
+  test "with_context/2 rem signals overflow when |num1| < |num2|" do
+    Context.with(%Context{precision: 3, emax: 2, traps: []}, fn ->
+      result = Decimal.rem(~d"9e9", ~d"9e10")
+      assert result == d(1, :inf, 0)
+      assert :overflow in Context.get().flags
+    end)
+  end
+
+  test "with_context/2 emin underflow" do
+    Context.with(%Context{precision: 3, emin: -2, traps: []}, fn ->
+      assert Decimal.div(1, 1000) == d(1, 0, 0)
+      assert :underflow in Context.get().flags
+      assert :inexact in Context.get().flags
+      assert :rounded in Context.get().flags
+    end)
+  end
+
+  test "with_context/2 exponent limit traps" do
+    assert_raise Error, "overflow", fn ->
+      Context.with(%Context{precision: 3, emax: 2, traps: [:overflow]}, fn ->
+        Decimal.mult(~d"9.99e2", 10)
+      end)
+    end
+
+    assert_raise Error, "underflow", fn ->
+      Context.with(%Context{precision: 3, emin: -2, traps: [:underflow]}, fn ->
+        Decimal.div(1, 1000)
+      end)
+    end
+  end
+
+  defp assert_runs_quickly(name, fun) do
+    {elapsed_us, _result} = :timer.tc(fun)
+
+    assert elapsed_us < @bounded_smoke_max_us,
+           "#{name} took #{elapsed_us}us, expected less than #{@bounded_smoke_max_us}us"
   end
 end

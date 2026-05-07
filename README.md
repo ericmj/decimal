@@ -19,6 +19,36 @@ Decimal.new(1, 123456789987654321, -9) #=> Decimal.new("123456789.987654321")
 For calculations, the amount of desired precision - that is, the number of
 decimal digits in the coefficient - can be specified.
 
+## Handling untrusted input
+
+Decimal can represent compact values with very large exponents, such as
+`1e1000000`. These values are valid decimals, but some operations can require
+memory or CPU proportional to the expanded size of the number. This matters when
+decimals are parsed from user input, JSON payloads, form fields, database
+fields, or other external data.
+
+Use bounded parsing for untrusted input:
+
+```elixir
+Decimal.parse(input, max_digits: 100, max_exponent: 1000)
+Decimal.cast(input, max_digits: 100, max_exponent: 1000)
+```
+
+Use bounded output when rendering decimals in formats that may expand the
+exponent:
+
+```elixir
+Decimal.to_string(decimal, :normal, max_digits: 1000)
+Decimal.to_string(decimal, :xsd, max_digits: 1000)
+```
+
+The default scientific string format is compact for large positive exponents,
+but `:normal` and `:xsd` output can materialize many zeroes. APIs that convert
+to an integer or otherwise need the expanded value may also be expensive for
+large exponents. `Decimal.Context` supports finite `emax` and `emin` values to
+limit operation results, but context limits do not validate already-created
+decimals and should not replace parse/cast limits for untrusted input.
+
 ## Usage
 
 Add Decimal as a dependency in your `mix.exs` file:
@@ -60,21 +90,45 @@ The context is accessed with `Decimal.Context.get/0` and set with
 
 ```elixir
 iex> D.Context.get()
-%Decimal.Context{flags: [:rounded, :inexact], precision: 9, rounding: :half_up,
- traps: [:invalid_operation, :division_by_zero]}
+%Decimal.Context{
+  precision: 9,
+  rounding: :half_up,
+  emax: :infinity,
+  emin: :infinity,
+  flags: [:rounded, :inexact],
+  traps: [:invalid_operation, :division_by_zero]
+}
 
 iex> D.Context.with(%D.Context{precision: 2}, fn -> IO.inspect D.Context.get() end)
-%Decimal.Context{flags: [], precision: 2, rounding: :half_up,
- traps: [:invalid_operation, :division_by_zero]}
-%Decimal.Context{flags: [], precision: 2, rounding: :half_up,
- traps: [:invalid_operation, :division_by_zero]}
+%Decimal.Context{
+  precision: 2,
+  rounding: :half_up,
+  emax: :infinity,
+  emin: :infinity,
+  flags: [],
+  traps: [:invalid_operation, :division_by_zero]
+}
+%Decimal.Context{
+  precision: 2,
+  rounding: :half_up,
+  emax: :infinity,
+  emin: :infinity,
+  flags: [],
+  traps: [:invalid_operation, :division_by_zero]
+}
 
 iex> D.Context.set(%D.Context{D.Context.get() | traps: []})
 :ok
 
 iex> D.Context.get()
-%Decimal.Context{flags: [:rounded, :inexact], precision: 9, rounding: :half_up,
- traps: []}
+%Decimal.Context{
+  precision: 9,
+  rounding: :half_up,
+  emax: :infinity,
+  emin: :infinity,
+  flags: [:rounded, :inexact],
+  traps: []
+}
 ```
 
 ### Precision and rounding
