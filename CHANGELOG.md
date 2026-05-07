@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## v2.4.0 (2026-05-07)
+
+### Security
+
+* Mitigate exponent amplification (CVE-2026-32686).
+  Compact inputs such as `1e1000000` could force multi-second expansions
+  during arithmetic, parsing, normalization, comparison, or formatting.
+  `Decimal.add/2` and `Decimal.sub/2` now scale operands to `precision + 2`
+  digits with a sticky bit instead of materializing the full coefficient.
+
+### Enhancements
+
+* Add `:max_digits` and `:max_exponent` options to `Decimal.parse/2` and
+  `Decimal.cast/2` to reject pathological inputs without expansion
+* Add `:max_digits` option to `Decimal.to_string/3` to cap formatted output
+  before materialization
+* Add `:emax` and `:emin` fields to `Decimal.Context` for IBM General Decimal
+  Arithmetic-style overflow and underflow signaling
+* Optimize hot paths for large decimals: `coef_length`, `normalize`,
+  `to_integer`, `integer?`, parsing, and large-coefficient string formatting
+
 ## v2.3.0 (2024-12-13)
 
 * Implement the upcoming [`JSON.Encoder`](https://hexdocs.pm/elixir/main/JSON.Encoder.html)
