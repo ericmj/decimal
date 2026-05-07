@@ -867,6 +867,19 @@ defmodule DecimalTest do
     assert Decimal.to_integer(%Decimal{sign: -1, coef: coef, exp: -4_999}) == -10
   end
 
+  property "to_integer/1 round-trips any integer through trailing-zero-padded encodings" do
+    check all(
+            n <- integer(),
+            k <- integer(0..500),
+            max_runs: 100
+          ) do
+      sign = if n < 0, do: -1, else: 1
+      coef = Kernel.abs(n) * Integer.pow(10, k)
+      decimal = %Decimal{sign: sign, coef: coef, exp: -k}
+      assert Decimal.to_integer(decimal) == n
+    end
+  end
+
   test "to_integer/1 raises with normalized inspect" do
     # Loss-of-precision error inspects the normalized form (1.1, not 1.10).
     decimal = %Decimal{sign: 1, coef: 110, exp: -2}
