@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v2.4.1 (2026-05-08)
+
+### Bug fixes
+
+* Fix infinite loop in `Decimal.to_integer/1` when the coefficient is
+  zero and the exponent is negative (e.g. `Decimal.new("0.0")`). Such
+  values now correctly convert to the integer `0`.
+
 ## v2.4.0 (2026-05-07)
 
 ### Security
