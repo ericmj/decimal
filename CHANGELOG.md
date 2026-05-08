@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## Unreleased
+## v3.1.0 (2026-05-08)
 
 ### Enhancements
 
