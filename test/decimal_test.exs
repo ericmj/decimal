@@ -91,6 +91,12 @@ defmodule DecimalTest do
     assert Decimal.parse("123", max_digits: 3) == {d(1, 123, 0), ""}
     assert Decimal.parse("123", max_digits: 2) == :error
 
+    assert Decimal.parse("0.123", max_digits: 3) == {d(1, 123, -3), ""}
+    assert Decimal.parse("00123", max_digits: 3) == {d(1, 123, 0), ""}
+    assert Decimal.parse("0.00123", max_digits: 3) == {d(1, 123, -5), ""}
+    assert Decimal.parse("123.000", max_digits: 6) == {d(1, 123_000, -3), ""}
+    assert Decimal.parse("123.000", max_digits: 5) == :error
+
     assert Decimal.parse("1e10", max_exponent: 10) == {d(1, 1, 10), ""}
     assert Decimal.parse("1e10", max_exponent: 9) == :error
 
@@ -114,6 +120,15 @@ defmodule DecimalTest do
 
     assert_runs_quickly("parse/2 bounded exponent rejection", fn ->
       assert Decimal.parse(input, max_exponent: 9) == :error
+    end)
+  end
+
+  @tag timeout: @bounded_smoke_timeout
+  test "parse/2 rejects very long digit runs without materializing them" do
+    input = String.duplicate("9", 1_000_000)
+
+    assert_runs_quickly("parse/2 bounded digit rejection", fn ->
+      assert Decimal.parse(input, max_digits: 34) == :error
     end)
   end
 
@@ -146,10 +161,19 @@ defmodule DecimalTest do
 
     fractional = "0." <> digits
 
-    assert Decimal.parse(fractional, max_digits: 50_001, max_exponent: :infinity) ==
-             {%Decimal{coef: :erlang.binary_to_integer("0" <> digits), exp: -50_000}, ""}
+    assert Decimal.parse(fractional, max_digits: 50_000, max_exponent: :infinity) ==
+             {%Decimal{coef: :erlang.binary_to_integer(digits), exp: -50_000}, ""}
 
-    assert Decimal.parse(fractional, max_digits: 50_000, max_exponent: :infinity) == :error
+    assert Decimal.parse(fractional, max_digits: 49_999, max_exponent: :infinity) == :error
+  end
+
+  test "parse/1 round-trips inspect output at default precision" do
+    decimal = %Decimal{coef: 3_162_277_660_168_379_331_998_893_544_432_719, exp: -34}
+    string = Decimal.to_string(decimal, :scientific, max_digits: :infinity)
+
+    assert string == "0.3162277660168379331998893544432719"
+    assert Decimal.parse(string) == {decimal, ""}
+    assert Decimal.new(string) == decimal
   end
 
   test "nan?/1" do

@@ -1617,9 +1617,9 @@ defmodule Decimal do
 
   The following options are supported:
 
-    * `:max_digits` - maximum number of decimal digits consumed from the input,
-      including leading and trailing zeros. Defaults to `#{@default_max_digits}`.
-      Pass `:infinity` to disable.
+    * `:max_digits` - maximum number of significant decimal digits in the parsed
+      coefficient. Leading zeros are not counted, but trailing zeros are. Defaults
+      to `#{@default_max_digits}`. Pass `:infinity` to disable.
     * `:max_exponent` - maximum absolute value of the parsed decimal exponent,
       after fractional digits are accounted for. Defaults to
       `#{@default_max_exponent}`. Pass `:infinity` to disable.
@@ -2594,11 +2594,19 @@ defmodule Decimal do
           "#{inspect(key)} must be a non-negative integer or :infinity, got: #{inspect(value)}"
   end
 
-  defp parse_digits_count(<<digit, rest::binary>>, acc, count) when digit in ?0..?9 do
-    parse_digits_count(rest, [digit | acc], count + 1)
+  defp parse_digits_count(<<?0, rest::binary>>, acc, count, leading_zeros)
+       when count == leading_zeros do
+    parse_digits_count(rest, acc, count + 1, leading_zeros + 1)
   end
 
-  defp parse_digits_count(rest, acc, count), do: {acc, count, rest}
+  defp parse_digits_count(<<digit, rest::binary>>, acc, count, leading_zeros)
+       when digit in ?0..?9 do
+    parse_digits_count(rest, [digit | acc], count + 1, leading_zeros)
+  end
+
+  defp parse_digits_count(rest, acc, count, leading_zeros) do
+    {acc, count, leading_zeros, rest}
+  end
 
   defp digits_acc_to_integer([], _size), do: 0
   defp digits_acc_to_integer(acc, _size), do: :erlang.list_to_integer(:lists.reverse(acc))
@@ -2646,19 +2654,22 @@ defmodule Decimal do
   end
 
   defp parse_unsign(bin, limits) do
-    {int_rev, int_size, after_int} = parse_digits_count(bin, [], 0)
+    {int_rev, int_size, leading_zeros, after_int} = parse_digits_count(bin, [], 0, 0)
 
-    {coef_rev, total_size, after_float} =
+    {coef_rev, total_size, leading_zeros, after_float} =
       case after_int do
-        <<?., after_dot::binary>> -> parse_digits_count(after_dot, int_rev, int_size)
-        _ -> {int_rev, int_size, after_int}
+        <<?., after_dot::binary>> ->
+          parse_digits_count(after_dot, int_rev, int_size, leading_zeros)
+
+        _ ->
+          {int_rev, int_size, leading_zeros, after_int}
       end
 
     cond do
       total_size == 0 ->
         :error
 
-      exceeds_limit?(total_size, limits.max_digits) ->
+      exceeds_limit?(total_size - leading_zeros, limits.max_digits) ->
         :error
 
       true ->
