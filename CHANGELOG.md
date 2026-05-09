@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## Unreleased
+
+### Bug fixes
+
+* Fix `Decimal.parse/2` and `Decimal.new/2` rejecting inspect output for
+  values at the context's full precision with negative exponents (e.g.
+  `Decimal.new("0.3162277660168379331998893544432719")`). The
+  `:max_digits` limit no longer counts non-significant leading zeros.
+
 ## v3.1.0 (2026-05-08)
 
 ### Enhancements

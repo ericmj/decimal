@@ -205,6 +205,21 @@ defmodule Decimal.PropertyTest do
       end
     end
 
+    property "inspect output parses back at default decimal128 limits" do
+      gen =
+        decimal(
+          coef_max: 9_999_999_999_999_999_999_999_999_999_999_999,
+          exp_min: -6144,
+          exp_max: 6144
+        )
+
+      check all(a <- gen, max_runs: 200) do
+        s = Decimal.to_string(a, :scientific, max_digits: :infinity)
+        assert {parsed, ""} = Decimal.parse(s)
+        assert parsed == a
+      end
+    end
+
     property "Decimal.new/1 of an integer round-trips through to_integer/1" do
       check all(n <- StreamData.integer(), max_runs: 100) do
         d = Decimal.new(n)

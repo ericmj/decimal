@@ -1617,9 +1617,9 @@ defmodule Decimal do
 
   The following options are supported:
 
-    * `:max_digits` - maximum number of decimal digits consumed from the input,
-      including leading and trailing zeros. Defaults to `#{@default_max_digits}`.
-      Pass `:infinity` to disable.
+    * `:max_digits` - maximum number of significant decimal digits in the parsed
+      coefficient. Leading zeros are not counted, but trailing zeros are. Defaults
+      to `#{@default_max_digits}`. Pass `:infinity` to disable.
     * `:max_exponent` - maximum absolute value of the parsed decimal exponent,
       after fractional digits are accounted for. Defaults to
       `#{@default_max_exponent}`. Pass `:infinity` to disable.
@@ -2658,21 +2658,17 @@ defmodule Decimal do
       total_size == 0 ->
         :error
 
-      exceeds_limit?(total_size, limits.max_digits) ->
-        :error
-
       true ->
         {exp, rest} = parse_exp(after_float)
         exp_chars = if exp == [], do: ~c"0", else: exp
         float_size = total_size - int_size
 
-        case bounded_exponent(exp_chars, float_size, limits.max_exponent) do
-          {:ok, exp_int} ->
-            coef = digits_acc_to_integer(coef_rev, total_size)
-            {%Decimal{coef: coef, exp: exp_int}, rest}
-
-          :error ->
-            :error
+        with {:ok, exp_int} <- bounded_exponent(exp_chars, float_size, limits.max_exponent),
+             coef = digits_acc_to_integer(coef_rev, total_size),
+             false <- exceeds_limit?(decimal_digit_count(coef), limits.max_digits) do
+          {%Decimal{coef: coef, exp: exp_int}, rest}
+        else
+          _ -> :error
         end
     end
   end
