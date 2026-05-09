@@ -123,6 +123,15 @@ defmodule DecimalTest do
     end)
   end
 
+  @tag timeout: @bounded_smoke_timeout
+  test "parse/2 rejects very long digit runs without materializing them" do
+    input = String.duplicate("9", 1_000_000)
+
+    assert_runs_quickly("parse/2 bounded digit rejection", fn ->
+      assert Decimal.parse(input, max_digits: 34) == :error
+    end)
+  end
+
   test "parse/2 with very long digit strings under explicit limits" do
     digits = String.duplicate("9", 50_000)
     coef = :erlang.binary_to_integer(digits)
