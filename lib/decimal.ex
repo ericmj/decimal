@@ -2799,8 +2799,6 @@ defmodule Decimal do
 
   defp fix_float_exp([], result), do: :lists.reverse(result)
 
-  defp check_dbl_min_max(%Decimal{coef: :inf} = infinity), do: infinity
-
   defp check_dbl_min_max(%Decimal{sign: 1} = num) do
     cond do
       Decimal.gt?(num, dbl_max(1)) ->
