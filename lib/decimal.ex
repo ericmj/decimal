@@ -2456,7 +2456,15 @@ defmodule Decimal do
 
     signals = if any_nonzero?(remain, sticky?), do: [:inexact, :rounded], else: [:rounded]
 
-    exp = exp + (num_digits - precision)
+    # A rounding carry can lengthen the coefficient past `precision` (e.g.
+    # [?9] -> [?1, ?0] at precision 1). Drop the trailing zero the carry
+    # introduced and raise the exponent so the result keeps exactly
+    # `precision` significant digits, matching the General Decimal Arithmetic
+    # spec's round operation and Python's decimal.
+    {signif, carry} =
+      if length(signif) > precision, do: {:lists.droplast(signif), 1}, else: {signif, 0}
+
+    exp = exp + (num_digits - precision) + carry
     coef = digits_to_integer(signif)
     dec = %Decimal{sign: sign, coef: coef, exp: exp}
     {dec, signals}

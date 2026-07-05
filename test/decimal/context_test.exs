@@ -50,13 +50,15 @@ defmodule Decimal.ContextTest do
 
   test "with_context/2: half even" do
     Context.with(%Context{precision: 2, rounding: :half_even}, fn ->
-      assert Decimal.add(~d"0", ~d"9.99") == d(1, 100, -1)
+      # 9.99 rounds up to 10 at precision 2; the carry re-rounds to two
+      # significant digits (d(1, 10, 0)), not the three-digit d(1, 100, -1).
+      assert Decimal.add(~d"0", ~d"9.99") == d(1, 10, 0)
       assert Decimal.add(~d"0", ~d"1.0") == d(1, 10, -1)
       assert Decimal.add(~d"0", ~d"123") == d(1, 12, 1)
       assert Decimal.add(~d"0", ~d"6.66") == d(1, 67, -1)
-      assert Decimal.add(~d"0", ~d"9.99") == d(1, 100, -1)
+      assert Decimal.add(~d"0", ~d"9.99") == d(1, 10, 0)
       assert Decimal.add(~d"0", ~d"-6.66") == d(-1, 67, -1)
-      assert Decimal.add(~d"0", ~d"-9.99") == d(-1, 100, -1)
+      assert Decimal.add(~d"0", ~d"-9.99") == d(-1, 10, 0)
     end)
 
     Context.with(%Context{precision: 3, rounding: :half_even}, fn ->
@@ -92,6 +94,27 @@ defmodule Decimal.ContextTest do
       assert Decimal.mult(~d"9.00", ~d"1") == d(1, 9, 0)
       # a nonzero discarded digit still rounds up
       assert Decimal.add(~d"0", ~d"3.1") == d(1, 4, 0)
+    end)
+  end
+
+  test "with_context/2: rounding carry keeps exactly precision digits" do
+    # When rounding overflows an all-nines coefficient (9.99 -> 10.0 at
+    # precision 2, 9.5 -> 10 at precision 1), the result must be re-rounded
+    # to `precision` significant digits rather than keeping the extra digit.
+    # Applies to every context operation. Expected values match the General
+    # Decimal Arithmetic spec and Python's decimal.
+    Context.with(%Context{precision: 1, rounding: :half_even}, fn ->
+      assert Decimal.div(~d"95", ~d"10") == d(1, 1, 1)
+    end)
+
+    Context.with(%Context{precision: 2, rounding: :half_even}, fn ->
+      assert Decimal.add(~d"0", ~d"9.99") == d(1, 10, 0)
+      assert Decimal.mult(~d"3.33", ~d"3") == d(1, 10, 0)
+      assert Decimal.sub(~d"10", ~d"0.001") == d(1, 10, 0)
+    end)
+
+    Context.with(%Context{precision: 3, rounding: :ceiling}, fn ->
+      assert Decimal.div(~d"9995", ~d"1000") == d(1, 100, -1)
     end)
   end
 
@@ -137,14 +160,17 @@ defmodule Decimal.ContextTest do
     num = d(1, 1, 100_000)
     one = d(1, 1, 0)
 
+    # Modes that round up carry 9.99e99999 to 1.00e100000; the carry
+    # re-rounds to three significant digits, d(1, 100, 99_998), rather than
+    # the four-digit d(1, 1000, 99_997). :down and :floor truncate (no carry).
     for {rounding, result} <- [
           down: d(1, 999, 99_997),
-          half_up: d(1, 1000, 99_997),
-          half_even: d(1, 1000, 99_997),
-          half_down: d(1, 1000, 99_997),
-          up: d(1, 1000, 99_997),
+          half_up: d(1, 100, 99_998),
+          half_even: d(1, 100, 99_998),
+          half_down: d(1, 100, 99_998),
+          up: d(1, 100, 99_998),
           floor: d(1, 999, 99_997),
-          ceiling: d(1, 1000, 99_997)
+          ceiling: d(1, 100, 99_998)
         ] do
       Context.with(
         %Context{precision: 3, rounding: rounding, emax: :infinity, emin: :infinity},
@@ -170,7 +196,9 @@ defmodule Decimal.ContextTest do
 
     Context.with(%Context{precision: 3, emax: :infinity, emin: :infinity}, fn ->
       assert_runs_quickly("sub/2 large exponent gap", fn ->
-        assert Decimal.sub(num, one) == %Decimal{sign: 1, coef: 1000, exp: @bounded_smoke_exp - 3}
+        # default :half_up carries 9.99e(N-1) to 1.00eN; the carry re-rounds
+        # to three significant digits (coef 100, exp N-2).
+        assert Decimal.sub(num, one) == %Decimal{sign: 1, coef: 100, exp: @bounded_smoke_exp - 2}
       end)
     end)
   end
