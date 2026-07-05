@@ -193,7 +193,14 @@ defmodule Decimal.ContextTest do
       coef = :erlang.binary_to_integer("1" <> String.duplicate("0", 106))
       Decimal.div(Decimal.new(1, coef, 0), ~d"17")
 
-      assert [:rounded] = Context.get().flags
+      # 10^106 / 17 is non-terminating, so rounding it to 111 digits produces
+      # an inexact result: both :rounded and :inexact must be signalled (per
+      # the General Decimal Arithmetic spec; Python's decimal agrees). This
+      # previously asserted only [:rounded] because :inexact was erroneously
+      # suppressed whenever the division remainder was a power of ten.
+      flags = Context.get().flags
+      assert :rounded in flags
+      assert :inexact in flags
     end)
 
     Context.with(%Context{precision: 2}, fn ->
