@@ -82,6 +82,17 @@ defmodule Decimal.ContextTest do
       assert Decimal.add(~d"0", ~d"-102") == d(-1, 11, 1)
       assert Decimal.add(~d"0", ~d"1.1") == d(1, 11, -1)
     end)
+
+    # :up rounds away from zero only when a discarded digit is nonzero. An
+    # exact value whose dropped digits are all zero must be left unchanged
+    # (matches the General Decimal Arithmetic spec and Python's decimal).
+    Context.with(%Context{precision: 1, rounding: :up}, fn ->
+      assert Decimal.add(~d"0", ~d"9.0") == d(1, 9, 0)
+      assert Decimal.add(~d"0", ~d"-9.0") == d(-1, 9, 0)
+      assert Decimal.mult(~d"9.00", ~d"1") == d(1, 9, 0)
+      # a nonzero discarded digit still rounds up
+      assert Decimal.add(~d"0", ~d"3.1") == d(1, 4, 0)
+    end)
   end
 
   test "with_context/2: large exponent gap addition" do
