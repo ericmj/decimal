@@ -195,9 +195,7 @@ defmodule Decimal.ContextTest do
 
       # 10^106 / 17 is non-terminating, so rounding it to 111 digits produces
       # an inexact result: both :rounded and :inexact must be signalled (per
-      # the General Decimal Arithmetic spec; Python's decimal agrees). This
-      # previously asserted only [:rounded] because :inexact was erroneously
-      # suppressed whenever the division remainder was a power of ten.
+      # the General Decimal Arithmetic spec; Python's decimal agrees).
       flags = Context.get().flags
       assert :rounded in flags
       assert :inexact in flags
