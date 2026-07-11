@@ -2465,8 +2465,7 @@ defmodule Decimal do
 
   # Round-up is away from zero, but per the General Decimal Arithmetic spec
   # an all-zero discarded part leaves the value unchanged (an exact value is
-  # never rounded up). Check the discarded digits like :ceiling/:floor do,
-  # rather than incrementing unconditionally.
+  # never rounded up). Check the discarded digits like :ceiling/:floor do.
   defp increment?(:up, _, _, remain, sticky?), do: any_nonzero?(remain, sticky?)
 
   defp increment?(:ceiling, sign, _, remain, sticky?),
