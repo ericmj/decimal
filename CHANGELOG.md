@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## Unreleased
+
+### Bug fixes
+
+* Fix `Decimal.div/2` rounding the wrong way on inexact results. The long
+  division discarded its remainder instead of carrying it into rounding as
+  a sticky bit, so a guard digit of 5 with a nonzero tail was treated as an
+  exact tie (`:half_even`/`:half_down`) and a guard digit of 0 with a
+  nonzero tail was treated as zero (`:ceiling`/`:floor`/`:up`). Roughly 5%
+  of random divisions at the default precision were affected, including
+  `:ceiling`/`:floor` returning a result on the wrong side of the true
+  value. The same remainder is now also reflected in the `:inexact` flag,
+  which was previously suppressed when the remainder was a power of ten.
+
 ## v3.1.1 (2026-05-27)
 
 ### Bug fixes

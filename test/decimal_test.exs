@@ -517,6 +517,35 @@ defmodule DecimalTest do
     end
   end
 
+  test "div/2 carries the remainder as a sticky bit when rounding" do
+    # The digit past the kept digits being 5 with a nonzero tail is not an
+    # exact tie and must round up; a guard digit of 0 with a nonzero tail is
+    # still nonzero for the directional modes. Expected values verified
+    # against the exact integer quotient and Python's decimal.
+
+    Context.with(%Context{precision: 28, rounding: :half_even}, fn ->
+      # 4.7460 / -5522 -> …1405287…: guard digit 5, nonzero tail -> rounds up
+      assert Decimal.div(~d"4.7460", ~d"-5522") ==
+               d(-1, 8_594_712_060_847_519_014_849_692_141, -31)
+    end)
+
+    # genuine ties still round to even
+    Context.with(%Context{precision: 1, rounding: :half_even}, fn ->
+      assert Decimal.div(~d"5", ~d"2") == d(1, 2, 0)
+      assert Decimal.div(~d"7", ~d"2") == d(1, 4, 0)
+    end)
+
+    # :ceiling / :floor must honor the remainder (their defining guarantee):
+    # 1.0000001 / 1 at precision 5 has a zero guard digit but a nonzero tail
+    Context.with(%Context{precision: 5, rounding: :ceiling}, fn ->
+      assert Decimal.div(~d"1.0000001", ~d"1") == d(1, 10_001, -4)
+    end)
+
+    Context.with(%Context{precision: 5, rounding: :floor}, fn ->
+      assert Decimal.div(~d"-1.0000001", ~d"1") == d(-1, 10_001, -4)
+    end)
+  end
+
   test "div_int/2" do
     assert Decimal.div_int(~d"1", ~d"0.3") == d(1, 3, 0)
     assert Decimal.div_int(~d"2", ~d"3") == d(1, 0, 0)

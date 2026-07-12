@@ -800,9 +800,15 @@ defmodule Decimal do
     else
       prec10 = pow10(Context.get().precision)
       {coef1, coef2, adjust} = div_adjust(coef1, coef2, 0)
-      {coef, adjust, _rem, signals} = div_calc(coef1, coef2, 0, adjust, prec10)
+      {coef, adjust, rem, signals} = div_calc(coef1, coef2, 0, adjust, prec10)
 
-      context(%Decimal{sign: sign, coef: coef, exp: exp1 - exp2 - adjust}, signals)
+      # `rem` is the leftover of the long division below the digits we kept.
+      # It must be carried into rounding as the sticky bit: a nonzero `rem`
+      # means the true quotient lies strictly beyond the last computed digit,
+      # so a guard digit of 5 is not an exact tie (`:half_even`/`:half_down`)
+      # and a guard digit of 0 is still nonzero for `:ceiling`/`:floor`/`:up`.
+      # Without it, ~5% of inexact divisions round the wrong way.
+      context(%Decimal{sign: sign, coef: coef, exp: exp1 - exp2 - adjust}, signals, rem != 0)
     end
   end
 
