@@ -14,6 +14,15 @@
   value. The same remainder is now also reflected in the `:inexact` flag,
   which was previously suppressed when the remainder was a power of ten.
 
+* Re-round the coefficient when a rounding carry lengthens it past the
+  context precision. Rounding an all-nines coefficient up (e.g. `9.99` to
+  precision 2, or `Decimal.div(95, 10)` at precision 1) produced a
+  coefficient with one digit more than `precision` (`d(1, 100, -1)`,
+  `d(1, 10, 0)`) instead of re-rounding to exactly `precision` significant
+  digits (`d(1, 10, 0)`, `d(1, 1, 1)`). This affects every context
+  operation (`add`, `sub`, `mult`, `div`) and now matches the General
+  Decimal Arithmetic spec and Python's decimal.
+
 ## v3.1.1 (2026-05-27)
 
 ### Bug fixes
