@@ -229,6 +229,70 @@ defmodule Decimal.PropertyTest do
     end
   end
 
+  describe "integer division" do
+    property "div_int/2 and rem/2 agree with Kernel.div/2 and Kernel.rem/2" do
+      check all(
+              x <- StreamData.integer(-1_000_000_000_000_000..1_000_000_000_000_000),
+              y <- StreamData.integer(-1_000_000..1_000_000),
+              y != 0,
+              max_runs: 100
+            ) do
+        assert x |> Decimal.div_int(y) |> Decimal.to_integer() == Kernel.div(x, y)
+        assert x |> Decimal.rem(y) |> Decimal.to_integer() == Kernel.rem(x, y)
+      end
+    end
+
+    property "div_rem/2 reconstructs the dividend" do
+      # domains sized so quotient * divisor stays within context precision,
+      # keeping the reconstruction exact
+      gen = [coef_max: 99_999_999, exp_min: -4, exp_max: 4]
+
+      check all(
+              a <- decimal(gen),
+              b <- non_zero_decimal(gen),
+              max_runs: 100
+            ) do
+        {q, r} = Decimal.div_rem(a, b)
+        assert Decimal.compare(Decimal.add(Decimal.mult(q, b), r), a) == :eq
+      end
+    end
+  end
+
+  describe "round/3" do
+    property "floor and ceiling bracket the value and every other mode" do
+      check all(
+              a <- decimal(),
+              places <- StreamData.integer(0..10),
+              max_runs: 100
+            ) do
+        floor = Decimal.round(a, places, :floor)
+        ceiling = Decimal.round(a, places, :ceiling)
+
+        assert Decimal.compare(floor, a) in [:lt, :eq]
+        assert Decimal.compare(a, ceiling) in [:lt, :eq]
+
+        for mode <- [:down, :up, :half_up, :half_down, :half_even] do
+          rounded = Decimal.round(a, places, mode)
+          assert Decimal.compare(floor, rounded) in [:lt, :eq]
+          assert Decimal.compare(rounded, ceiling) in [:lt, :eq]
+        end
+      end
+    end
+  end
+
+  describe "sqrt/1" do
+    property "sqrt of an exact square recovers the root" do
+      # 16-digit roots square to at most 32 digits, so the square is exact
+      # within the default precision and sqrt takes its exact path
+      check all(
+              a <- positive_decimal(coef_max: 9_999_999_999_999_999, exp_min: -20, exp_max: 20),
+              max_runs: 100
+            ) do
+        assert Decimal.compare(Decimal.sqrt(Decimal.mult(a, a)), a) == :eq
+      end
+    end
+  end
+
   defp to_dec(float) when is_float(float), do: Decimal.from_float(float)
   defp to_dec(other), do: Decimal.new(other)
 

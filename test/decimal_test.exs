@@ -326,7 +326,7 @@ defmodule DecimalTest do
     assert Decimal.add(d(1, :inf, 2), d(1, :inf, 5)) == d(1, :inf, 5)
 
     Context.with(%Context{precision: 5, rounding: :floor}, fn ->
-      Decimal.add(~d"2", ~d"-2") == d(-1, 0, 0)
+      assert Decimal.add(~d"2", ~d"-2") == d(-1, 0, 0)
     end)
 
     assert Decimal.add(~d"inf", ~d"5") == d(1, :inf, 0)
@@ -352,7 +352,7 @@ defmodule DecimalTest do
     assert Decimal.add(~d"5", ~d"nan") == d(1, :NaN, 0)
 
     Context.with(%Context{precision: 5, rounding: :floor}, fn ->
-      Decimal.sub(~d"2", ~d"2") == d(-1, 0, 0)
+      assert Decimal.sub(~d"2", ~d"2") == d(-1, 0, 0)
     end)
 
     assert Decimal.sub(~d"inf", ~d"5") == d(1, :inf, 0)
@@ -1403,6 +1403,153 @@ defmodule DecimalTest do
 
       assert JSON.encode!(%{x: Decimal.new("1.0")}, encoder) == "{\"x\":1.0}"
     end
+  end
+
+  test "div/2 exact quotients keep the preferred exponent" do
+    assert Decimal.div(~d"100", ~d"1") == d(1, 100, 0)
+    assert Decimal.div(~d"20", ~d"1") == d(1, 20, 0)
+    assert Decimal.div(~d"1e2", ~d"1") == d(1, 1, 2)
+    assert Decimal.div(~d"2.50", ~d"2") == d(1, 125, -2)
+    assert Decimal.div(~d"1", ~d"2") == d(1, 5, -1)
+    assert Decimal.div(~d"1", ~d"8") == d(1, 125, -3)
+    assert Decimal.div(~d"100", ~d"4") == d(1, 25, 0)
+    assert Decimal.div(~d"1000", ~d"8") == d(1, 125, 0)
+  end
+
+  test "div/2 exact quotient wider than precision keeps precision digits and signals" do
+    pow10 = fn n -> String.to_integer("1" <> String.duplicate("0", n)) end
+
+    # 10^40 / 1 is exact, but the quotient cannot be represented with a
+    # non-negative adjust at precision 34; the result is clamped to 34
+    # significant digits with a raised exponent, and :inexact/:rounded are
+    # signalled (longstanding behavior of the digit-at-a-time division loop).
+    assert Decimal.div(Decimal.new(1, pow10.(40), 0), ~d"1") == d(1, pow10.(33), 7)
+
+    flags = Context.get().flags
+    assert :inexact in flags
+    assert :rounded in flags
+  end
+
+  test "div_int/2 and rem/2 quotient size limit" do
+    pow10 = fn n -> String.to_integer("1" <> String.duplicate("0", n)) end
+
+    # a quotient of exactly 10^precision digits-wise is still allowed
+    # (the "too large" check is strictly greater than 10^precision)
+    assert Decimal.div_int(Decimal.new(1, pow10.(34), 0), ~d"1") == d(1, pow10.(34), 0)
+
+    assert_raise Error, ~r/quotient too large/, fn ->
+      Decimal.div_int(Decimal.new(1, 2 * pow10.(34), 0), ~d"1")
+    end
+
+    # large exponent gaps are rejected from digit counts alone
+    assert_raise Error, ~r/quotient too large/, fn ->
+      Decimal.div_int(~d"1e50", ~d"1")
+    end
+
+    assert_raise Error, ~r/quotient too large/, fn ->
+      Decimal.rem(~d"1e50", ~d"1")
+    end
+  end
+
+  test "round/3 rounding mode table" do
+    values = ~w(5.5 2.5 1.6 1.1 1.0 -1.0 -1.1 -1.6 -2.5 -5.5)
+
+    expected = %{
+      up: ~w(6 3 2 2 1 -1 -2 -2 -3 -6),
+      down: ~w(5 2 1 1 1 -1 -1 -1 -2 -5),
+      ceiling: ~w(6 3 2 2 1 -1 -1 -1 -2 -5),
+      floor: ~w(5 2 1 1 1 -1 -2 -2 -3 -6),
+      half_up: ~w(6 3 2 1 1 -1 -1 -2 -3 -6),
+      half_down: ~w(5 2 2 1 1 -1 -1 -2 -2 -5),
+      half_even: ~w(6 2 2 1 1 -1 -1 -2 -2 -6)
+    }
+
+    for {mode, results} <- expected, {value, result} <- Enum.zip(values, results) do
+      assert Decimal.round(Decimal.new(value), 0, mode) == Decimal.new(result),
+             "round(#{value}, 0, #{mode}) expected #{result}"
+    end
+  end
+
+  test "round/3 when every digit is dropped" do
+    assert Decimal.round(~d"0.5", 0, :half_up) == d(1, 1, 0)
+    assert Decimal.round(~d"0.5", 0, :half_down) == d(1, 0, 0)
+    assert Decimal.round(~d"0.5", 0, :ceiling) == d(1, 1, 0)
+    assert Decimal.round(~d"0.5", 0, :floor) == d(1, 0, 0)
+    assert Decimal.round(~d"-0.5", 0, :half_up) == d(-1, 1, 0)
+    assert Decimal.round(~d"-0.5", 0, :floor) == d(-1, 1, 0)
+    assert Decimal.round(~d"-0.5", 0, :ceiling) == d(-1, 0, 0)
+    assert Decimal.round(~d"0.49", 0, :half_up) == d(1, 0, 0)
+    assert Decimal.round(~d"0.51", 0, :half_down) == d(1, 1, 0)
+  end
+
+  test "context rounding carry keeps exactly precision digits" do
+    Context.with(%Context{precision: 5, rounding: :half_up}, fn ->
+      assert Decimal.add(~d"99999", ~d"0.5") == d(1, 10_000, 1)
+    end)
+
+    Context.with(%Context{precision: 1, rounding: :half_up}, fn ->
+      assert Decimal.add(~d"9", ~d"0.5") == d(1, 1, 1)
+    end)
+  end
+
+  test "context :up rounding does not round exact values up" do
+    Context.with(%Context{precision: 2, rounding: :up}, fn ->
+      # discarded digits all zero: value is exact, no increment
+      assert Decimal.mult(~d"20", ~d"5") == d(1, 10, 1)
+      # nonzero discarded digits round away from zero
+      assert Decimal.mult(~d"3", ~d"34") == d(1, 11, 1)
+      # sticky remainder from division also rounds away from zero
+      assert Decimal.div(~d"1", ~d"3") == d(1, 34, -2)
+    end)
+  end
+
+  test "mult/2 rounds to context precision and signals" do
+    Context.with(%Context{precision: 5, rounding: :half_up}, fn ->
+      assert Decimal.mult(~d"12345", ~d"10001") == d(1, 12346, 4)
+
+      flags = Context.get().flags
+      assert :rounded in flags
+      assert :inexact in flags
+    end)
+  end
+
+  test "digit counting at the coef_length fallback boundary" do
+    c18 = 999_999_999_999_999_999
+    c19 = 9_999_999_999_999_999_999
+    pow10 = fn n -> String.to_integer("1" <> String.duplicate("0", n)) end
+
+    # 18 -> 19 digits crosses from the guard-chain clauses into the
+    # bit-length estimate; neither should be touched at default precision
+    assert Decimal.apply_context(Decimal.new(1, c18, 0)) == d(1, c18, 0)
+    assert Decimal.apply_context(Decimal.new(1, c19, 0)) == d(1, c19, 0)
+
+    # 34 digits fits the default precision exactly; 35 digits rounds
+    assert Decimal.apply_context(Decimal.new(1, pow10.(33), 0)) == d(1, pow10.(33), 0)
+    assert Decimal.apply_context(Decimal.new(1, pow10.(34), 0)) == d(1, pow10.(33), 1)
+
+    # rounding a 19-digit coefficient to 18 digits carries across the boundary
+    Context.with(%Context{precision: 18, rounding: :half_up}, fn ->
+      assert Decimal.apply_context(Decimal.new(1, c19, 0)) == d(1, pow10.(17), 2)
+    end)
+
+    # equal adjusted exponents at 19 digits reach the coefficient comparison
+    assert Decimal.compare(Decimal.new(1, c19, 0), Decimal.new(1, c19 - 1, 0)) == :gt
+    assert Decimal.compare(Decimal.new(1, c19 - 1, 0), Decimal.new(1, c19, 0)) == :lt
+  end
+
+  test "sqrt/1 across magnitudes" do
+    Context.with(%Context{precision: 9, rounding: :half_even}, fn ->
+      assert Decimal.sqrt(~d"1e100") == d(1, 1, 50)
+      assert Decimal.sqrt(~d"4e100") == d(1, 2, 50)
+      assert Decimal.sqrt(~d"1e-100") == d(1, 1, -50)
+      assert Decimal.sqrt(~d"2") == d(1, 141_421_356, -8)
+      assert Decimal.sqrt(~d"1e101") == d(1, 316_227_766, 42)
+    end)
+  end
+
+  test "to_string/2 :xsd expands large positive exponents" do
+    assert Decimal.to_string(~d"1e120", :xsd) ==
+             "1" <> String.duplicate("0", 120) <> ".0"
   end
 
   defp assert_runs_quickly(name, fun) do
