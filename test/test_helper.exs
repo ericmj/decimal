@@ -38,11 +38,14 @@ defmodule DecimalGenerators do
 
   Defaults stay well inside the decimal128 context bounds so arithmetic
   operations don't trigger overflow/underflow signals during property runs.
+  Coefficients span the full 34-digit decimal128 precision so runs cross
+  the `coef_length/1` guard-chain/estimate boundary at 19 digits and
+  exercise context rounding of oversized intermediate results.
   Tune `coef_max` / `exp_min` / `exp_max` per property when a wider or
   narrower domain is needed.
   """
 
-  @default_coef_max 10_000_000_000_000_000
+  @default_coef_max 9_999_999_999_999_999_999_999_999_999_999_999
   @default_exp_min -100
   @default_exp_max 100
 
