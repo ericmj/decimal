@@ -1310,9 +1310,14 @@ defmodule Decimal do
   def round(%Decimal{coef: :inf} = num, _, _), do: num
 
   def round(%Decimal{} = num, n, mode) do
-    %Decimal{sign: sign, coef: coef, exp: exp} = normalize(num)
-    value = do_round(sign, coef, exp, -n, mode)
-    context(value, [])
+    case normalize(num) do
+      %Decimal{coef: :inf} = num ->
+        num
+
+      %Decimal{sign: sign, coef: coef, exp: exp} ->
+        value = do_round(sign, coef, exp, -n, mode)
+        context(value, [])
+    end
   end
 
   def round(num, n, mode) do

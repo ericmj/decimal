@@ -1002,6 +1002,14 @@ defmodule DecimalTest do
     assert Decimal.round(~d"nan", 2, :down) == d(1, :NaN, 0)
   end
 
+  test "round/3: normalization overflow" do
+    Context.with(%Context{emax: 2, traps: []}, fn ->
+      for places <- [-1, 0, 1] do
+        assert Decimal.round(Decimal.new(1, 1, 3), places) == d(1, :inf, 0)
+      end
+    end)
+  end
+
   test "round/3: down" do
     round = &Decimal.round(&1, 2, :down)
     roundneg = &Decimal.round(&1, -2, :down)
