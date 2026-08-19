@@ -4,6 +4,15 @@ Mix.install([
   {:benchee_html, "~> 1.0"}
 ])
 
+# Measure production-compiled code:
+#
+#     MIX_ENV=prod elixir bench.exs
+#
+if Mix.env() != :prod do
+  IO.puts(:stderr, "refusing to benchmark a #{Mix.env()} build; rerun with MIX_ENV=prod")
+  System.halt(1)
+end
+
 {head, 0} = System.cmd("git", ["symbolic-ref", "--short", "HEAD"])
 {hash, 0} = System.cmd("git", ["rev-parse", "--short", "HEAD"])
 
@@ -73,6 +82,22 @@ each = fn decimals, fun ->
   fn -> Enum.each(decimals, fun) end
 end
 
+# Values at a fixed scale with small coefficients: the shape of monetary
+# amounts, where the same-exponent paths of `add/2` and `compare/2` and the
+# short-coefficient path of the parser are what run.
+money_strings = for i <- 1..200, do: "#{i * 37}.#{Integer.mod(i * 13, 100)}"
+money = Enum.map(money_strings, &Decimal.new/1)
+money_pairs = Enum.zip(money, Enum.reverse(money))
+
+floats = for i <- 1..200, do: i * 1.37
+
+# Conversions to float scale the operand into the significand of a double, so
+# operands near the ends of the exponent range do the most work.
+float_range_decimals =
+  for coef <- [1, 15, 1_234_567_890_123_456], exp <- [-300, -30, -1, 0, 1, 30, 300] do
+    struct(Decimal, %{sign: 1, coef: coef, exp: exp})
+  end
+
 jobs = %{
   "compare" => each_pair.(decimal_pairs, &Decimal.compare/2),
   "compare same scale" => each_pair.(same_scale_pairs, &Decimal.compare/2),
@@ -87,7 +112,16 @@ jobs = %{
   "normalize" => each.(decimals, &Decimal.normalize/1),
   "sqrt" => each.(positive_decimals, &Decimal.sqrt/1),
   "to_string scientific" => each.(decimals, &Decimal.to_string(&1, :scientific)),
-  "to_string normal" => each.(decimals, &Decimal.to_string(&1, :normal))
+  "to_string normal" => each.(decimals, &Decimal.to_string(&1, :normal)),
+  "new from string" => each.(money_strings, &Decimal.new/1),
+  "from_float" => each.(floats, &Decimal.from_float/1),
+  "to_float" => each.(float_range_decimals, &Decimal.to_float/1),
+  "inspect" => each.(money, &inspect/1),
+  "money add" => each_pair.(money_pairs, &Decimal.add/2),
+  "money mult" => each_pair.(money_pairs, &Decimal.mult/2),
+  "money div" => each_pair.(money_pairs, &Decimal.div/2),
+  "money compare" => each_pair.(money_pairs, &Decimal.compare/2),
+  "money round" => each.(money, &Decimal.round(&1, 2))
 }
 
 Benchee.run(jobs,

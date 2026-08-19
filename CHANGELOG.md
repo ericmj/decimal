@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Enhancements
+
+* Reduce the cost of every operation that goes through the context: results
+  that signal nothing no longer copy the context or write it back to the
+  process dictionary, the coefficient's digit count is computed once per
+  operation instead of up to four times, and digit counting no longer walks a
+  ladder of bignum comparisons before falling back to its estimate. Division
+  is ~1.9x faster, `add`/`sub`/`mult`/`round`/`normalize` ~1.3x, comparison of
+  same-scale values ~1.4x, parsing ~1.2x, all with 20-30% less allocation.
+
+* Make `Decimal.to_float/1` scale the operand with a computed shift instead of
+  one bit at a time: ~1.6x faster for typical values and ~11x for exponents
+  near the ends of the double range, with 96% fewer collections.
+
 ### Bug fixes
 
 * Fix `Decimal.div/2` rounding the wrong way on inexact results. The long

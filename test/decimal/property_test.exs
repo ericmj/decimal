@@ -293,6 +293,81 @@ defmodule Decimal.PropertyTest do
     end
   end
 
+  describe "against independent oracles" do
+    property "compare/2 agrees with comparing the operands as scaled integers" do
+      check all(a <- decimal(), b <- decimal(), max_runs: 200) do
+        assert Decimal.compare(a, b) == scaled_integer_compare(a, b)
+      end
+    end
+
+    property "compare/2 agrees with scaled integers at equal exponents" do
+      # Equal exponents skip the adjusted-exponent comparison entirely, so
+      # pin that path against the oracle as well.
+      check all(a <- decimal(), b <- decimal(), max_runs: 200) do
+        b = %{b | exp: a.exp}
+        assert Decimal.compare(a, b) == scaled_integer_compare(a, b)
+      end
+    end
+
+    property "add/2 agrees with exact integer addition when the sum fits the precision" do
+      # Coefficients up to 16 digits at equal exponents sum without rounding,
+      # so the result must be the exact integer sum.
+      check all(
+              a <- decimal(coef_max: 9_999_999_999_999_999, exp_min: -20, exp_max: 20),
+              b <- decimal(coef_max: 9_999_999_999_999_999, exp_min: -20, exp_max: 20),
+              max_runs: 200
+            ) do
+        b = %{b | exp: a.exp}
+        sum = a.sign * a.coef + b.sign * b.coef
+        result = Decimal.add(a, b)
+
+        assert result.sign * result.coef == sum
+        assert result.exp == a.exp
+      end
+    end
+
+    property "to_float/1 agrees with the runtime's own decimal to float conversion" do
+      # `String.to_float/1` is correctly rounded, and the exponent range here
+      # stays inside the double range that `to_float/1` accepts.
+      check all(
+              a <-
+                positive_decimal(
+                  coef_max: 9_999_999_999_999_999_999_999_999_999_999_999,
+                  exp_min: -60,
+                  exp_max: 60
+                ),
+              max_runs: 200
+            ) do
+        expected = String.to_float("#{a.coef}.0e#{a.exp}")
+
+        assert Decimal.to_float(a) == expected
+        assert Decimal.to_float(%{a | sign: -1}) == -expected
+      end
+    end
+
+    property "parse/1 agrees with building the coefficient from the digits" do
+      check all(
+              int_digits <- StreamData.string(?0..?9, min_length: 1, max_length: 17),
+              frac_digits <- StreamData.string(?0..?9, max_length: 17),
+              exponent <- StreamData.integer(-40..40),
+              max_runs: 200
+            ) do
+        string = "#{int_digits}.#{frac_digits}e#{exponent}"
+        {parsed, ""} = Decimal.parse(string, max_digits: :infinity)
+
+        assert parsed.coef == String.to_integer(int_digits <> frac_digits)
+        assert parsed.exp == exponent - String.length(frac_digits)
+      end
+    end
+  end
+
+  defp scaled_integer_compare(a, b) do
+    scale = min(a.exp, b.exp)
+    left = a.sign * a.coef * Integer.pow(10, a.exp - scale)
+    right = b.sign * b.coef * Integer.pow(10, b.exp - scale)
+    term_compare(left, right)
+  end
+
   defp to_dec(float) when is_float(float), do: Decimal.from_float(float)
   defp to_dec(other), do: Decimal.new(other)
 
