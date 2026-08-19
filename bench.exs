@@ -92,9 +92,10 @@ money_pairs = Enum.zip(money, Enum.reverse(money))
 floats = for i <- 1..200, do: i * 1.37
 
 # Conversions to float scale the operand into the significand of a double, so
-# operands near the ends of the exponent range do the most work.
+# operands near the ends of the exponent range do the most work. Exponents stay
+# inside the double range, which `to_float/1` requires.
 float_range_decimals =
-  for coef <- [1, 15, 1_234_567_890_123_456], exp <- [-300, -30, -1, 0, 1, 30, 300] do
+  for coef <- [1, 15, 1_234_567_890_123_456], exp <- [-290, -30, -1, 0, 1, 30, 290] do
     struct(Decimal, %{sign: 1, coef: coef, exp: exp})
   end
 
