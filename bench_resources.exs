@@ -5,7 +5,17 @@ Mix.install([
 ])
 
 # Benchmarks must measure production-compiled code:
-#   MIX_ENV=prod elixir bench_resources.exs
+#
+#     MIX_ENV=prod elixir bench_resources.exs
+#
+# To compare two builds, save one run and compare the next against it. The
+# saved file holds the measurements themselves, so nothing has to parse the
+# printed table back:
+#
+#     DECIMAL_PATH=../decimal-main SAVE=/tmp/main.bench MIX_ENV=prod \
+#       elixir bench_resources.exs
+#     COMPARE=/tmp/main.bench MIX_ENV=prod elixir bench_resources.exs
+#
 if Mix.env() != :prod do
   IO.puts(:stderr, "refusing to benchmark a #{Mix.env()} build; rerun with MIX_ENV=prod")
   System.halt(1)
@@ -161,41 +171,98 @@ defmodule Resources do
       Keyword.get(gc, :mbuf_size, 0) + Keyword.get(gc, :stack_size, 0)
   end
 
-  @row "~-18s ~-8s ~9.1f ~9.1f ~10.1f ~10.1f ~10.1f ~8.2f ~8.2f ~9.1f~n"
-  @head "~-18s ~-8s ~9s ~9s ~10s ~10s ~10s ~8s ~8s ~9s~n"
+  # Reported in this order, each as `{label, key, precision}`.
+  @metrics [
+    {"wall/op", :wall_ns, 1},
+    {"cpu/op", :cpu_ns, 1},
+    {"reds/op", :reds, 1},
+    {"alloc/op", :alloc_w, 1},
+    {"copy/op", :copy_w, 1},
+    {"minor/1k", :minor, 2},
+    {"major/1k", :major, 2},
+    {"peak KB", :peak_kb, 1}
+  ]
 
-  def header do
-    IO.write(
-      :io_lib.format(@head, [
-        "operation",
-        "mode",
-        "wall/op",
-        "cpu/op",
-        "reds/op",
-        "alloc/op",
-        "copy/op",
-        "minor/1k",
-        "major/1k",
-        "peak KB"
-      ])
-    )
+  @name_width 18
+  @mode_width 8
+  @value_width 10
+  @delta_width 6
+
+  def header(comparing?) do
+    ["operation", "mode"]
+    |> pad([@name_width, @mode_width])
+    |> then(&[&1 | Enum.map(@metrics, fn {label, _key, _p} -> cell(label, comparing?) end)])
+    |> emit()
   end
 
-  def row(name, mode, m) do
-    IO.write(
-      :io_lib.format(@row, [
-        name,
-        Atom.to_string(mode),
-        m.wall_ns,
-        m.cpu_ns,
-        m.reds,
-        m.alloc_w,
-        m.copy_w,
-        m.minor,
-        m.major,
-        m.peak_kb
-      ])
-    )
+  def row(name, mode, measurement, baseline) do
+    comparing? = baseline != nil
+
+    values =
+      Enum.map(@metrics, fn {_label, key, precision} ->
+        value = format_value(Map.fetch!(measurement, key), precision)
+
+        if comparing? do
+          value <> delta(Map.fetch!(measurement, key), Map.fetch!(baseline, key))
+        else
+          value
+        end
+      end)
+
+    [name, Atom.to_string(mode)]
+    |> pad([@name_width, @mode_width])
+    |> then(&[&1 | values])
+    |> emit()
+  end
+
+  defp emit(parts), do: IO.puts(Enum.join(parts, " "))
+
+  defp pad(strings, widths) do
+    Enum.zip(strings, widths)
+    |> Enum.map_join(" ", fn {string, width} -> String.pad_trailing(string, width) end)
+  end
+
+  defp cell(label, comparing?) do
+    width = if comparing?, do: @value_width + @delta_width, else: @value_width
+    String.pad_leading(label, width)
+  end
+
+  defp format_value(value, precision) do
+    value
+    |> :erlang.float_to_binary(decimals: precision)
+    |> String.pad_leading(@value_width)
+  end
+
+  # A percentage against a zero baseline is meaningless.
+  defp delta(_value, baseline) when baseline == 0,
+    do: String.pad_leading("-", @delta_width)
+
+  defp delta(value, baseline) do
+    percent = (value - baseline) / baseline * 100
+    sign = if percent < 0, do: "-", else: "+"
+    magnitude = :erlang.float_to_binary(abs(percent), decimals: 0)
+    String.pad_leading("#{sign}#{magnitude}%", @delta_width)
+  end
+
+  # A workload runs `count` operations per repetition, so everything except the
+  # peak footprint - which belongs to the process, not to one operation - is
+  # divided down to a single operation.
+  @per_operation [:wall_ns, :cpu_ns, :reds, :alloc_w, :copy_w, :minor, :major]
+
+  def per_operation(measurement, count) do
+    Enum.reduce(@per_operation, measurement, fn key, acc ->
+      Map.update!(acc, key, &(&1 / count))
+    end)
+  end
+
+  def load(nil), do: %{}
+  def load(path), do: path |> File.read!() |> :erlang.binary_to_term()
+
+  def save(nil, _rows), do: :ok
+
+  def save(path, rows) do
+    File.write!(path, :erlang.term_to_binary(rows))
+    IO.puts("\nsaved #{map_size(rows)} measurements to #{path}")
   end
 end
 
@@ -243,33 +310,36 @@ workloads = [
   {"to_float tiny", over.(tiny, &Decimal.to_float/1), 15, 50}
 ]
 
-IO.puts("Decimal beam: #{:code.which(Decimal)}")
-IO.puts("live set: #{length(live_set)} decimals held across every run\n")
-Resources.header()
-
+baseline = Resources.load(System.get_env("COMPARE"))
+save_to = System.get_env("SAVE")
 rounds = String.to_integer(System.get_env("ROUNDS", "3"))
 
-for {name, fun, reps, per_rep} <- workloads, mode <- [:discard, :retain] do
-  # one untimed pass so the JIT has compiled everything
-  Resources.measure(fun, max(div(reps, 10), 1), mode, live_set)
+IO.puts("Decimal beam: #{:code.which(Decimal)}")
+IO.puts("live set: #{length(live_set)} decimals held across every run")
 
-  # Wall and CPU time are noisy on a shared machine while reductions and
-  # allocation are deterministic, so take the fastest of several runs: the
-  # minimum is the estimate least polluted by unrelated system activity.
-  m =
-    Enum.min_by(
-      Enum.map(1..rounds, fn _ -> Resources.measure(fun, reps, mode, live_set) end),
-      & &1.wall_ns
-    )
-
-  Resources.row(name, mode, %{
-    m
-    | wall_ns: m.wall_ns / per_rep,
-      cpu_ns: m.cpu_ns / per_rep,
-      reds: m.reds / per_rep,
-      alloc_w: m.alloc_w / per_rep,
-      copy_w: m.copy_w / per_rep,
-      minor: m.minor / per_rep,
-      major: m.major / per_rep
-  })
+if baseline != %{} do
+  IO.puts("comparing against #{System.get_env("COMPARE")}")
 end
+
+IO.puts("")
+Resources.header(baseline != %{})
+
+rows =
+  for {name, fun, reps, per_rep} <- workloads, mode <- [:discard, :retain], into: %{} do
+    # one untimed pass so the JIT has compiled everything
+    Resources.measure(fun, max(div(reps, 10), 1), mode, live_set)
+
+    # Wall and CPU time are noisy on a shared machine while reductions and
+    # allocation are deterministic, so take the fastest of several runs: the
+    # minimum is the estimate least polluted by unrelated system activity.
+    measurement =
+      Enum.map(1..rounds, fn _ -> Resources.measure(fun, reps, mode, live_set) end)
+      |> Enum.min_by(& &1.wall_ns)
+      |> Resources.per_operation(per_rep)
+
+    Resources.row(name, mode, measurement, baseline[{name, mode}])
+
+    {{name, mode}, measurement}
+  end
+
+Resources.save(save_to, rows)
