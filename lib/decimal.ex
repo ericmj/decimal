@@ -1321,11 +1321,18 @@ defmodule Decimal do
     %{num | exp: 0}
   end
 
-  def normalize(%Decimal{sign: sign, coef: coef, exp: exp}) do
-    if coef == 0 do
-      %Decimal{sign: sign, coef: 0, exp: 0}
-    else
-      %{do_normalize(coef, exp) | sign: sign} |> context
+  def normalize(%Decimal{sign: sign, coef: coef, exp: exp} = num) do
+    cond do
+      coef == 0 ->
+        %Decimal{sign: sign, coef: 0, exp: 0}
+
+      # A coefficient that does not end in zero is already minimal, so the
+      # input struct is the normalized value - no need to rebuild it.
+      Kernel.rem(coef, 10) != 0 ->
+        context(num)
+
+      true ->
+        %{do_normalize(coef, exp) | sign: sign} |> context
     end
   end
 
