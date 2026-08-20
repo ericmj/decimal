@@ -2379,8 +2379,10 @@ defmodule Decimal do
 
     cond do
       rem != 0 ->
-        signals = if base10?(rem), do: [:rounded], else: [:inexact, :rounded]
-        {coef, adjust + precision, rem, signals, precision + 1}
+        # A nonzero remainder is the sticky bit, and precision/5 signals
+        # :inexact whenever it is set, so the result is always inexact here
+        # regardless of the remainder's shape.
+        {coef, adjust + precision, rem, [:inexact, :rounded], precision + 1}
 
       adjust + precision < 0 ->
         {coef, adjust + precision, 0, [:inexact, :rounded], precision + 1}
@@ -2465,12 +2467,10 @@ defmodule Decimal do
   defp ratio(coef, exp) when exp >= 0, do: {coef * pow10(exp), 1}
   defp ratio(coef, exp) when exp < 0, do: {coef, pow10(-exp)}
 
-  pow10_max =
-    Enum.reduce(0..104, 1, fn int, acc ->
-      defp pow10(unquote(int)), do: unquote(acc)
-      defp base10?(unquote(acc)), do: true
-      acc * 10
-    end)
+  Enum.reduce(0..104, 1, fn int, acc ->
+    defp pow10(unquote(int)), do: unquote(acc)
+    acc * 10
+  end)
 
   # Binary powering (square-and-multiply): O(log n) multiplications instead
   # of a linear chain that repeatedly multiplies an ever-growing bignum.
@@ -2484,21 +2484,6 @@ defmodule Decimal do
       square
     end
   end
-
-  # Anything reaching past the table that does not end in a zero cannot be a
-  # power of ten, which rejects almost every argument with one division. Must
-  # stay below the table: `base10?(1)` is a table hit and ends in a one.
-  defp base10?(num) when Kernel.rem(num, 10) != 0, do: false
-
-  defp base10?(num) when num >= unquote(pow10_max) do
-    if Kernel.rem(num, unquote(pow10_max)) == 0 do
-      base10?(Kernel.div(num, unquote(pow10_max)))
-    else
-      false
-    end
-  end
-
-  defp base10?(_num), do: false
 
   ## ROUNDING ##
 
