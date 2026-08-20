@@ -1,5 +1,7 @@
+decimal_path = System.get_env("DECIMAL_PATH", ".")
+
 Mix.install([
-  {:decimal, path: ".", override: true},
+  {:decimal, path: decimal_path, override: true},
   {:benchee, "~> 1.0"},
   {:benchee_html, "~> 1.0"}
 ])
@@ -8,13 +10,22 @@ Mix.install([
 #
 #     MIX_ENV=prod elixir bench.exs
 #
+# To compare two checkouts, measure one and load its results into the run of
+# the other, which makes Benchee print both per job:
+#
+#     DECIMAL_PATH=../decimal-main MIX_ENV=prod elixir bench.exs
+#     LOAD=benchmarks/HEAD-0c0f72c.benchee MIX_ENV=prod elixir bench.exs
+#
 if Mix.env() != :prod do
   IO.puts(:stderr, "refusing to benchmark a #{Mix.env()} build; rerun with MIX_ENV=prod")
   System.halt(1)
 end
 
-{head, 0} = System.cmd("git", ["symbolic-ref", "--short", "HEAD"])
-{hash, 0} = System.cmd("git", ["rev-parse", "--short", "HEAD"])
+# The tag names the code under test, which is not necessarily this checkout.
+# `--abbrev-ref` reports `HEAD` rather than failing when that checkout has no
+# branch, as a worktree at a bare commit does.
+{head, 0} = System.cmd("git", ["-C", decimal_path, "rev-parse", "--abbrev-ref", "HEAD"])
+{hash, 0} = System.cmd("git", ["-C", decimal_path, "rev-parse", "--short", "HEAD"])
 
 tag = "#{String.trim(head)}-#{String.trim(hash)}"
 
@@ -129,5 +140,6 @@ Benchee.run(jobs,
   time: 10,
   memory_time: 2,
   save: [path: "benchmarks/#{tag}.benchee", tag: tag],
+  load: System.get_env("LOAD", "") |> String.split(",", trim: true),
   formatters: [Benchee.Formatters.Console]
 )
