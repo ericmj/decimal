@@ -558,6 +558,8 @@ defmodule Decimal do
     compare(decimal(num1), decimal(num2))
   end
 
+  @compile {:inline, adjust_exp: 1}
+
   defp adjust_exp(%Decimal{coef: coef, exp: exp}) do
     coef_adjustment = coef_length(coef)
     exp + coef_adjustment - 1
