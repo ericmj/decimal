@@ -168,6 +168,10 @@ defmodule Decimal do
   @default_max_exponent 6_144
   @default_to_string_max_digits 6_178
 
+  # A literal map is a compile-time constant, so the limits `parse/1`, `new/1`
+  # and `cast/1` always use cost no allocation.
+  @default_parse_limits %{max_digits: @default_max_digits, max_exponent: @default_max_exponent}
+
   # Below 10^2000 the BIF `:erlang.integer_to_binary/1` is fast enough; for
   # larger integers `integer_to_decimal_iodata/3` recursively splits on a
   # power of 10 (down to chunks of `@decimal_conversion_leaf_digits` digits)
@@ -377,9 +381,9 @@ defmodule Decimal do
         add_zero(num2, num1, ctx)
 
       # Equal exponents need no alignment, so there is nothing for the bounded
-      # path to protect against: it would pick `base_exp == exp1` and compute
-      # this very sum. Skipping the check avoids counting both coefficients'
-      # digits, which is all `add_bounded?/3` does here.
+      # path to protect against: it would settle on `base_exp == exp1` and
+      # compute this very sum. Deciding that costs counting both coefficients'
+      # digits, which is all `add_bounded?/3` does.
       exp1 == exp2 ->
         add_coefs(sign1, coef1, sign2, coef2, exp1, ctx)
 
@@ -508,10 +512,9 @@ defmodule Decimal do
   def compare(%Decimal{sign: 1}, %Decimal{sign: -1}), do: :gt
   def compare(%Decimal{sign: -1}, %Decimal{sign: 1}), do: :lt
 
-  # Same-scale comparison, the shape of comparing amounts at a fixed scale, is
-  # decided by the coefficients alone: with equal exponents the adjusted
-  # exponents differ exactly as the coefficient lengths do, so counting digits
-  # only to compare digit counts is wasted work.
+  # With equal exponents the adjusted exponents differ exactly as the
+  # coefficient lengths do, so the coefficients decide it on their own and no
+  # digits need counting.
   def compare(%Decimal{sign: sign, coef: coef1, exp: exp}, %Decimal{coef: coef2, exp: exp}) do
     cond do
       coef1 == coef2 -> :eq
@@ -558,13 +561,10 @@ defmodule Decimal do
     exp + coef_adjustment - 1
   end
 
-  # The ladder below only compares against literals that fit in a machine word
-  # (2^59 - 1 is the largest small integer), so each test is a register
-  # compare. Coefficients above that are bignums, where a comparison costs an
-  # order of magnitude more: they leave the ladder after two tests and take the
-  # bit-length estimate, which is cheaper than walking the remaining rungs.
-  # Test order matters - walking the full ladder first, as this function used
-  # to, costs more than the estimate itself.
+  # The ladder compares only against literals that fit a machine word
+  # (2^59 - 1 is the largest), so each rung is a register compare. Bignums
+  # leave it after two rungs, because comparing them costs an order of
+  # magnitude more than the bit-length estimate they fall through to.
   defp coef_length(coef) when coef < 1_000_000_000 do
     cond do
       coef < 10 -> 1
@@ -593,8 +593,8 @@ defmodule Decimal do
     end
   end
 
-  # The rest are bignums. 18 digit ones are worth one more comparison, since
-  # the estimate costs about ten times what a comparison does.
+  # One more rung for the bignums that are still 18 digits: the estimate costs
+  # about ten comparisons, so this one pays for itself.
   defp coef_length(coef) when coef < 1_000_000_000_000_000_000, do: 18
   defp coef_length(coef), do: integer_decimal_digit_count(coef)
 
@@ -1597,7 +1597,7 @@ defmodule Decimal do
 
   """
   @spec cast(term) :: {:ok, t} | :error
-  def cast(term), do: cast_with_limits(term, default_parse_limits())
+  def cast(term), do: cast_with_limits(term, @default_parse_limits)
 
   @doc """
   Creates a new decimal number from an integer, string, float, or existing decimal
@@ -1662,7 +1662,7 @@ defmodule Decimal do
   """
   @spec parse(binary()) :: {t(), binary()} | :error
   def parse(binary) when is_binary(binary) do
-    parse_with_limits(binary, default_parse_limits())
+    parse_with_limits(binary, @default_parse_limits)
   end
 
   @doc """
@@ -2117,11 +2117,12 @@ defmodule Decimal do
   @spec scale(t) :: non_neg_integer()
   def scale(%Decimal{exp: exp}), do: Kernel.max(0, -exp)
 
-  # Scaling the ratio into the 53 bits of a double's significand used to shift
-  # one bit at a time, allocating a bignum per bit: over a thousand iterations
-  # for exponents near the ends of the double range, and ~50 even for a value
-  # like 1.5. The shift needed is the difference of the operands' bit lengths,
-  # which is exact to within one bit, so one comparison settles it.
+  # Shifts `num` up until it reaches `den`, so that dividing the two yields the
+  # 53 bits of a double's significand. The distance is the difference of the
+  # bit lengths, which lands within one bit, so a single comparison finishes
+  # it. Walking there one bit at a time, as this did, allocated a bignum per
+  # bit: ~50 of them for a value like 1.5, over a thousand near the ends of the
+  # double range.
   defp scale_up(num, den, exp) when num >= den, do: {num, exp}
 
   defp scale_up(num, den, exp) do
@@ -2135,8 +2136,10 @@ defmodule Decimal do
     end
   end
 
-  # Doubles `den` until `num < 2 * den`, returning the denominator scaled back
-  # down by the 52 bits `boundary` was scaled up by.
+  # The other direction: `den` grows until `num < 2 * den`. The caller passes it
+  # pre-multiplied by 2^52, which the result gives back. Landing one bit past
+  # the target means undoing that bit, hence the extra shift in the first
+  # branch.
   defp scale_down(num, den, exp) do
     shift = Kernel.max(bit_length(num) - bit_length(den), 1)
     scaled = den <<< shift
@@ -2363,11 +2366,10 @@ defmodule Decimal do
   # (including the loop's inexact-shaped signals for exact quotients whose
   # adjust stays negative).
   #
-  # The quotient's digit count is returned as well: the same invariant pins it
-  # to exactly `precision + 1`, so rounding does not have to count the digits
-  # of a number that was just produced. Stripping the trailing zeros of an
-  # exact quotient changes the length, so that branch reports `nil` and the
-  # digits are counted as before.
+  # The same invariant pins the quotient's digit count to `precision + 1`, so
+  # it is returned for rounding to use instead of counting the digits of a
+  # number just produced. Stripping trailing zeros changes that length, so the
+  # exact branch reports `nil` and its digits are counted as before.
   defp div_calc(coef1, coef2, adjust, precision) do
     scaled = coef1 * pow10(precision)
     coef = Kernel.div(scaled, coef2)
@@ -2481,10 +2483,9 @@ defmodule Decimal do
     end
   end
 
-  # The powers of ten themselves are matched by the table above; everything
-  # that reaches here and does not end in a zero cannot be one, which rejects
-  # almost every argument with a single division. Must stay below the table:
-  # `base10?(1)` is a table hit and does not end in a zero.
+  # Anything reaching past the table that does not end in a zero cannot be a
+  # power of ten, which rejects almost every argument with one division. Must
+  # stay below the table: `base10?(1)` is a table hit and ends in a one.
   defp base10?(num) when Kernel.rem(num, 10) != 0, do: false
 
   defp base10?(num) when num >= unquote(pow10_max) do
@@ -2519,9 +2520,8 @@ defmodule Decimal do
     end
   end
 
-  # Returns the digit count of the result along with it: the caller needs it to
-  # check the exponent limits, and it is either already known here or a
-  # by-product of rounding.
+  # The result's digit count comes back too, since the caller needs it for the
+  # exponent limits and it is known here either way.
   defp precision(%Decimal{coef: :NaN} = num, _digits, _precision, _rounding, _sticky?) do
     {num, [], 0}
   end
@@ -2573,9 +2573,9 @@ defmodule Decimal do
 
     exp = exp + drop + carry
     dec = %Decimal{sign: sign, coef: signif, exp: exp}
-    # Dropping `drop` digits off a `num_digits` digit coefficient leaves
-    # exactly `precision` digits, and the carry above restores that length
-    # when the increment lengthened it.
+    # Dropping `drop` of `num_digits` digits leaves exactly `precision` of
+    # them, and the carry above restores that length when the increment
+    # lengthened it.
     {dec, signals, precision}
   end
 
@@ -2586,8 +2586,8 @@ defmodule Decimal do
   # then a leading zero and all of `coef` lands in the rest.
   defp split_digits(coef, 0, sticky?), do: {coef, 0, sticky?}
 
-  # Dropping a single digit - what every division does with its guard digit,
-  # and what rounding one place does - needs no powers of ten at all.
+  # Dropping one digit, what every division does with its guard digit, needs
+  # no powers of ten at all.
   defp split_digits(coef, 1, sticky?) do
     {Kernel.div(coef, 10), Kernel.rem(coef, 10), sticky?}
   end
@@ -2646,11 +2646,11 @@ defmodule Decimal do
     error(merge_signals(signals, prec_signals, exp_signals), nil, result, context)
   end
 
-  # Signals are recorded in the order they are merged, so the merge order is
-  # kept as is. What the shape-specific clauses skip is the repeated membership
-  # scanning for the two cases that cover virtually every operation: the
-  # caller's signals already cover the rounding ones (an inexact division),
-  # and rounding is the only thing that signalled (any rounded result).
+  # Flags are recorded in the order the signals are merged, so the order is
+  # kept exactly. The first clauses only skip the membership scanning for the
+  # two shapes that cover virtually every operation: the caller's signals
+  # already cover the rounding ones, as in an inexact division, and rounding
+  # being the only thing that signalled, as in any rounded result.
   defp merge_signals(signals, [], []), do: signals
   defp merge_signals(signals, prec_signals, []) when prec_signals == signals, do: signals
   defp merge_signals([], prec_signals, []), do: :lists.reverse(prec_signals)
@@ -2713,10 +2713,6 @@ defmodule Decimal do
 
   ## PARSING ##
 
-  # A literal map is a compile-time constant, so the default limits cost no
-  # allocation on the (overwhelmingly common) `parse/1` and `new/1` paths.
-  @default_parse_limits %{max_digits: @default_max_digits, max_exponent: @default_max_exponent}
-
   defp parse_limits!([]), do: @default_parse_limits
 
   defp parse_limits!(opts) do
@@ -2732,8 +2728,6 @@ defmodule Decimal do
     end)
   end
 
-  defp default_parse_limits, do: @default_parse_limits
-
   defp limit!(_key, :infinity), do: :infinity
 
   defp limit!(_key, value) when is_integer(value) and value >= 0, do: value
@@ -2743,12 +2737,11 @@ defmodule Decimal do
           "#{inspect(key)} must be a non-negative integer or :infinity, got: #{inspect(value)}"
   end
 
-  # Digits are scanned once, counting them (the limits are checked against the
-  # counts) while accumulating their value directly into an integer. Up to
-  # `@accum_digits` digits the accumulator stays inside a machine word, so the
-  # scan produces the coefficient with no intermediate list or binary at all.
-  # Past that the accumulator would turn into a bignum and grow quadratically,
-  # so longer runs are only counted and converted afterwards in one step.
+  # One pass counts the digits, which is what the limits are checked against,
+  # and accumulates their value. Up to `@accum_digits` the accumulator stays
+  # inside a machine word and the scan yields the coefficient itself, with no
+  # intermediate list or binary. Beyond that it would become a bignum and grow
+  # quadratically, so longer runs are counted only and converted in one step.
   @accum_digits 17
 
   defp parse_digits_count(<<?0, rest::binary>>, count, leading_zeros, acc)
@@ -2833,10 +2826,9 @@ defmodule Decimal do
     end
   end
 
-  # Short coefficients came out of the scan already. Longer ones are the
-  # integer digits and the fraction digits, each converted in one step and
-  # combined by shifting the integer part up, which avoids copying the two
-  # slices into one binary first.
+  # Short coefficients came out of the scan already. Longer ones convert each
+  # digit run separately and shift the integer part up, rather than copying the
+  # two runs into one binary to convert together.
   defp parse_coef(_bin, _int_size, _fraction, _float_size, total_size, acc)
        when total_size <= @accum_digits,
        do: acc
@@ -2855,11 +2847,10 @@ defmodule Decimal do
     int * pow10(float_size) + frac
   end
 
-  # `e` notation. The exponent digits are checked against the limit *before*
-  # being turned into an integer, so an exponent like `1e<a million digits>`
-  # is rejected without ever being materialized. Without an exponent, or
-  # without digits after the marker (in which case the marker is not part of
-  # the number), the exponent is just the fraction digit count.
+  # `e` notation. The digits are checked against the limit before being turned
+  # into an integer, so `1e<a million digits>` is rejected without ever being
+  # materialized. With no exponent, or no digits after the marker - in which
+  # case the marker is not part of the number - only the fraction digits count.
   defp parse_exp(<<e, rest::binary>> = bin, float_size, max_exponent) when e in [?e, ?E] do
     {negative?, digits} =
       case rest do
@@ -2886,26 +2877,26 @@ defmodule Decimal do
 
   defp exp_value(digits, size, leading_zeros, acc, negative?, rest, float_size, :infinity) do
     value = exp_digits_value(digits, size, leading_zeros, acc)
-    {:ok, signed_exp(value, negative?) - float_size, rest}
+    {:ok, exponent(value, negative?, float_size), rest}
   end
 
   defp exp_value(digits, size, leading_zeros, acc, negative?, rest, float_size, max_exponent) do
-    significant = size - leading_zeros
-    bound = max_exponent + float_size
-
-    if significant > coef_length(bound) do
+    # More digits than the largest allowed exponent has cannot be within the
+    # limit, and rejecting on the count alone keeps a hostile exponent from
+    # being turned into an integer at all. What survives is at most one digit
+    # longer than the limit, so the limit check below settles it.
+    if size - leading_zeros > coef_length(max_exponent + float_size) do
       :error
     else
       value = exp_digits_value(digits, size, leading_zeros, acc)
-      exp = signed_exp(value, negative?) - float_size
+      exp = exponent(value, negative?, float_size)
 
-      if value <= bound and within_exponent_limit?(exp, max_exponent) do
-        {:ok, exp, rest}
-      else
-        :error
-      end
+      if within_exponent_limit?(exp, max_exponent), do: {:ok, exp, rest}, else: :error
     end
   end
+
+  defp exponent(value, true, float_size), do: -value - float_size
+  defp exponent(value, false, float_size), do: value - float_size
 
   defp exp_digits_value(_digits, size, _leading_zeros, acc) when size <= @accum_digits, do: acc
   defp exp_digits_value(_digits, size, leading_zeros, _acc) when size == leading_zeros, do: 0
@@ -2913,9 +2904,6 @@ defmodule Decimal do
   defp exp_digits_value(digits, size, leading_zeros, _acc) do
     :erlang.binary_to_integer(binary_part(digits, leading_zeros, size - leading_zeros))
   end
-
-  defp signed_exp(value, true), do: -value
-  defp signed_exp(value, false), do: value
 
   defp decimal_within_limits?(%Decimal{coef: coef, exp: exp}, limits) do
     not exceeds_limit?(decimal_digit_count(coef), limits.max_digits) and
@@ -2942,10 +2930,9 @@ defmodule Decimal do
           "implicit conversion of #{inspect(other)} to Decimal is not allowed. Use Decimal.from_float/1"
   end
 
-  # The overwhelming majority of operations signal nothing. Without signals
-  # there are no flags to add and no trap to fire, so the context is unchanged
-  # and there is nothing to write back: skip the copy and the process
-  # dictionary write entirely.
+  # Most operations signal nothing, and with no signals there are no flags to
+  # add and no trap to fire: the context is unchanged, so the copy and the
+  # process dictionary write are skipped entirely.
   defp handle_error([], _reason, result, _context), do: {:ok, result}
 
   defp handle_error(signals, reason, result, context) when is_list(signals) do
@@ -2961,9 +2948,9 @@ defmodule Decimal do
 
     flags = put_uniq(context.flags, signals)
 
-    # Flags are sticky, so a signal that is already recorded leaves the context
-    # untouched and there is nothing to write back. In a loop of operations
-    # that keep signalling the same thing, only the first one writes.
+    # Flags are sticky, so an already recorded signal leaves the context
+    # untouched: in a loop that keeps signalling the same thing, only the first
+    # operation writes.
     if flags !== context.flags do
       Context.set(%{context | flags: flags})
     end
@@ -2986,17 +2973,15 @@ defmodule Decimal do
 
   # `:io_lib_format.fwrite_g/1` renders exponent notation with a redundant
   # fraction: `1.0e5`. Dropping it keeps `from_float/1` from reading that as a
-  # coefficient of 10 with the exponent one lower. Matching the pattern going
-  # forward builds the result directly, where accumulating and reversing cost
-  # a second cons cell per character.
+  # coefficient of 10 with the exponent one lower. Matching forward builds the
+  # result directly; accumulating and reversing cost a second cons per char.
   defp fix_float_exp([?., ?0, ?e | rest]), do: [?e | fix_float_exp(rest)]
   defp fix_float_exp([char | rest]), do: [char | fix_float_exp(rest)]
   defp fix_float_exp([]), do: []
 
-  # A value whose adjusted exponent is strictly inside ±308 is inside the
-  # double range: it is bracketed by 10^adjusted and 10^(adjusted+1), which
-  # keeps it clear of both DBL_MAX and DBL_MIN. That covers everything except
-  # the extremes, which still take the exact comparisons below.
+  # An adjusted exponent strictly inside ±308 puts the value between
+  # 10^adjusted and 10^(adjusted+1), clear of both DBL_MAX and DBL_MIN. Only
+  # the extremes need the exact comparisons below.
   defp check_dbl_min_max(%Decimal{coef: 0} = num), do: num
 
   defp check_dbl_min_max(%Decimal{coef: coef, exp: exp} = num) do
@@ -3039,8 +3024,6 @@ defmodule Decimal do
 end
 
 defimpl Inspect, for: Decimal do
-  # One binary construction rather than a chain of `<>` concatenations, each of
-  # which copies the accumulated result.
   def inspect(dec, _opts) do
     string = Decimal.to_string(dec, :scientific, max_digits: :infinity)
     <<"Decimal.new(\"", string::binary, "\")">>

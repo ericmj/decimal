@@ -268,7 +268,13 @@ fuzz_strings =
     int = if int_len == 0, do: "", else: zeros <> digits.(int_len)
     frac = if frac_len == 0, do: "", else: digits.(frac_len)
 
-    dot = if frac == "" and Enum.random(1..4) == 1, do: ".", else: if(frac == "", do: "", else: ".")
+    # a trailing point with no fraction digits is valid input too
+    dot =
+      cond do
+        frac != "" -> "."
+        Enum.random(1..4) == 1 -> "."
+        true -> ""
+      end
 
     exp =
       case Enum.random(1..8) do
@@ -375,7 +381,7 @@ float_fuzz =
       finite.(fn -> :rand.uniform() * :math.pow(10.0, rem(i * 7, 600) - 300) end)
     end)
 
-for f <- float_fuzz, is_float(f), f == f do
+for f <- float_fuzz do
   emit.("float fuzz from #{inspect(f)}", fn -> Decimal.from_float(f) end)
   emit.("float fuzz raw #{inspect(f)}", fn -> Decimal.to_string(Decimal.from_float(f), :raw) end)
   emit.("float fuzz trip #{inspect(f)}", fn -> f |> Decimal.from_float() |> Decimal.to_float() end)

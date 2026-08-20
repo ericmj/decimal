@@ -189,60 +189,48 @@ defmodule Resources do
   @delta_width 6
 
   def header(comparing?) do
-    ["operation", "mode"]
-    |> pad([@name_width, @mode_width])
-    |> then(&[&1 | Enum.map(@metrics, fn {label, _key, _p} -> cell(label, comparing?) end)])
-    |> emit()
-  end
-
-  def row(name, mode, measurement, baseline) do
-    comparing? = baseline != nil
-
-    values =
-      Enum.map(@metrics, fn {_label, key, precision} ->
-        value = format_value(Map.fetch!(measurement, key), precision)
-
-        if comparing? do
-          value <> delta(Map.fetch!(measurement, key), Map.fetch!(baseline, key))
-        else
-          value
-        end
-      end)
-
-    [name, Atom.to_string(mode)]
-    |> pad([@name_width, @mode_width])
-    |> then(&[&1 | values])
-    |> emit()
-  end
-
-  defp emit(parts), do: IO.puts(Enum.join(parts, " "))
-
-  defp pad(strings, widths) do
-    Enum.zip(strings, widths)
-    |> Enum.map_join(" ", fn {string, width} -> String.pad_trailing(string, width) end)
-  end
-
-  defp cell(label, comparing?) do
     width = if comparing?, do: @value_width + @delta_width, else: @value_width
-    String.pad_leading(label, width)
+
+    @metrics
+    |> Enum.map(fn {label, _key, _precision} -> String.pad_leading(label, width) end)
+    |> emit_row("operation", "mode")
   end
 
-  defp format_value(value, precision) do
-    value
-    |> :erlang.float_to_binary(decimals: precision)
-    |> String.pad_leading(@value_width)
+  # `baseline` is the matching measurement from the run being compared against,
+  # or nil when this workload was not in it.
+  def row(name, mode, measurement, baseline, comparing?) do
+    @metrics
+    |> Enum.map(&cell(&1, measurement, baseline, comparing?))
+    |> emit_row(name, Atom.to_string(mode))
   end
 
-  # A percentage against a zero baseline is meaningless.
-  defp delta(_value, baseline) when baseline == 0,
-    do: String.pad_leading("-", @delta_width)
+  defp emit_row(cells, name, mode) do
+    name = String.pad_trailing(name, @name_width)
+    mode = String.pad_trailing(mode, @mode_width)
+    IO.puts(Enum.join([name, mode | cells], " "))
+  end
+
+  defp cell({_label, key, precision}, measurement, baseline, comparing?) do
+    value = Map.fetch!(measurement, key)
+    formatted = value |> :erlang.float_to_binary(decimals: precision) |> pad(@value_width)
+
+    cond do
+      not comparing? -> formatted
+      baseline == nil -> formatted <> pad("new", @delta_width)
+      true -> formatted <> delta(value, Map.fetch!(baseline, key))
+    end
+  end
+
+  # A percentage against a zero baseline says nothing.
+  defp delta(_value, baseline) when baseline == 0, do: pad("-", @delta_width)
 
   defp delta(value, baseline) do
     percent = (value - baseline) / baseline * 100
     sign = if percent < 0, do: "-", else: "+"
-    magnitude = :erlang.float_to_binary(abs(percent), decimals: 0)
-    String.pad_leading("#{sign}#{magnitude}%", @delta_width)
+    pad("#{sign}#{:erlang.float_to_binary(abs(percent), decimals: 0)}%", @delta_width)
   end
+
+  defp pad(string, width), do: String.pad_leading(string, width)
 
   # A workload runs `count` operations per repetition, so everything except the
   # peak footprint - which belongs to the process, not to one operation - is
@@ -256,7 +244,23 @@ defmodule Resources do
   end
 
   def load(nil), do: %{}
-  def load(path), do: path |> File.read!() |> :erlang.binary_to_term()
+
+  def load(path) do
+    measurements = path |> File.read!() |> :erlang.binary_to_term()
+    keys = Enum.map(@metrics, fn {_label, key, _precision} -> key end)
+
+    valid? =
+      is_map(measurements) and
+        Enum.all?(Map.values(measurements), fn measurement ->
+          is_map(measurement) and Enum.all?(keys, &Map.has_key?(measurement, &1))
+        end)
+
+    if valid? do
+      measurements
+    else
+      raise "#{path} does not hold measurements for #{inspect(keys)}; re-save it with SAVE="
+    end
+  end
 
   def save(nil, _rows), do: :ok
 
@@ -310,19 +314,17 @@ workloads = [
   {"to_float tiny", over.(tiny, &Decimal.to_float/1), 15, 50}
 ]
 
-baseline = Resources.load(System.get_env("COMPARE"))
+compare_to = System.get_env("COMPARE")
+baseline = Resources.load(compare_to)
 save_to = System.get_env("SAVE")
 rounds = String.to_integer(System.get_env("ROUNDS", "3"))
 
 IO.puts("Decimal beam: #{:code.which(Decimal)}")
 IO.puts("live set: #{length(live_set)} decimals held across every run")
-
-if baseline != %{} do
-  IO.puts("comparing against #{System.get_env("COMPARE")}")
-end
-
+if compare_to, do: IO.puts("comparing against #{compare_to}")
 IO.puts("")
-Resources.header(baseline != %{})
+
+Resources.header(compare_to != nil)
 
 rows =
   for {name, fun, reps, per_rep} <- workloads, mode <- [:discard, :retain], into: %{} do
@@ -337,7 +339,7 @@ rows =
       |> Enum.min_by(& &1.wall_ns)
       |> Resources.per_operation(per_rep)
 
-    Resources.row(name, mode, measurement, baseline[{name, mode}])
+    Resources.row(name, mode, measurement, baseline[{name, mode}], compare_to != nil)
 
     {{name, mode}, measurement}
   end

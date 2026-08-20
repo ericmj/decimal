@@ -1707,6 +1707,9 @@ defmodule DecimalTest do
       Decimal.add(~d"1", ~d"2")
       assert Context.get().flags == []
 
+      # The order is asserted, not just the membership: operations merge their
+      # own signals with the ones rounding raises, and the merge must not
+      # reshuffle what is already recorded.
       Decimal.div(~d"1", ~d"3")
       assert Context.get().flags == [:rounded, :inexact]
 
