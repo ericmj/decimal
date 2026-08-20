@@ -1,10 +1,4 @@
-decimal_path = System.get_env("DECIMAL_PATH", ".")
-
-Mix.install([
-  {:decimal, path: decimal_path, override: true},
-  {:benchee, "~> 1.0"},
-  {:benchee_html, "~> 1.0"}
-])
+Code.require_file("bench_helper.exs", __DIR__)
 
 # Measure production-compiled code:
 #
@@ -16,10 +10,7 @@ Mix.install([
 #     DECIMAL_PATH=../decimal-main MIX_ENV=prod elixir bench.exs
 #     LOAD=benchmarks/HEAD-0c0f72c.benchee MIX_ENV=prod elixir bench.exs
 #
-if Mix.env() != :prod do
-  IO.puts(:stderr, "refusing to benchmark a #{Mix.env()} build; rerun with MIX_ENV=prod")
-  System.halt(1)
-end
+decimal_path = BenchHelper.install!([{:benchee, "~> 1.0"}, {:benchee_html, "~> 1.0"}])
 
 # The tag names the code under test, which is not necessarily this checkout.
 # `--abbrev-ref` reports `HEAD` rather than failing when that checkout has no
@@ -93,10 +84,7 @@ each = fn decimals, fun ->
   fn -> Enum.each(decimals, fun) end
 end
 
-# Values at a fixed scale with small coefficients: the shape of monetary
-# amounts, where the same-exponent paths of `add/2` and `compare/2` and the
-# short-coefficient path of the parser are what run.
-money_strings = for i <- 1..200, do: "#{i * 37}.#{Integer.mod(i * 13, 100)}"
+money_strings = BenchHelper.money_strings()
 money = Enum.map(money_strings, &Decimal.new/1)
 money_pairs = Enum.zip(money, Enum.reverse(money))
 
@@ -136,10 +124,19 @@ jobs = %{
   "money round" => each.(money, &Decimal.round(&1, 2))
 }
 
+load = System.get_env("LOAD", "") |> String.split(",", trim: true)
+
+# Benchee resolves load paths with Path.wildcard, which turns a mistyped path
+# into an empty list and a comparison run into a plain one, with no error.
+for path <- load, Path.wildcard(path) == [] do
+  IO.puts(:stderr, "LOAD path #{path} matches no saved benchmark")
+  System.halt(1)
+end
+
 Benchee.run(jobs,
   time: 10,
   memory_time: 2,
   save: [path: "benchmarks/#{tag}.benchee", tag: tag],
-  load: System.get_env("LOAD", "") |> String.split(",", trim: true),
+  load: load,
   formatters: [Benchee.Formatters.Console]
 )

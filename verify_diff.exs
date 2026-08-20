@@ -146,7 +146,11 @@ for emax <- [:infinity, 6144, 20, 2], emin <- [:infinity, -6143, -20, -2] do
   for {a, b} <- Enum.take_every(pairs, 211) do
     key = "#{inspect(emax)} #{inspect(emin)} #{inspect(raw.(a))} #{inspect(raw.(b))}"
     emit.("lim add #{key}", fn -> Decimal.Context.with(case_ctx, fn -> Decimal.add(a, b) end) end)
-    emit.("lim mult #{key}", fn -> Decimal.Context.with(case_ctx, fn -> Decimal.mult(a, b) end) end)
+
+    emit.("lim mult #{key}", fn ->
+      Decimal.Context.with(case_ctx, fn -> Decimal.mult(a, b) end)
+    end)
+
     emit.("lim div #{key}", fn -> Decimal.Context.with(case_ctx, fn -> Decimal.div(a, b) end) end)
   end
 end
@@ -192,7 +196,13 @@ for s <- strings do
   emit.("new #{inspect(s)}", fn -> Decimal.new(s) end)
   emit.("cast #{inspect(s)}", fn -> Decimal.cast(s) end)
 
-  for opts <- [[], [max_digits: 5], [max_digits: :infinity], [max_exponent: 10], [max_exponent: :infinity]] do
+  for opts <- [
+        [],
+        [max_digits: 5],
+        [max_digits: :infinity],
+        [max_exponent: 10],
+        [max_exponent: :infinity]
+      ] do
     emit.("parse2 #{inspect(s)} #{inspect(opts)}", fn -> Decimal.parse(s, opts) end)
     emit.("cast2 #{inspect(s)} #{inspect(opts)}", fn -> Decimal.cast(s, opts) end)
   end
@@ -384,6 +394,7 @@ float_fuzz =
 for f <- float_fuzz do
   emit.("float fuzz from #{inspect(f)}", fn -> Decimal.from_float(f) end)
   emit.("float fuzz raw #{inspect(f)}", fn -> Decimal.to_string(Decimal.from_float(f), :raw) end)
+
   emit.("float fuzz trip #{inspect(f)}", fn -> f |> Decimal.from_float() |> Decimal.to_float() end)
 end
 
@@ -394,7 +405,7 @@ for i <- [0, 1, -1, 42, -42, 10_000_000_000_000_000_000, -10_000_000_000_000_000
 end
 
 # every to_float that a double can represent, across the whole exponent range
-for exp <- -330..310, coef <- [1, 15, 1234567890123456, 9999999999999999] do
+for exp <- -330..310, coef <- [1, 15, 1_234_567_890_123_456, 9_999_999_999_999_999] do
   emit.("to_float_sweep #{coef} #{exp}", fn -> Decimal.to_float(Decimal.new(1, coef, exp)) end)
   emit.("to_float_sweep- #{coef} #{exp}", fn -> Decimal.to_float(Decimal.new(-1, coef, exp)) end)
 end

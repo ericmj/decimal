@@ -1,8 +1,4 @@
-decimal_path = System.get_env("DECIMAL_PATH", ".")
-
-Mix.install([
-  {:decimal, path: decimal_path, override: true}
-])
+Code.require_file("bench_helper.exs", __DIR__)
 
 # Benchmarks must measure production-compiled code:
 #
@@ -16,10 +12,7 @@ Mix.install([
 #       elixir bench_resources.exs
 #     COMPARE=/tmp/main.bench MIX_ENV=prod elixir bench_resources.exs
 #
-if Mix.env() != :prod do
-  IO.puts(:stderr, "refusing to benchmark a #{Mix.env()} build; rerun with MIX_ENV=prod")
-  System.halt(1)
-end
+BenchHelper.install!()
 
 defmodule Resources do
   @moduledoc """
@@ -61,32 +54,44 @@ defmodule Resources do
         # whole run and has to be traced by every collection.
         receive do: (:go -> :ok)
         acc = loop(fun, reps, mode, [])
-        send(parent, {:done, self(), :erlang.phash2({acc, live_set})})
+        send(parent, {:done, self()})
+        # The hash keeps `acc` and the live set referenced past the loop. It
+        # runs only after the parent has taken every measurement, so its cost
+        # lands in none of them.
+        receive do: (:measured -> :ok)
+        send(parent, {:hash, self(), :erlang.phash2({acc, live_set})})
         receive do: (:stop -> :ok)
       end)
 
     :erlang.trace(pid, true, [:garbage_collection])
+    info0 = Process.info(pid, [:reductions, :garbage_collection_info])
     sched0 = scheduler_active()
     t0 = System.monotonic_time(:nanosecond)
     send(pid, :go)
 
     receive do
-      {:done, ^pid, _hash} -> :ok
+      {:done, ^pid} -> :ok
     end
 
     t1 = System.monotonic_time(:nanosecond)
     sched1 = scheduler_active()
     :erlang.trace(pid, false, [:garbage_collection])
     info = Process.info(pid, [:reductions, :garbage_collection_info])
+    send(pid, :measured)
+
+    receive do
+      {:hash, ^pid, _hash} -> :ok
+    end
+
     send(pid, :stop)
 
     events = drain([])
-    gc = summarize(events, info)
+    gc = summarize(events, info, used_words(info0[:garbage_collection_info] || []))
 
     %{
       wall_ns: (t1 - t0) / reps,
       cpu_ns: (sched1 - sched0) / reps,
-      reds: info[:reductions] / reps,
+      reds: (info[:reductions] - info0[:reductions]) / reps,
       alloc_w: gc.allocated / reps,
       copy_w: gc.copied / reps,
       minor: gc.minor * 1000 / reps,
@@ -122,20 +127,31 @@ defmodule Resources do
   end
 
   # Allocation is the growth of the used heap between the end of one collection
-  # and the start of the next. Copying is what survives a collection, which is
-  # the work the collector actually does.
-  defp summarize(events, info) do
-    init = %{allocated: 0, copied: 0, last_end: 0, peak_words: 0, minor: 0, major: 0}
+  # and the start of the next, on top of the heap the process was spawned with.
+  # Copying is what a collection moves: a minor collection copies the surviving
+  # young heap plus what it promotes and leaves the rest of the old heap where
+  # it is, while a major collection rebuilds the whole live set.
+  defp summarize(events, info, spawned_words) do
+    init = %{
+      allocated: 0,
+      copied: 0,
+      last_end: spawned_words,
+      old_at_start: 0,
+      peak_words: 0,
+      minor: 0,
+      major: 0
+    }
 
     acc =
       Enum.reduce(events, init, fn {event, gc}, acc ->
-        used = Keyword.get(gc, :heap_size, 0) + Keyword.get(gc, :old_heap_size, 0)
+        used = used_words(gc)
 
         case event do
           :gc_minor_start ->
             %{
               acc
               | allocated: acc.allocated + max(used - acc.last_end, 0),
+                old_at_start: Keyword.get(gc, :old_heap_size, 0),
                 peak_words: max(acc.peak_words, held(gc)),
                 minor: acc.minor + 1
             }
@@ -144,11 +160,19 @@ defmodule Resources do
             %{
               acc
               | allocated: acc.allocated + max(used - acc.last_end, 0),
+                old_at_start: Keyword.get(gc, :old_heap_size, 0),
                 peak_words: max(acc.peak_words, held(gc)),
                 major: acc.major + 1
             }
 
-          event when event in [:gc_minor_end, :gc_major_end] ->
+          :gc_minor_end ->
+            copied =
+              Keyword.get(gc, :heap_size, 0) +
+                (Keyword.get(gc, :old_heap_size, 0) - acc.old_at_start)
+
+            %{acc | copied: acc.copied + max(copied, 0), last_end: used}
+
+          :gc_major_end ->
             %{acc | copied: acc.copied + used, last_end: used}
 
           _ ->
@@ -157,13 +181,16 @@ defmodule Resources do
       end)
 
     final = info[:garbage_collection_info] || []
-    final_used = Keyword.get(final, :heap_size, 0) + Keyword.get(final, :old_heap_size, 0)
 
     %{
       acc
-      | allocated: acc.allocated + max(final_used - acc.last_end, 0),
+      | allocated: acc.allocated + max(used_words(final) - acc.last_end, 0),
         peak_words: max(acc.peak_words, held(final))
     }
+  end
+
+  defp used_words(gc) do
+    Keyword.get(gc, :heap_size, 0) + Keyword.get(gc, :old_heap_size, 0)
   end
 
   defp held(gc) do
@@ -274,9 +301,9 @@ end
 
 :erlang.system_flag(:scheduler_wall_time, true)
 
-money = Enum.map(1..200, &Decimal.new("#{&1 * 37}.#{Integer.mod(&1 * 13, 100)}"))
+money_strings = BenchHelper.money_strings()
+money = Enum.map(money_strings, &Decimal.new/1)
 money_pairs = Enum.zip(money, Enum.reverse(money))
-money_strings = Enum.map(money, &Decimal.to_string/1)
 
 wide =
   Enum.map(1..50, fn i ->
