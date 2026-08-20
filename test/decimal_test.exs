@@ -1721,6 +1721,19 @@ defmodule DecimalTest do
     assert Decimal.parse("0000000000000000000000000000000000000001.5") == {d(1, 15, -1), ""}
     assert Decimal.parse("0.0000000000000000000001") == {d(1, 1, -22), ""}
     assert Decimal.parse(String.duplicate("0", 40)) == {d(1, 0, 0), ""}
+
+    # past the boundary the digits convert from the input, leading zeros and all
+    nines = String.duplicate("9", 18)
+    assert Decimal.parse("000" <> nines) == {d(1, String.to_integer(nines), 0), ""}
+
+    assert Decimal.parse("000" <> nines <> ".55") ==
+             {d(1, String.to_integer(nines <> "55"), -2), ""}
+
+    assert Decimal.parse("0." <> String.duplicate("0", 21) <> nines) ==
+             {d(1, String.to_integer(nines), -39), ""}
+
+    # exponent digits go through the same scan
+    assert Decimal.parse("1e" <> String.duplicate("0", 20) <> "5") == {d(1, 1, 5), ""}
   end
 
   test "flags accumulate across operations" do

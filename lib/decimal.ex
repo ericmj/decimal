@@ -2732,12 +2732,14 @@ defmodule Decimal do
   end
 
   # One pass counts the digits, which is what the limits are checked against,
-  # and accumulates their value. Up to `@accum_digits` the accumulator stays
-  # inside a machine word and the scan yields the coefficient itself, with no
-  # intermediate list or binary. Beyond that it would become a bignum and grow
-  # quadratically, so longer runs are counted only and converted in one step -
-  # after the limit check, so that an over-long input is still rejected without
-  # its coefficient ever being materialized.
+  # and accumulates their value. Leading zeros carry no value, so only the
+  # significant digits count against the accumulator: up to `@accum_digits` of
+  # them the accumulator stays inside a machine word and the scan yields the
+  # coefficient itself, with no intermediate list or binary. Beyond that it
+  # would become a bignum and grow quadratically, so longer runs are counted
+  # only and converted in one step - after the limit check, so that an
+  # over-long input is still rejected without its coefficient ever being
+  # materialized.
   @accum_digits 17
 
   defp parse_digits_count(<<?0, rest::binary>>, count, leading_zeros, acc)
@@ -2746,7 +2748,7 @@ defmodule Decimal do
   end
 
   defp parse_digits_count(<<digit, rest::binary>>, count, leading_zeros, acc)
-       when digit in ?0..?9 and count < @accum_digits do
+       when digit in ?0..?9 and count - leading_zeros < @accum_digits do
     parse_digits_count(rest, count + 1, leading_zeros, acc * 10 + (digit - ?0))
   end
 
@@ -2789,16 +2791,10 @@ defmodule Decimal do
   defp parse_unsign(bin, limits) do
     {int_size, leading_zeros, acc, after_int} = parse_digits_count(bin, 0, 0, 0)
 
-    {total_size, leading_zeros, acc, fraction, after_float} =
+    {total_size, leading_zeros, acc, after_float} =
       case after_int do
-        <<?., after_dot::binary>> ->
-          {total_size, leading_zeros, acc, rest} =
-            parse_digits_count(after_dot, int_size, leading_zeros, acc)
-
-          {total_size, leading_zeros, acc, after_dot, rest}
-
-        _ ->
-          {int_size, leading_zeros, acc, "", after_int}
+        <<?., after_dot::binary>> -> parse_digits_count(after_dot, int_size, leading_zeros, acc)
+        _ -> {int_size, leading_zeros, acc, after_int}
       end
 
     cond do
@@ -2813,7 +2809,7 @@ defmodule Decimal do
 
         case parse_exp(after_float, float_size, limits.max_exponent) do
           {:ok, exp, rest} ->
-            coef = parse_coef(bin, int_size, fraction, float_size, total_size, acc)
+            coef = parse_coef(bin, int_size, float_size, total_size - leading_zeros, acc)
             {%Decimal{coef: coef, exp: exp}, rest}
 
           :error ->
@@ -2824,22 +2820,23 @@ defmodule Decimal do
 
   # Short coefficients came out of the scan already. Longer ones convert each
   # digit run separately and shift the integer part up, rather than copying the
-  # two runs into one binary to convert together.
-  defp parse_coef(_bin, _int_size, _fraction, _float_size, total_size, acc)
-       when total_size <= @accum_digits,
+  # two runs into one binary to convert together. A fraction can only exist
+  # when a dot was consumed, so its digits sit at `int_size + 1` in the input.
+  defp parse_coef(_bin, _int_size, _float_size, significant, acc)
+       when significant <= @accum_digits,
        do: acc
 
-  defp parse_coef(bin, int_size, _fraction, 0, _total_size, _acc) do
+  defp parse_coef(bin, int_size, 0, _significant, _acc) do
     :erlang.binary_to_integer(binary_part(bin, 0, int_size))
   end
 
-  defp parse_coef(_bin, 0, fraction, float_size, _total_size, _acc) do
-    :erlang.binary_to_integer(binary_part(fraction, 0, float_size))
+  defp parse_coef(bin, 0, float_size, _significant, _acc) do
+    :erlang.binary_to_integer(binary_part(bin, 1, float_size))
   end
 
-  defp parse_coef(bin, int_size, fraction, float_size, _total_size, _acc) do
+  defp parse_coef(bin, int_size, float_size, _significant, _acc) do
     int = :erlang.binary_to_integer(binary_part(bin, 0, int_size))
-    frac = :erlang.binary_to_integer(binary_part(fraction, 0, float_size))
+    frac = :erlang.binary_to_integer(binary_part(bin, int_size + 1, float_size))
     int * pow10(float_size) + frac
   end
 
@@ -2894,8 +2891,9 @@ defmodule Decimal do
   defp exponent(value, true, float_size), do: -value - float_size
   defp exponent(value, false, float_size), do: value - float_size
 
-  defp exp_digits_value(_digits, size, _leading_zeros, acc) when size <= @accum_digits, do: acc
-  defp exp_digits_value(_digits, size, leading_zeros, _acc) when size == leading_zeros, do: 0
+  defp exp_digits_value(_digits, size, leading_zeros, acc)
+       when size - leading_zeros <= @accum_digits,
+       do: acc
 
   defp exp_digits_value(digits, size, leading_zeros, _acc) do
     :erlang.binary_to_integer(binary_part(digits, leading_zeros, size - leading_zeros))
