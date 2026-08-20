@@ -1,11 +1,22 @@
-Mix.install([
-  {:decimal, path: ".", override: true},
-  {:benchee, "~> 1.0"},
-  {:benchee_html, "~> 1.0"}
-])
+Code.require_file("bench_helper.exs", __DIR__)
 
-{head, 0} = System.cmd("git", ["symbolic-ref", "--short", "HEAD"])
-{hash, 0} = System.cmd("git", ["rev-parse", "--short", "HEAD"])
+# Measure production-compiled code:
+#
+#     MIX_ENV=prod elixir bench.exs
+#
+# To compare two checkouts, measure one and load its results into the run of
+# the other, which makes Benchee print both per job:
+#
+#     DECIMAL_PATH=../decimal-main MIX_ENV=prod elixir bench.exs
+#     LOAD=benchmarks/HEAD-0c0f72c.benchee MIX_ENV=prod elixir bench.exs
+#
+decimal_path = BenchHelper.install!([{:benchee, "~> 1.0"}, {:benchee_html, "~> 1.0"}])
+
+# The tag names the code under test, which is not necessarily this checkout.
+# `--abbrev-ref` reports `HEAD` rather than failing when that checkout has no
+# branch, as a worktree at a bare commit does.
+{head, 0} = System.cmd("git", ["-C", decimal_path, "rev-parse", "--abbrev-ref", "HEAD"])
+{hash, 0} = System.cmd("git", ["-C", decimal_path, "rev-parse", "--short", "HEAD"])
 
 tag = "#{String.trim(head)}-#{String.trim(hash)}"
 
@@ -73,6 +84,20 @@ each = fn decimals, fun ->
   fn -> Enum.each(decimals, fun) end
 end
 
+money_strings = BenchHelper.money_strings()
+money = Enum.map(money_strings, &Decimal.new/1)
+money_pairs = Enum.zip(money, Enum.reverse(money))
+
+floats = for i <- 1..200, do: i * 1.37
+
+# Conversions to float scale the operand into the significand of a double, so
+# operands near the ends of the exponent range do the most work. Exponents stay
+# inside the double range, which `to_float/1` requires.
+float_range_decimals =
+  for coef <- [1, 15, 1_234_567_890_123_456], exp <- [-290, -30, -1, 0, 1, 30, 290] do
+    struct(Decimal, %{sign: 1, coef: coef, exp: exp})
+  end
+
 jobs = %{
   "compare" => each_pair.(decimal_pairs, &Decimal.compare/2),
   "compare same scale" => each_pair.(same_scale_pairs, &Decimal.compare/2),
@@ -87,12 +112,31 @@ jobs = %{
   "normalize" => each.(decimals, &Decimal.normalize/1),
   "sqrt" => each.(positive_decimals, &Decimal.sqrt/1),
   "to_string scientific" => each.(decimals, &Decimal.to_string(&1, :scientific)),
-  "to_string normal" => each.(decimals, &Decimal.to_string(&1, :normal))
+  "to_string normal" => each.(decimals, &Decimal.to_string(&1, :normal)),
+  "new from string" => each.(money_strings, &Decimal.new/1),
+  "from_float" => each.(floats, &Decimal.from_float/1),
+  "to_float" => each.(float_range_decimals, &Decimal.to_float/1),
+  "inspect" => each.(money, &inspect/1),
+  "money add" => each_pair.(money_pairs, &Decimal.add/2),
+  "money mult" => each_pair.(money_pairs, &Decimal.mult/2),
+  "money div" => each_pair.(money_pairs, &Decimal.div/2),
+  "money compare" => each_pair.(money_pairs, &Decimal.compare/2),
+  "money round" => each.(money, &Decimal.round(&1, 2))
 }
+
+load = System.get_env("LOAD", "") |> String.split(",", trim: true)
+
+# Benchee resolves load paths with Path.wildcard, which turns a mistyped path
+# into an empty list and a comparison run into a plain one, with no error.
+for path <- load, Path.wildcard(path) == [] do
+  IO.puts(:stderr, "LOAD path #{path} matches no saved benchmark")
+  System.halt(1)
+end
 
 Benchee.run(jobs,
   time: 10,
   memory_time: 2,
   save: [path: "benchmarks/#{tag}.benchee", tag: tag],
+  load: load,
   formatters: [Benchee.Formatters.Console]
 )

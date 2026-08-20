@@ -1179,6 +1179,29 @@ defmodule DecimalTest do
   end
 
   @tag timeout: @bounded_smoke_timeout
+  test "add/2 with a very large coefficient at the same exponent stays bounded" do
+    # Equal exponents skip the bounded path, so pin that this cannot amplify:
+    # with nothing to align, the coefficient is whatever the caller already
+    # built, and the result is rounded to the context precision.
+    # kept under `emax` so the result is a number rather than an overflow
+    digits = 5_000
+
+    big = %Decimal{
+      sign: 1,
+      coef: :erlang.binary_to_integer(String.duplicate("9", digits)),
+      exp: 0
+    }
+
+    small = %Decimal{sign: 1, coef: 1, exp: 0}
+
+    assert_runs_quickly("add large coef at equal exp", fn ->
+      # 5_000 nines plus one is 10^5_000, which has 5_001 digits and rounds to
+      # the 34 the default context allows
+      assert Decimal.add(big, small) == d(1, Integer.pow(10, 33), digits + 1 - 34)
+    end)
+  end
+
+  @tag timeout: @bounded_smoke_timeout
   test "add/2 with very large coefficient and small addend" do
     big = %Decimal{
       sign: 1,
@@ -1526,10 +1549,20 @@ defmodule DecimalTest do
     c19 = 9_999_999_999_999_999_999
     pow10 = fn n -> String.to_integer("1" <> String.duplicate("0", n)) end
 
-    # 18 -> 19 digits crosses from the guard-chain clauses into the
-    # bit-length estimate; neither should be touched at default precision
+    c17 = 99_999_999_999_999_999
+
+    # 17 -> 18 digits crosses from the comparison ladder into the bit-length
+    # estimate, 18 -> 19 crosses the machine word; none should be touched at
+    # default precision
+    assert Decimal.apply_context(Decimal.new(1, c17, 0)) == d(1, c17, 0)
+    assert Decimal.apply_context(Decimal.new(1, c17 + 1, 0)) == d(1, c17 + 1, 0)
     assert Decimal.apply_context(Decimal.new(1, c18, 0)) == d(1, c18, 0)
     assert Decimal.apply_context(Decimal.new(1, c19, 0)) == d(1, c19, 0)
+
+    # the same boundary through scaling and comparison
+    assert Decimal.compare(Decimal.new(1, c17, 0), Decimal.new(1, c17 + 1, 0)) == :lt
+    assert Decimal.add(Decimal.new(1, c17, 0), Decimal.new(1, 1, 0)) == d(1, c17 + 1, 0)
+    assert Decimal.to_string(Decimal.new(1, c17 + 1, 0)) == "100000000000000000"
 
     # 34 digits fits the default precision exactly; 35 digits rounds
     assert Decimal.apply_context(Decimal.new(1, pow10.(33), 0)) == d(1, pow10.(33), 0)
@@ -1558,6 +1591,192 @@ defmodule DecimalTest do
   test "to_string/2 :xsd expands large positive exponents" do
     assert Decimal.to_string(~d"1e120", :xsd) ==
              "1" <> String.duplicate("0", 120) <> ".0"
+  end
+
+  test "compare/2 with equal exponents" do
+    assert Decimal.compare(d(1, 12_345, -2), d(1, 12_346, -2)) == :lt
+    assert Decimal.compare(d(1, 12_346, -2), d(1, 12_345, -2)) == :gt
+    assert Decimal.compare(d(1, 12_345, -2), d(1, 12_345, -2)) == :eq
+
+    # a negative sign inverts the coefficient order
+    assert Decimal.compare(d(-1, 12_345, -2), d(-1, 12_346, -2)) == :gt
+    assert Decimal.compare(d(-1, 12_346, -2), d(-1, 12_345, -2)) == :lt
+
+    # coefficients of different lengths at the same exponent
+    assert Decimal.compare(d(1, 9, 0), d(1, 1_000, 0)) == :lt
+    assert Decimal.compare(d(-1, 9, 0), d(-1, 1_000, 0)) == :gt
+
+    # 34-digit coefficients at the same scale
+    coef = 1_234_567_890_123_456_789_012_345_678_901_234
+    assert Decimal.compare(d(1, coef, -5), d(1, coef + 1, -5)) == :lt
+    assert Decimal.compare(d(-1, coef, -5), d(-1, coef + 1, -5)) == :gt
+    assert Decimal.compare(d(1, coef, -5), d(1, coef, -5)) == :eq
+
+    # zero and NaN are still decided before the coefficients are compared
+    assert Decimal.compare(d(1, 0, -2), d(1, 0, -2)) == :eq
+    assert Decimal.compare(d(1, 0, -2), d(1, 5, -2)) == :lt
+    assert Decimal.compare(d(-1, 0, -2), d(-1, 5, -2)) == :gt
+    assert Decimal.compare(d(1, 5, -2), d(-1, 5, -2)) == :gt
+
+    assert_raise Error, fn -> Decimal.compare(d(1, :NaN, 0), d(1, 5, 0)) end
+  end
+
+  test "add/2 with equal exponents and a coefficient length gap over the precision" do
+    # An exponent gap is what makes alignment expensive; with equal exponents
+    # there is nothing to align, so the exact sum is computed and rounded.
+    wide = String.to_integer("1" <> String.duplicate("0", 40))
+    rounded = String.to_integer("1" <> String.duplicate("0", 33))
+
+    Context.with(%Context{traps: []}, fn ->
+      assert Decimal.add(d(1, wide, 0), d(1, 1, 0)) == d(1, rounded, 7)
+      assert :inexact in Context.get().flags
+      assert :rounded in Context.get().flags
+    end)
+
+    # subtractive cancellation at equal exponents
+    assert Decimal.add(d(1, wide, 0), d(-1, wide, 0)) == d(1, 0, 0)
+    assert Decimal.add(d(1, 12_345, -2), d(-1, 12_346, -2)) == d(-1, 1, -2)
+
+    # in-precision sums are exact
+    assert Decimal.add(d(1, 12_345, -2), d(1, 1, -2)) == d(1, 12_346, -2)
+    assert Decimal.sub(d(1, 12_345, -2), d(1, 12_345, -2)) == d(1, 0, -2)
+  end
+
+  test "to_float/1 across the double range" do
+    # subnormals are below DBL_MIN and rejected, as documented
+    assert_raise Error, fn -> Decimal.to_float(~d"5e-324") end
+
+    assert Decimal.to_float(~d"2.2250738585072014e-308") == 2.2250738585072014e-308
+    assert Decimal.to_float(~d"1.7976931348623157e308") == 1.7976931348623157e308
+    assert Decimal.to_float(~d"-1.7976931348623157e308") == -1.7976931348623157e308
+
+    # `String.to_float/1` is correctly rounded, so it is an independent oracle
+    # for the scaling `to_float/1` does with integer arithmetic
+    for coef <- [1, 3, 7, 9, 15, 123, 999_999_999_999_999, 1_234_567_890_123_456],
+        exp <- [-30, -17, -7, -3, -1, 0, 1, 3, 7, 17, 30] do
+      decimal = Decimal.new(1, coef, exp)
+      expected = String.to_float("#{coef}.0e#{exp}")
+
+      assert Decimal.to_float(decimal) == expected
+      assert Decimal.to_float(Decimal.new(-1, coef, exp)) == -expected
+    end
+
+    # every power of ten in range survives the round trip
+    for exp <- -300..300 do
+      float = :math.pow(10.0, exp)
+      assert float |> Decimal.from_float() |> Decimal.to_float() == float
+    end
+  end
+
+  test "from_float/1 drops the redundant fraction from exponent notation" do
+    assert Decimal.from_float(1.0e5) == d(1, 1, 5)
+    assert Decimal.from_float(100_000.0) == d(1, 1, 5)
+    assert Decimal.from_float(1.0e-5) == d(1, 1, -5)
+    assert Decimal.from_float(-1.0e300) == d(-1, 1, 300)
+    assert Decimal.from_float(5.0e-324) == d(1, 5, -324)
+
+    # values rendered without an exponent are untouched
+    assert Decimal.from_float(1.5) == d(1, 15, -1)
+    assert Decimal.from_float(0.1) == d(1, 1, -1)
+    assert Decimal.from_float(-3.14) == d(-1, 314, -2)
+    assert Decimal.from_float(0.0) == d(1, 0, -1)
+  end
+
+  test "parse/2 exponent digits" do
+    assert Decimal.parse("1e0000") == {d(1, 1, 0), ""}
+    assert Decimal.parse("1e00000000000000000000005") == {d(1, 1, 5), ""}
+    assert Decimal.parse("1.5e-2x") == {d(1, 15, -3), "x"}
+
+    # the marker is only part of the number when digits follow it
+    assert Decimal.parse("1e") == {d(1, 1, 0), "e"}
+    assert Decimal.parse("1e+") == {d(1, 1, 0), "e+"}
+    assert Decimal.parse("1e-") == {d(1, 1, 0), "e-"}
+    assert Decimal.parse("1E") == {d(1, 1, 0), "E"}
+
+    # an exponent past the limit is rejected without being materialized
+    assert Decimal.parse("1e" <> String.duplicate("9", 10_000)) == :error
+    assert Decimal.parse("1e-" <> String.duplicate("9", 10_000)) == :error
+    assert Decimal.parse("1e6144") == {d(1, 1, 6144), ""}
+    assert Decimal.parse("1e6145") == :error
+
+    # without a limit it is parsed in full
+    digits = String.duplicate("9", 40)
+
+    assert Decimal.parse("1e" <> digits, max_exponent: :infinity) ==
+             {d(1, 1, String.to_integer(digits)), ""}
+  end
+
+  test "parse/1 coefficients around the digit accumulator boundary" do
+    for length <- 15..21 do
+      digits = String.duplicate("9", length)
+      assert Decimal.parse(digits) == {d(1, String.to_integer(digits), 0), ""}
+
+      with_point = String.duplicate("9", length) <> "." <> String.duplicate("7", 5)
+
+      assert Decimal.parse(with_point) ==
+               {d(1, String.to_integer(String.duplicate("9", length) <> "77777"), -5), ""}
+    end
+
+    # leading zeros are not significant digits and do not stop the accumulator
+    assert Decimal.parse("0000000000000000000000000000000000000001.5") == {d(1, 15, -1), ""}
+    assert Decimal.parse("0.0000000000000000000001") == {d(1, 1, -22), ""}
+    assert Decimal.parse(String.duplicate("0", 40)) == {d(1, 0, 0), ""}
+
+    # past the boundary the digits convert from the input, leading zeros and all
+    nines = String.duplicate("9", 18)
+    assert Decimal.parse("000" <> nines) == {d(1, String.to_integer(nines), 0), ""}
+
+    assert Decimal.parse("000" <> nines <> ".55") ==
+             {d(1, String.to_integer(nines <> "55"), -2), ""}
+
+    assert Decimal.parse("0." <> String.duplicate("0", 21) <> nines) ==
+             {d(1, String.to_integer(nines), -39), ""}
+
+    # exponent digits go through the same scan
+    assert Decimal.parse("1e" <> String.duplicate("0", 20) <> "5") == {d(1, 1, 5), ""}
+  end
+
+  test "flags accumulate across operations" do
+    Context.with(%Context{traps: []}, fn ->
+      assert Context.get().flags == []
+
+      Decimal.add(~d"1", ~d"2")
+      assert Context.get().flags == []
+
+      # The order is asserted, not just the membership: operations merge their
+      # own signals with the ones rounding raises, and the merge must not
+      # reshuffle what is already recorded.
+      Decimal.div(~d"1", ~d"3")
+      assert Context.get().flags == [:rounded, :inexact]
+
+      # re-signalling the same condition leaves the flags as they are
+      Decimal.div(~d"2", ~d"7")
+      Decimal.add(~d"1", ~d"2")
+      assert Context.get().flags == [:rounded, :inexact]
+
+      # a new signal is still recorded on top
+      Decimal.mult(~d"1e6000", ~d"1e6000")
+      flags = Context.get().flags
+      assert :overflow in flags
+      assert :inexact in flags
+      assert :rounded in flags
+    end)
+
+    # flags are per context, so a fresh one starts clean
+    Context.with(%Context{}, fn -> assert Context.get().flags == [] end)
+  end
+
+  test "round/3 dropping exactly one digit" do
+    assert Decimal.round(~d"1.25", 1, :half_even) == d(1, 12, -1)
+    assert Decimal.round(~d"1.35", 1, :half_even) == d(1, 14, -1)
+    assert Decimal.round(~d"1.25", 1, :half_up) == d(1, 13, -1)
+    assert Decimal.round(~d"-1.25", 1, :half_up) == d(-1, 13, -1)
+    assert Decimal.round(~d"1.25", 1, :half_down) == d(1, 12, -1)
+    assert Decimal.round(~d"1.29", 1, :down) == d(1, 12, -1)
+    assert Decimal.round(~d"1.21", 1, :up) == d(1, 13, -1)
+    assert Decimal.round(~d"1.21", 1, :ceiling) == d(1, 13, -1)
+    assert Decimal.round(~d"1.29", 1, :floor) == d(1, 12, -1)
+    assert Decimal.round(~d"-1.21", 1, :floor) == d(-1, 13, -1)
   end
 
   defp assert_runs_quickly(name, fun) do
