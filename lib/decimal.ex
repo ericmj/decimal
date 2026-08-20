@@ -2129,9 +2129,7 @@ defmodule Decimal do
   # Shifts `num` up until it reaches `den`, so that dividing the two yields the
   # 53 bits of a double's significand. The distance is the difference of the
   # bit lengths, which lands within one bit, so a single comparison finishes
-  # it. Walking there one bit at a time, as this did, allocated a bignum per
-  # bit: ~50 of them for a value like 1.5, over a thousand near the ends of the
-  # double range.
+  # it.
   defp scale_up(num, den, exp) when num >= den, do: {num, exp}
 
   defp scale_up(num, den, exp) do
@@ -2967,8 +2965,7 @@ defmodule Decimal do
 
   # `:io_lib_format.fwrite_g/1` renders exponent notation with a redundant
   # fraction: `1.0e5`. Dropping it keeps `from_float/1` from reading that as a
-  # coefficient of 10 with the exponent one lower. Matching forward builds the
-  # result directly; accumulating and reversing cost a second cons per char.
+  # coefficient of 10 with the exponent one lower.
   defp fix_float_exp([?., ?0, ?e | rest]), do: [?e | fix_float_exp(rest)]
   defp fix_float_exp([char | rest]), do: [char | fix_float_exp(rest)]
   defp fix_float_exp([]), do: []
@@ -2978,8 +2975,8 @@ defmodule Decimal do
   # the extremes need the exact comparisons below.
   defp check_dbl_min_max(%Decimal{coef: 0} = num), do: num
 
-  defp check_dbl_min_max(%Decimal{coef: coef, exp: exp} = num) do
-    if Kernel.abs(exp + coef_length(coef) - 1) < 308 do
+  defp check_dbl_min_max(%Decimal{} = num) do
+    if Kernel.abs(adjust_exp(num)) < 308 do
       num
     else
       check_dbl_range(num)
@@ -3019,8 +3016,7 @@ end
 
 defimpl Inspect, for: Decimal do
   def inspect(dec, _opts) do
-    string = Decimal.to_string(dec, :scientific, max_digits: :infinity)
-    <<"Decimal.new(\"", string::binary, "\")">>
+    "Decimal.new(\"" <> Decimal.to_string(dec, :scientific, max_digits: :infinity) <> "\")"
   end
 end
 
