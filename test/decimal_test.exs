@@ -1179,6 +1179,29 @@ defmodule DecimalTest do
   end
 
   @tag timeout: @bounded_smoke_timeout
+  test "add/2 with a very large coefficient at the same exponent stays bounded" do
+    # Equal exponents skip the bounded path, so pin that this cannot amplify:
+    # with nothing to align, the coefficient is whatever the caller already
+    # built, and the result is rounded to the context precision.
+    # kept under `emax` so the result is a number rather than an overflow
+    digits = 5_000
+
+    big = %Decimal{
+      sign: 1,
+      coef: :erlang.binary_to_integer(String.duplicate("9", digits)),
+      exp: 0
+    }
+
+    small = %Decimal{sign: 1, coef: 1, exp: 0}
+
+    assert_runs_quickly("add large coef at equal exp", fn ->
+      # 5_000 nines plus one is 10^5_000, which has 5_001 digits and rounds to
+      # the 34 the default context allows
+      assert Decimal.add(big, small) == d(1, Integer.pow(10, 33), digits + 1 - 34)
+    end)
+  end
+
+  @tag timeout: @bounded_smoke_timeout
   test "add/2 with very large coefficient and small addend" do
     big = %Decimal{
       sign: 1,

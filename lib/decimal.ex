@@ -380,9 +380,11 @@ defmodule Decimal do
       coef2 == 0 ->
         add_zero(num2, num1, ctx)
 
-      # Equal exponents need no alignment, so there is nothing for the bounded
-      # path to protect against: it would settle on `base_exp == exp1` and
-      # compute this very sum. Deciding that costs counting both coefficients'
+      # The bounded path below guards against coefficient amplification from an
+      # exponent gap (CVE-2026-32686). Equal exponents need no alignment, so
+      # there is nothing to amplify: the bounded path would settle on
+      # `base_exp == exp1`, scale both coefficients by 10^0 and compute this
+      # very sum. Reaching that conclusion costs counting both coefficients'
       # digits, which is all `add_bounded?/3` does.
       exp1 == exp2 ->
         add_coefs(sign1, coef1, sign2, coef2, exp1, ctx)
@@ -2741,7 +2743,9 @@ defmodule Decimal do
   # and accumulates their value. Up to `@accum_digits` the accumulator stays
   # inside a machine word and the scan yields the coefficient itself, with no
   # intermediate list or binary. Beyond that it would become a bignum and grow
-  # quadratically, so longer runs are counted only and converted in one step.
+  # quadratically, so longer runs are counted only and converted in one step -
+  # after the limit check, so that an over-long input is still rejected without
+  # its coefficient ever being materialized.
   @accum_digits 17
 
   defp parse_digits_count(<<?0, rest::binary>>, count, leading_zeros, acc)
