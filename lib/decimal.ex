@@ -2164,10 +2164,14 @@ defmodule Decimal do
     quo = Kernel.div(num, den)
     rem = num - quo * den
 
+    # Compare the doubled remainder so halving `den` cannot floor: with an
+    # exact division (`rem` 0) against `den` of 1, `den >>> 1` would be 0 and
+    # the exact quotient would fall through to the ties-to-even clause,
+    # rounding odd 53-bit significands away by one ULP.
     tmp =
-      case den >>> 1 do
-        den when rem > den -> quo + 1
-        den when rem < den -> quo
+      case rem <<< 1 do
+        rem2 when rem2 > den -> quo + 1
+        rem2 when rem2 < den -> quo
         _ when (quo &&& 1) === 1 -> quo + 1
         _ -> quo
       end

@@ -997,6 +997,20 @@ defmodule DecimalTest do
     end)
   end
 
+  test "to_float/1 odd integers with 53-bit significands are exact" do
+    # 2^52 + 1, 2^53 - 1, and any odd integer between them are exactly
+    # representable as doubles and must convert without rounding.
+    assert Decimal.to_float(~d"4503599627370497") === 4_503_599_627_370_497.0
+    assert Decimal.to_float(~d"-4503599627370497") === -4_503_599_627_370_497.0
+    assert Decimal.to_float(~d"6004799503160661") === 6_004_799_503_160_661.0
+    assert Decimal.to_float(~d"9007199254740991") === 9_007_199_254_740_991.0
+
+    # Just above 2^53 the ULP is 2: odd values are genuine ties and must
+    # keep rounding to the even significand.
+    assert Decimal.to_float(~d"9007199254740993") === 9_007_199_254_740_992.0
+    assert Decimal.to_float(~d"9007199254740995") === 9_007_199_254_740_996.0
+  end
+
   test "round/3: special" do
     assert Decimal.round(~d"inf", 2, :down) == d(1, :inf, 0)
     assert Decimal.round(~d"nan", 2, :down) == d(1, :NaN, 0)
