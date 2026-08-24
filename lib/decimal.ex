@@ -984,7 +984,7 @@ defmodule Decimal do
 
         case integer_division(div_sign, coef1, exp1, coef2, exp2) do
           {:ok, result} ->
-            sub(num1, mult(num2, result))
+            exact_rem(num1, num2, result)
 
           {:error, error, reason, num} ->
             error(error, reason, num)
@@ -1065,7 +1065,7 @@ defmodule Decimal do
       true ->
         case integer_division(div_sign, coef1, exp1, coef2, exp2) do
           {:ok, result} ->
-            {result, sub(num1, mult(num2, result))}
+            {result, exact_rem(num1, num2, result)}
 
           {:error, error, reason, num} ->
             error(error, reason, {num, num})
@@ -2439,6 +2439,26 @@ defmodule Decimal do
       "integer division impossible, quotient too large",
       %Decimal{coef: :NaN}
     }
+  end
+
+  # The remainder is computed exactly: routing `num2 * quotient` through the
+  # public operations would round the product to the context precision before
+  # the subtraction, and a rounded product can cancel the true remainder
+  # entirely (for 34-digit operands the rounded product may equal `num1`).
+  # Only the final remainder goes through the context, like any result. The
+  # intermediates stay input-proportional: `integer_division/5` caps the
+  # quotient at `precision + 1` digits, which also bounds the exponent gap
+  # the alignment bridges.
+  #
+  # The quotient is floor(|num1| / |num2|), so the difference is non-negative
+  # and the remainder carries the dividend's sign - also when the remainder
+  # is zero, as IEEE 754 defines it.
+  defp exact_rem(%Decimal{} = num1, %Decimal{} = num2, %Decimal{coef: qcoef}) do
+    %Decimal{sign: sign1, coef: coef1, exp: exp1} = num1
+    %Decimal{coef: coef2, exp: exp2} = num2
+
+    {coef1, prod} = add_align(coef1, exp1, coef2 * qcoef, exp2)
+    context(%Decimal{sign: sign1, coef: coef1 - prod, exp: Kernel.min(exp1, exp2)})
   end
 
   defp do_normalize(coef, exp) when coef >= @normalize_chunk_pow do

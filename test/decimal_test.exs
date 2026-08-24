@@ -604,6 +604,34 @@ defmodule DecimalTest do
     end
   end
 
+  test "rem/2 and div_rem/2 compute the remainder exactly" do
+    # 34-digit operands whose divisor * quotient spans 67 digits: rounding
+    # that intermediate product to the context precision yields exactly the
+    # dividend, cancelling the true remainder of 3E-33 down to 0.
+    x = ~d"9999999999999999999999999999999999"
+    y = ~d"2.000000000000000000000000000000001"
+
+    assert Decimal.rem(x, y) == d(1, 3, -33)
+    assert Decimal.rem(~d"-9999999999999999999999999999999999", y) == d(-1, 3, -33)
+
+    {q, r} = Decimal.div_rem(x, y)
+    assert q == d(1, 4_999_999_999_999_999_999_999_999_999_999_997, 0)
+    assert r == d(1, 3, -33)
+
+    # the remainder is exact, so nothing may signal from the internals
+    flags = Context.get().flags
+    refute :inexact in flags
+    refute :rounded in flags
+
+    # a zero remainder takes the sign of the dividend, like any nonzero
+    # remainder does (and as IEEE 754 and Python's decimal define it)
+    assert Decimal.rem(~d"-4", ~d"2") == d(-1, 0, 0)
+
+    Context.with(%Context{precision: 5}, fn ->
+      assert Decimal.rem(~d"99999", ~d"2.0001") == d(1, 3, -4)
+    end)
+  end
+
   test "max/2" do
     assert Decimal.max(~d"0", ~d"0") == d(1, 0, 0)
     assert Decimal.max(~d"1", ~d"0") == d(1, 1, 0)
