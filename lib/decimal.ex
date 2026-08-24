@@ -1464,8 +1464,14 @@ defmodule Decimal do
       context(%Decimal{sign: 1, coef: coef, exp: exp}, [], false, ctx)
     else
       # otherwise the calculated root is inexact (but still meets precision),
-      # so use the root as `coef` and get the final exponent by shifting `exp`
-      context(%Decimal{sign: 1, coef: root, exp: exp - shift}, [], false, ctx)
+      # so use the root as `coef` and get the final exponent by shifting `exp`.
+      # The true root lies strictly beyond the truncated `root` on this branch
+      # (either the root itself is inexact, or an inexact down-shift dropped
+      # digits from an exact one), so the sticky bit is set: without it,
+      # rounding treats the guard digit as the entire discarded part, leaving
+      # directed modes short of the true root and turning "guard 5 with more
+      # beyond" into a false half-even tie.
+      context(%Decimal{sign: 1, coef: root, exp: exp - shift}, [], true, ctx)
     end
   end
 

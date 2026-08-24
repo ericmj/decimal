@@ -1134,6 +1134,40 @@ defmodule DecimalTest do
     end)
   end
 
+  test "sqrt/1 carries the discarded digits into rounding as a sticky bit" do
+    # An inexact root lies strictly beyond its truncated coefficient, so
+    # directed roundings must bump even when the guard digit is 0:
+    # sqrt(10) = 3.16227766016... > 3.16227766.
+    Context.with(%Context{precision: 9, rounding: :ceiling}, fn ->
+      assert Decimal.sqrt(~d"10") == d(1, 316_227_767, -8)
+      assert Decimal.sqrt(~d"2") == d(1, 141_421_357, -8)
+    end)
+
+    Context.with(%Context{precision: 9, rounding: :up}, fn ->
+      assert Decimal.sqrt(~d"10") == d(1, 316_227_767, -8)
+    end)
+
+    # :floor truncates a positive result regardless of discarded digits.
+    Context.with(%Context{precision: 9, rounding: :floor}, fn ->
+      assert Decimal.sqrt(~d"10") == d(1, 316_227_766, -8)
+    end)
+
+    # A guard digit of 5 with nonzero digits beyond it is not a tie:
+    # sqrt(1.57) = 1.25299... rounds up, not to the even neighbor.
+    Context.with(%Context{precision: 2, rounding: :half_even}, fn ->
+      assert Decimal.sqrt(~d"1.57") == d(1, 13, -1)
+    end)
+
+    # An inexact root signals :inexact, not just :rounded.
+    Context.with(%Context{precision: 9, rounding: :half_even}, fn ->
+      assert Decimal.sqrt(~d"10") == d(1, 316_227_766, -8)
+
+      flags = Context.get().flags
+      assert :inexact in flags
+      assert :rounded in flags
+    end)
+  end
+
   test "integer?/1" do
     assert Decimal.integer?(~d"1.0000")
     assert Decimal.integer?(~d"1")
