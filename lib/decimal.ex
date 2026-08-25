@@ -179,6 +179,13 @@ defmodule Decimal do
   @decimal_conversion_direct_limit :erlang.binary_to_integer("1" <> String.duplicate("0", 2_000))
   @decimal_conversion_leaf_digits 1_024
 
+  # Ceiling for seeding `sqrt_loop` from a float estimate: any operand below
+  # 10^300 converts to a double without overflow (DBL_MAX ~ 1.8e308). The
+  # operand `sqrt/1` scales for the loop has roughly `2 * precision` digits -
+  # ~70 at the default precision - so the power-of-ten fallback only triggers
+  # for precisions in the hundreds.
+  @float_sqrt_seed_limit :erlang.binary_to_integer("1" <> String.duplicate("0", 300))
+
   # Rational approximation of log10(2) used by `integer_decimal_digit_count/1`
   # to estimate decimal digit count from bit length:
   #
@@ -1443,16 +1450,7 @@ defmodule Decimal do
   defp do_sqrt(shifted_coef, shift, exp, exact, ctx) do
     # the preferred exponent is `exp / 2` as per IEEE 754
     exp = exp >>> 1
-    # `shift` scaled the operand so its integer square root has at most
-    # `ctx.precision + 1` digits, i.e. the root is below `10^(precision+1)`.
-    # That makes this fixed power of ten a valid seed for `sqrt_loop`, which
-    # requires starting at or above the true root: from an over-estimate the
-    # iteration descends monotonically and stops exactly at
-    # floor(√shifted_coef), while an under-estimate would satisfy the stop
-    # condition immediately and be returned as a too-small root. The seed
-    # also overshoots by less than 10x, so convergence takes only a few steps.
-    guess = pow10(ctx.precision + 1)
-    root = sqrt_loop(shifted_coef, guess)
+    root = sqrt_loop(shifted_coef, sqrt_seed(shifted_coef, ctx.precision))
 
     if exact and root * root === shifted_coef do
       # if the root is exact, use preferred `exp` and shift `coef` to match
@@ -1474,6 +1472,27 @@ defmodule Decimal do
       context(%Decimal{sign: 1, coef: root, exp: exp - shift}, [], true, ctx)
     end
   end
+
+  # `sqrt_loop` requires a seed at or above the true root: from an
+  # over-estimate the iteration descends monotonically and stops exactly at
+  # floor(√shifted_coef), while an under-estimate would satisfy the stop
+  # condition immediately and be returned as a too-small root.
+  #
+  # A double holds the operand with at most 2^-52 relative error and
+  # :math.sqrt/1 is correctly rounded, so the float estimate sits within a
+  # few ULPs of the true root. Widening it by 1e-12 - orders of magnitude
+  # beyond that error - and stepping past truncation guarantees a start
+  # above the root, while overshooting so little that the loop settles in
+  # two or three divisions instead of descending from a power of ten.
+  defp sqrt_seed(shifted_coef, _precision) when shifted_coef < @float_sqrt_seed_limit do
+    trunc(:math.sqrt(shifted_coef * 1.0) * 1.000000000001) + 1
+  end
+
+  # Operands too large for a double: `shift` scaled the operand so its
+  # integer square root has at most `precision + 1` digits, i.e. the root is
+  # below this power of ten, making it a valid seed that overshoots by less
+  # than 10x.
+  defp sqrt_seed(_shifted_coef, precision), do: pow10(precision + 1)
 
   # Babylonion method
   defp sqrt_loop(coef, guess) do
