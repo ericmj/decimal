@@ -213,8 +213,10 @@ defmodule DecimalTest do
     assert Decimal.new(d(-1, 3, 2)) == d(-1, 3, 2)
     assert Decimal.new(123) == d(1, 123, 0)
 
+    # apply/3 keeps the intentionally invalid argument opaque to the
+    # type checker; the raise is the point.
     assert_raise FunctionClauseError, fn ->
-      Decimal.new(:atom)
+      apply(Decimal, :new, [:atom])
     end
   end
 
@@ -943,8 +945,10 @@ defmodule DecimalTest do
         fn -> Decimal.to_integer(d(1, 1001, -2)) end
       )
 
+      # apply/3 keeps the intentionally invalid argument opaque to the
+      # type checker; the raise is the point.
       assert_raise FunctionClauseError, fn ->
-        Decimal.to_integer(d(1, :NaN, 0))
+        apply(Decimal, :to_integer, [d(1, :NaN, 0)])
       end
     end)
   end
@@ -1401,8 +1405,10 @@ defmodule DecimalTest do
   end
 
   test "issue #60" do
+    # apply/3 keeps the intentionally invalid argument opaque to the
+    # type checker; the raise is the point.
     assert_raise(FunctionClauseError, "no function clause matching in Decimal.decimal/1", fn ->
-      Decimal.round(nil)
+      apply(Decimal, :round, [nil])
     end)
   end
 
