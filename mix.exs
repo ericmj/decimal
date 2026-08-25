@@ -24,7 +24,7 @@ defmodule Decimal.Mixfile do
 
   defp deps() do
     [
-      {:ex_doc, ">= 0.0.0", only: :dev},
+      {:ex_doc, "~> 0.40.3", only: :dev},
       {:stream_data, "~> 1.2.0", only: :test}
     ]
   end
