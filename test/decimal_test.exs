@@ -604,6 +604,34 @@ defmodule DecimalTest do
     end
   end
 
+  test "rem/2 and div_rem/2 compute the remainder exactly" do
+    # 34-digit operands whose divisor * quotient spans 67 digits: rounding
+    # that intermediate product to the context precision yields exactly the
+    # dividend, cancelling the true remainder of 3E-33 down to 0.
+    x = ~d"9999999999999999999999999999999999"
+    y = ~d"2.000000000000000000000000000000001"
+
+    assert Decimal.rem(x, y) == d(1, 3, -33)
+    assert Decimal.rem(~d"-9999999999999999999999999999999999", y) == d(-1, 3, -33)
+
+    {q, r} = Decimal.div_rem(x, y)
+    assert q == d(1, 4_999_999_999_999_999_999_999_999_999_999_997, 0)
+    assert r == d(1, 3, -33)
+
+    # the remainder is exact, so nothing may signal from the internals
+    flags = Context.get().flags
+    refute :inexact in flags
+    refute :rounded in flags
+
+    # a zero remainder takes the sign of the dividend, like any nonzero
+    # remainder does (and as IEEE 754 and Python's decimal define it)
+    assert Decimal.rem(~d"-4", ~d"2") == d(-1, 0, 0)
+
+    Context.with(%Context{precision: 5}, fn ->
+      assert Decimal.rem(~d"99999", ~d"2.0001") == d(1, 3, -4)
+    end)
+  end
+
   test "max/2" do
     assert Decimal.max(~d"0", ~d"0") == d(1, 0, 0)
     assert Decimal.max(~d"1", ~d"0") == d(1, 1, 0)
@@ -997,6 +1025,20 @@ defmodule DecimalTest do
     end)
   end
 
+  test "to_float/1 odd integers with 53-bit significands are exact" do
+    # 2^52 + 1, 2^53 - 1, and any odd integer between them are exactly
+    # representable as doubles and must convert without rounding.
+    assert Decimal.to_float(~d"4503599627370497") === 4_503_599_627_370_497.0
+    assert Decimal.to_float(~d"-4503599627370497") === -4_503_599_627_370_497.0
+    assert Decimal.to_float(~d"6004799503160661") === 6_004_799_503_160_661.0
+    assert Decimal.to_float(~d"9007199254740991") === 9_007_199_254_740_991.0
+
+    # Just above 2^53 the ULP is 2: odd values are genuine ties and must
+    # keep rounding to the even significand.
+    assert Decimal.to_float(~d"9007199254740993") === 9_007_199_254_740_992.0
+    assert Decimal.to_float(~d"9007199254740995") === 9_007_199_254_740_996.0
+  end
+
   test "round/3: special" do
     assert Decimal.round(~d"inf", 2, :down) == d(1, :inf, 0)
     assert Decimal.round(~d"nan", 2, :down) == d(1, :NaN, 0)
@@ -1117,6 +1159,40 @@ defmodule DecimalTest do
       assert Decimal.sqrt(~d"10") == d(1, 316_227_766, -8)
       assert Decimal.sqrt(~d"7") == d(1, 264_575_131, -8)
       assert Decimal.sqrt(~d"0.39") == d(1, 624_499_800, -9)
+    end)
+  end
+
+  test "sqrt/1 carries the discarded digits into rounding as a sticky bit" do
+    # An inexact root lies strictly beyond its truncated coefficient, so
+    # directed roundings must bump even when the guard digit is 0:
+    # sqrt(10) = 3.16227766016... > 3.16227766.
+    Context.with(%Context{precision: 9, rounding: :ceiling}, fn ->
+      assert Decimal.sqrt(~d"10") == d(1, 316_227_767, -8)
+      assert Decimal.sqrt(~d"2") == d(1, 141_421_357, -8)
+    end)
+
+    Context.with(%Context{precision: 9, rounding: :up}, fn ->
+      assert Decimal.sqrt(~d"10") == d(1, 316_227_767, -8)
+    end)
+
+    # :floor truncates a positive result regardless of discarded digits.
+    Context.with(%Context{precision: 9, rounding: :floor}, fn ->
+      assert Decimal.sqrt(~d"10") == d(1, 316_227_766, -8)
+    end)
+
+    # A guard digit of 5 with nonzero digits beyond it is not a tie:
+    # sqrt(1.57) = 1.25299... rounds up, not to the even neighbor.
+    Context.with(%Context{precision: 2, rounding: :half_even}, fn ->
+      assert Decimal.sqrt(~d"1.57") == d(1, 13, -1)
+    end)
+
+    # An inexact root signals :inexact, not just :rounded.
+    Context.with(%Context{precision: 9, rounding: :half_even}, fn ->
+      assert Decimal.sqrt(~d"10") == d(1, 316_227_766, -8)
+
+      flags = Context.get().flags
+      assert :inexact in flags
+      assert :rounded in flags
     end)
   end
 
