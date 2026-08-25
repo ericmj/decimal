@@ -277,7 +277,7 @@ defmodule Decimal do
     defmacro is_decimal(term) do
       case __CALLER__.context do
         nil ->
-          quote do
+          quote generated: true do
             case unquote(term) do
               %Decimal{} -> true
               _ -> false
@@ -299,7 +299,7 @@ defmodule Decimal do
   else
     # TODO: remove when we require Elixir v1.10
     defmacro is_decimal(term) do
-      quote do
+      quote generated: true do
         case unquote(term) do
           %Decimal{} -> true
           _ -> false
