@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Breaking changes
+
+* Require Elixir 1.15 or later.
+
 ### Enhancements
 
 * Reduce the cost of every operation that goes through the context: results
