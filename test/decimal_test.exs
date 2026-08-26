@@ -1166,6 +1166,27 @@ defmodule DecimalTest do
     end)
   end
 
+  test "sqrt/1 inexact roots at default precision" do
+    # 34-significant-digit references for well-known constants; sqrt(1e33)
+    # exercises the odd-exponent scaling path.
+    assert Decimal.sqrt(~d"2") == d(1, 1_414_213_562_373_095_048_801_688_724_209_698, -33)
+    assert Decimal.sqrt(~d"3") == d(1, 1_732_050_807_568_877_293_527_446_341_505_872, -33)
+    assert Decimal.sqrt(~d"1e33") == d(1, 3_162_277_660_168_379_331_998_893_544_432_719, -17)
+  end
+
+  test "sqrt/1 uses the power-of-ten seed above the float range" do
+    # At precision 200 the scaled operand has ~400 digits, past the 10^300
+    # float-seed limit, so this exercises the pow10 fallback seed. Exact
+    # squares are a sharp probe: a seed below the true root would be
+    # returned by sqrt_loop as-is and fail the equality. The square is
+    # built with integer math because mult/2 would round it to precision.
+    Context.with(%Context{precision: 200}, fn ->
+      n = Integer.pow(10, 199) + 1
+      assert Decimal.sqrt(Decimal.new(1, n * n, 0)) == d(1, n, 0)
+      assert Decimal.sqrt(~d"4") == d(1, 2, 0)
+    end)
+  end
+
   test "sqrt/1 carries the discarded digits into rounding as a sticky bit" do
     # An inexact root lies strictly beyond its truncated coefficient, so
     # directed roundings must bump even when the guard digit is 0:
