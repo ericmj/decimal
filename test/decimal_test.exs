@@ -1151,6 +1151,56 @@ defmodule DecimalTest do
     assert roundneg.(~d"1099") == d(1, 11, 2)
   end
 
+  test "round/3 applies only the caller's rounding mode" do
+    # The input used to be routed through the full context, which rounded the
+    # coefficient to `precision` under `ctx.rounding` before `mode` was ever
+    # applied. An input wider than the precision was then rounded twice, and
+    # the first rounding ignored `mode`: :half_up carried 0.4995 to 0.500 and
+    # :down truncated that to 0.5 - above the value it was asked to truncate.
+    Context.with(%Context{precision: 3}, fn ->
+      assert Decimal.round(~d"0.4995", 1, :down) == d(1, 4, -1)
+    end)
+
+    # The context's mode must not leak in either direction. Rounding up first
+    # under :ceiling turned a truncation into an increment...
+    Context.with(%Context{precision: 3, rounding: :ceiling}, fn ->
+      assert Decimal.round(~d"0.4991", 1, :down) == d(1, 4, -1)
+    end)
+
+    # ...and truncating first under :floor discarded the nonzero digits that
+    # :ceiling needs to see, leaving it short of the true ceiling.
+    Context.with(%Context{precision: 3, rounding: :floor}, fn ->
+      assert Decimal.round(~d"0.4001", 1, :ceiling) == d(1, 5, -1)
+    end)
+  end
+
+  test "round/3 does not double-round coefficients wider than the precision" do
+    # Such values cannot be built through `new/1` at the default context - the
+    # parse limit and the precision are both 34, so the literal is rejected -
+    # but `new/3` performs no digit count, and a driver decoding a numeric
+    # column builds the struct the same way. 0.4999...95 has 35 significant
+    # digits: truncating gives 0.4, while rounding to 34 digits first carries
+    # it to exactly 0.5.
+    coef = String.to_integer("4" <> String.duplicate("9", 33) <> "5")
+    num = Decimal.new(1, coef, -35)
+
+    assert Decimal.round(num, 1, :down) == d(1, 4, -1)
+    assert Decimal.round(num, 1, :floor) == d(1, 4, -1)
+    assert Decimal.round(num, 1, :half_even) == d(1, 5, -1)
+  end
+
+  @tag timeout: @bounded_smoke_timeout
+  test "round/3 applies the exponent limits before scaling the coefficient" do
+    # The limits have to be checked on the input: without them `do_round/5`
+    # would build `coef * pow10(exp - target_exp)` - ten million digits here -
+    # only for the context to discard it.
+    num = %Decimal{sign: 1, coef: 1, exp: 10_000_000}
+
+    assert_runs_quickly("round/3 bounded huge exponent", fn ->
+      assert Decimal.round(num, 0) == d(1, :inf, 0)
+    end)
+  end
+
   test "sqrt/1" do
     Context.with(%Context{precision: 9, rounding: :half_even}, fn ->
       assert Decimal.sqrt(~d"0") == d(1, 0, 0)

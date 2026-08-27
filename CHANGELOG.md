@@ -37,6 +37,23 @@
   operation (`add`, `sub`, `mult`, `div`) and now matches the General
   Decimal Arithmetic spec and Python's decimal.
 
+* Fix `Decimal.round/3` applying the context's rounding mode before the
+  caller's. The value was routed through the full context first, which
+  rounded the coefficient to `precision` under `Context.get().rounding`, so
+  an input with more significant digits than the precision was rounded twice
+  and the first rounding ignored the `mode` argument. At `precision: 3`,
+  `Decimal.round(Decimal.new("0.4995"), 1, :down)` returned `0.5` — above the
+  value it was asked to truncate. Coefficients wider than the precision reach
+  `round/3` at the default context whenever they are not built through
+  `new/1`, which rejects them at its parse limit: `new/3` performs no digit
+  count, and database drivers decoding a numeric column build the struct the
+  same way. Only the exponent limits are now applied to the input, so `mode`
+  is the only rounding `round/3` performs. As a result `round/3` no longer
+  sets `:inexact`/`:rounded` for an over-precision input; it did not set them
+  for the digits it discards itself, so it now signals for neither, remaining
+  a round-to-integral-value style operation that does not signal for the
+  digits it discards.
+
 ## v3.1.1 (2026-05-27)
 
 ### Bug fixes
