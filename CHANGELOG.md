@@ -48,11 +48,11 @@
   `new/1`, which rejects them at its parse limit: `new/3` performs no digit
   count, and database drivers decoding a numeric column build the struct the
   same way. Only the exponent limits are now applied to the input, so `mode`
-  is the only rounding `round/3` performs. As a result `round/3` no longer
-  sets `:inexact`/`:rounded` for an over-precision input; it did not set them
-  for the digits it discards itself, so it now signals for neither, remaining
-  a round-to-integral-value style operation that does not signal for the
-  digits it discards.
+  is the only rounding applied before the result reaches the context. As a
+  result `round/3` no longer signals `:inexact`/`:rounded` merely because its
+  *input* was wider than the precision. It still signals when the *result*
+  reaches the context wider than the precision, as every operation does, and
+  it still does not signal for the digits it discards itself.
 
 ## v3.1.1 (2026-05-27)
 

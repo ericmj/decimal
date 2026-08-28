@@ -1201,6 +1201,26 @@ defmodule DecimalTest do
     end)
   end
 
+  test "round/3 signals only for what the context rounds" do
+    # The digits `round/3` itself discards never signal: dropping "34" here
+    # sets no flag.
+    Context.with(%Context{precision: 3}, fn ->
+      assert Decimal.round(~d"1.234", 1) == d(1, 12, -1)
+      assert Context.get().flags == []
+    end)
+
+    # The result still goes through the context like any other operation, so a
+    # coefficient `places` does not narrow below the precision is rounded there
+    # - under `ctx.rounding` rather than the mode passed here - and signals.
+    Context.with(%Context{precision: 3}, fn ->
+      assert Decimal.round(~d"0.4995", 4, :down) == d(1, 500, -3)
+
+      flags = Context.get().flags
+      assert :inexact in flags
+      assert :rounded in flags
+    end)
+  end
+
   test "sqrt/1" do
     Context.with(%Context{precision: 9, rounding: :half_even}, fn ->
       assert Decimal.sqrt(~d"0") == d(1, 0, 0)
