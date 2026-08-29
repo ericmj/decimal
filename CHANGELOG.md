@@ -37,22 +37,17 @@
   operation (`add`, `sub`, `mult`, `div`) and now matches the General
   Decimal Arithmetic spec and Python's decimal.
 
-* Fix `Decimal.round/3` applying the context's rounding mode before the
-  caller's. The value was routed through the full context first, which
-  rounded the coefficient to `precision` under `Context.get().rounding`, so
-  an input with more significant digits than the precision was rounded twice
-  and the first rounding ignored the `mode` argument. At `precision: 3`,
-  `Decimal.round(Decimal.new("0.4995"), 1, :down)` returned `0.5` — above the
-  value it was asked to truncate. Coefficients wider than the precision reach
-  `round/3` at the default context whenever they are not built through
-  `new/1`, which rejects them at its parse limit: `new/3` performs no digit
-  count, and database drivers decoding a numeric column build the struct the
-  same way. Only the exponent limits are now applied to the input, so `mode`
-  is the only rounding applied before the result reaches the context. As a
-  result `round/3` no longer signals `:inexact`/`:rounded` merely because its
-  *input* was wider than the precision. It still signals when the *result*
-  reaches the context wider than the precision, as every operation does, and
-  it still does not signal for the digits it discards itself.
+* Fix `Decimal.round/3` rounding the input under the context's rounding mode
+  before the caller's. The input went through the full context first, so a
+  coefficient with more significant digits than the precision was rounded
+  twice and the first rounding ignored the `mode` argument: at
+  `precision: 3`, `Decimal.round(Decimal.new("0.4995"), 1, :down)` returned
+  `0.5`. Such inputs come from `new/3`, which performs no digit count. Only
+  the exponent limits are now applied to the input. `round/3` no longer
+  signals `:inexact`/`:rounded` because its input was wider than the
+  precision; it still signals when the result reaches the context wider than
+  the precision, as every operation does, and still does not signal for the
+  digits it discards itself.
 
 ## v3.1.1 (2026-05-27)
 

@@ -1152,35 +1152,25 @@ defmodule DecimalTest do
   end
 
   test "round/3 applies only the caller's rounding mode" do
-    # The input used to be routed through the full context, which rounded the
-    # coefficient to `precision` under `ctx.rounding` before `mode` was ever
-    # applied. An input wider than the precision was then rounded twice, and
-    # the first rounding ignored `mode`: :half_up carried 0.4995 to 0.500 and
-    # :down truncated that to 0.5 - above the value it was asked to truncate.
+    # Inputs wider than the precision, under a context mode that disagrees
+    # with `mode`.
     Context.with(%Context{precision: 3}, fn ->
       assert Decimal.round(~d"0.4995", 1, :down) == d(1, 4, -1)
     end)
 
-    # The context's mode must not leak in either direction. Rounding up first
-    # under :ceiling turned a truncation into an increment...
     Context.with(%Context{precision: 3, rounding: :ceiling}, fn ->
       assert Decimal.round(~d"0.4991", 1, :down) == d(1, 4, -1)
     end)
 
-    # ...and truncating first under :floor discarded the nonzero digits that
-    # :ceiling needs to see, leaving it short of the true ceiling.
     Context.with(%Context{precision: 3, rounding: :floor}, fn ->
       assert Decimal.round(~d"0.4001", 1, :ceiling) == d(1, 5, -1)
     end)
   end
 
   test "round/3 does not double-round coefficients wider than the precision" do
-    # Such values cannot be built through `new/1` at the default context - the
-    # parse limit and the precision are both 34, so the literal is rejected -
-    # but `new/3` performs no digit count, and a driver decoding a numeric
-    # column builds the struct the same way. 0.4999...95 has 35 significant
-    # digits: truncating gives 0.4, while rounding to 34 digits first carries
-    # it to exactly 0.5.
+    # 35 significant digits, one more than the default precision (`new/3`
+    # performs no digit count). Rounded to 34 digits first it would carry to
+    # exactly 0.5.
     coef = String.to_integer("4" <> String.duplicate("9", 33) <> "5")
     num = Decimal.new(1, coef, -35)
 
