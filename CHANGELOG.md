@@ -37,6 +37,18 @@
   operation (`add`, `sub`, `mult`, `div`) and now matches the General
   Decimal Arithmetic spec and Python's decimal.
 
+* Fix `Decimal.round/3` rounding the input under the context's rounding mode
+  before the caller's. The input went through the full context first, so a
+  coefficient with more significant digits than the precision was rounded
+  twice and the first rounding ignored the `mode` argument: at
+  `precision: 3`, `Decimal.round(Decimal.new("0.4995"), 1, :down)` returned
+  `0.5`. Such inputs come from `new/3`, which performs no digit count. Only
+  the exponent limits are now applied to the input. `round/3` no longer
+  signals `:inexact`/`:rounded` because its input was wider than the
+  precision; it still signals when the result reaches the context wider than
+  the precision, as every operation does, and still does not signal for the
+  digits it discards itself.
+
 ## v3.1.1 (2026-05-27)
 
 ### Bug fixes

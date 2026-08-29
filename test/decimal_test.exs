@@ -1151,6 +1151,66 @@ defmodule DecimalTest do
     assert roundneg.(~d"1099") == d(1, 11, 2)
   end
 
+  test "round/3 applies only the caller's rounding mode" do
+    # Inputs wider than the precision, under a context mode that disagrees
+    # with `mode`.
+    Context.with(%Context{precision: 3}, fn ->
+      assert Decimal.round(~d"0.4995", 1, :down) == d(1, 4, -1)
+    end)
+
+    Context.with(%Context{precision: 3, rounding: :ceiling}, fn ->
+      assert Decimal.round(~d"0.4991", 1, :down) == d(1, 4, -1)
+    end)
+
+    Context.with(%Context{precision: 3, rounding: :floor}, fn ->
+      assert Decimal.round(~d"0.4001", 1, :ceiling) == d(1, 5, -1)
+    end)
+  end
+
+  test "round/3 does not double-round coefficients wider than the precision" do
+    # 35 significant digits, one more than the default precision (`new/3`
+    # performs no digit count). Rounded to 34 digits first it would carry to
+    # exactly 0.5.
+    coef = String.to_integer("4" <> String.duplicate("9", 33) <> "5")
+    num = Decimal.new(1, coef, -35)
+
+    assert Decimal.round(num, 1, :down) == d(1, 4, -1)
+    assert Decimal.round(num, 1, :floor) == d(1, 4, -1)
+    assert Decimal.round(num, 1, :half_even) == d(1, 5, -1)
+  end
+
+  @tag timeout: @bounded_smoke_timeout
+  test "round/3 applies the exponent limits before scaling the coefficient" do
+    # The limits have to be checked on the input: without them `do_round/5`
+    # would build `coef * pow10(exp - target_exp)` - ten million digits here -
+    # only for the context to discard it.
+    num = %Decimal{sign: 1, coef: 1, exp: 10_000_000}
+
+    assert_runs_quickly("round/3 bounded huge exponent", fn ->
+      assert Decimal.round(num, 0) == d(1, :inf, 0)
+    end)
+  end
+
+  test "round/3 signals only for what the context rounds" do
+    # The digits `round/3` itself discards never signal: dropping "34" here
+    # sets no flag.
+    Context.with(%Context{precision: 3}, fn ->
+      assert Decimal.round(~d"1.234", 1) == d(1, 12, -1)
+      assert Context.get().flags == []
+    end)
+
+    # The result still goes through the context like any other operation, so a
+    # coefficient `places` does not narrow below the precision is rounded there
+    # - under `ctx.rounding` rather than the mode passed here - and signals.
+    Context.with(%Context{precision: 3}, fn ->
+      assert Decimal.round(~d"0.4995", 4, :down) == d(1, 500, -3)
+
+      flags = Context.get().flags
+      assert :inexact in flags
+      assert :rounded in flags
+    end)
+  end
+
   test "sqrt/1" do
     Context.with(%Context{precision: 9, rounding: :half_even}, fn ->
       assert Decimal.sqrt(~d"0") == d(1, 0, 0)

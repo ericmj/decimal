@@ -1369,13 +1369,16 @@ defmodule Decimal do
   def round(%Decimal{coef: :inf} = num, _, _), do: num
 
   def round(%Decimal{} = num, n, mode) do
-    case normalize(num) do
+    ctx = Context.get()
+
+    case exponent_limited(num, ctx) do
       %Decimal{coef: :inf} = num ->
         num
 
       %Decimal{sign: sign, coef: coef, exp: exp} ->
+        {coef, exp} = strip_trailing_zeros(coef, exp)
         value = do_round(sign, coef, exp, -n, mode)
-        context(value, [])
+        context(value, [], false, ctx)
     end
   end
 
@@ -2700,6 +2703,17 @@ defmodule Decimal do
 
   defp merge_signals(signals, prec_signals, exp_signals) do
     signals |> put_uniq(prec_signals) |> put_uniq(exp_signals)
+  end
+
+  # The exponent half of `context/5` without the precision half, for `round/3`.
+  # The limits still have to be applied to the input: an adjusted exponent past
+  # `emax` must overflow before `do_round/5` scales the coefficient by
+  # `pow10(exp - target_exp)`, which is otherwise unbounded for an exponent
+  # built through `new/3`. The precision half must not run, because the
+  # caller's `mode` is the only rounding `round/3` was asked to perform.
+  defp exponent_limited(%Decimal{coef: coef} = num, %Context{} = context) do
+    {result, signals} = exponent_limits(num, coef_length(coef), context)
+    error(signals, nil, result, context)
   end
 
   defp exponent_limits(%Decimal{coef: coef} = num, _digits, _context)
