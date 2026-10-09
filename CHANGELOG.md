@@ -20,7 +20,8 @@
   exponent within ±22 with a single float multiplication or division, which
   rounds exactly as the full conversion does: ~10x faster for money amounts.
   `Decimal.from_float/1` formats the float with `:erlang.float_to_binary/2` on
-  OTP 25 and later: ~1.3x faster.
+  OTP 25 and later and reads the digits in one pass instead of parsing them:
+  ~3x faster, and `Decimal.cast/1` of a float ~2.3x.
 
 * Make `Decimal.compare/3` compare its bounds as integers when the three
   exponents are within 104 of each other: ~3x faster for same-scale values and

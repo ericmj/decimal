@@ -1730,8 +1730,7 @@ defmodule Decimal do
   def from_float(float) when is_float(float) do
     float
     |> float_to_shortest()
-    |> fix_float_exp()
-    |> new()
+    |> shortest_to_decimal()
   end
 
   @doc """
@@ -3340,12 +3339,30 @@ defmodule Decimal do
     defp float_to_shortest(float), do: IO.iodata_to_binary(:io_lib_format.fwrite_g(float))
   end
 
-  # Exponent notation has one digit before the point and a redundant fraction
-  # when that digit is all there is: `1.0e5`. Dropping it keeps `from_float/1`
-  # from reading that as a coefficient of 10 with the exponent one lower.
-  defp fix_float_exp(<<?-, digit, ".0e", rest::binary>>), do: <<?-, digit, ?e, rest::binary>>
-  defp fix_float_exp(<<digit, ".0e", rest::binary>>), do: <<digit, ?e, rest::binary>>
-  defp fix_float_exp(binary), do: binary
+  # The shortest representation is always `-?D+.D+` with an optional `e-?D+`,
+  # and at most 17 significant digits with an exponent within ±324, inside the
+  # default parse limits, so it is read in one pass instead of going through
+  # `parse/1`. Exponent notation has one digit before the point and a
+  # redundant fraction when that digit is all there is: `1.0e5` is read as a
+  # coefficient of 1, not 10 with the exponent one lower.
+  defp shortest_to_decimal(<<?-, rest::binary>>), do: %{shortest_to_decimal(rest) | sign: -1}
+  defp shortest_to_decimal(binary), do: shortest_integer_part(binary, 0)
+
+  defp shortest_integer_part(<<?., rest::binary>>, coef), do: shortest_fraction(rest, coef, 0)
+
+  defp shortest_integer_part(<<digit, rest::binary>>, coef),
+    do: shortest_integer_part(rest, coef * 10 + digit - ?0)
+
+  defp shortest_fraction(<<"0e", exp::binary>>, coef, 0),
+    do: %Decimal{coef: coef, exp: :erlang.binary_to_integer(exp)}
+
+  defp shortest_fraction(<<?e, exp::binary>>, coef, digits),
+    do: %Decimal{coef: coef, exp: :erlang.binary_to_integer(exp) - digits}
+
+  defp shortest_fraction(<<digit, rest::binary>>, coef, digits),
+    do: shortest_fraction(rest, coef * 10 + digit - ?0, digits + 1)
+
+  defp shortest_fraction(<<>>, coef, digits), do: %Decimal{coef: coef, exp: -digits}
 
   # An adjusted exponent strictly inside ±308 puts the value between
   # 10^adjusted and 10^(adjusted+1), clear of both DBL_MAX and DBL_MIN. Only
