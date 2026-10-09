@@ -87,6 +87,14 @@ end
 money_strings = BenchHelper.money_strings()
 money = Enum.map(money_strings, &Decimal.new/1)
 money_pairs = Enum.zip(money, Enum.reverse(money))
+money_threshold = Decimal.new("0.01")
+
+# Whole amounts at the money scale, which `to_integer/1` converts by dropping
+# the zero cents, and the integers they come from.
+integers = Enum.map(1..200, &(&1 * 37_123))
+whole_money = Enum.map(integers, &Decimal.new(1, &1 * 100, -2))
+
+context = struct(Decimal.Context, precision: 10)
 
 floats = for i <- 1..200, do: i * 1.37
 
@@ -121,7 +129,31 @@ jobs = %{
   "money mult" => each_pair.(money_pairs, &Decimal.mult/2),
   "money div" => each_pair.(money_pairs, &Decimal.div/2),
   "money compare" => each_pair.(money_pairs, &Decimal.compare/2),
-  "money round" => each.(money, &Decimal.round(&1, 2))
+  "money round" => each.(money, &Decimal.round(&1, 2)),
+  "money compare/3" => each_pair.(money_pairs, &Decimal.compare(&1, &2, money_threshold)),
+  "money eq?" => each_pair.(money_pairs, &Decimal.eq?/2),
+  "money gte?" => each_pair.(money_pairs, &Decimal.gte?/2),
+  "money max" => each_pair.(money_pairs, &Decimal.max/2),
+  "money min" => each_pair.(money_pairs, &Decimal.min/2),
+  "money div_int" => each_pair.(money_pairs, &Decimal.div_int/2),
+  "money rem" => each_pair.(money_pairs, &Decimal.rem/2),
+  "money div_rem" => each_pair.(money_pairs, &Decimal.div_rem/2),
+  "money negate" => each.(money, &Decimal.negate/1),
+  "money abs" => each.(money, &Decimal.abs/1),
+  "money sqrt" => each.(money, &Decimal.sqrt/1),
+  "money integer?" => each.(money, &Decimal.integer?/1),
+  "money to_float" => each.(money, &Decimal.to_float/1),
+  "money to_string xsd" => each.(money, &Decimal.to_string(&1, :xsd)),
+  "money to_string raw" => each.(money, &Decimal.to_string(&1, :raw)),
+  "money to_string with limit" => each.(money, &Decimal.to_string(&1, :normal, max_digits: 100)),
+  "to_integer" => each.(whole_money, &Decimal.to_integer/1),
+  "new from integer" => each.(integers, &Decimal.new/1),
+  "new from string with limits" => each.(money_strings, &Decimal.new(&1, max_digits: 40)),
+  "parse" => each.(money_strings, &Decimal.parse/1),
+  "cast string" => each.(money_strings, &Decimal.cast/1),
+  "cast integer" => each.(integers, &Decimal.cast/1),
+  "cast float" => each.(floats, &Decimal.cast/1),
+  "Context.with" => each.(money, fn _ -> Decimal.Context.with(context, fn -> :ok end) end)
 }
 
 load = System.get_env("LOAD", "") |> String.split(",", trim: true)
