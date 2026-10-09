@@ -112,6 +112,11 @@ defmodule Decimal do
   alias Decimal.Error
 
   @power_of_2_to_52 4_503_599_627_370_496
+  @power_of_2_to_53 9_007_199_254_740_992
+
+  # `compare/3` aligns its operands at the lowest exponent when their exponents
+  # are this close, the range `pow10/1` answers from its table.
+  @compare_align_limit 104
 
   @typedoc """
   The coefficient of the power of `10`. Non-negative because the sign is stored separately in `sign`.
@@ -483,10 +488,27 @@ defmodule Decimal do
         %Decimal{sign: sign3, coef: coef3, exp: exp3}
       )
       when is_integer(coef1) and is_integer(coef2) and is_integer(coef3) do
-    cond do
-      sum_sign([{sign1, coef1, exp1}, {-sign3, coef3, exp3}, {-sign2, coef2, exp2}]) > 0 -> :gt
-      sum_sign([{sign1, coef1, exp1}, {sign3, coef3, exp3}, {-sign2, coef2, exp2}]) < 0 -> :lt
-      true -> :eq
+    # Close exponents cost at most `@compare_align_limit` digits to align, so
+    # the bounds are compared as integers. Wider gaps go through `sum_sign/1`,
+    # which never aligns more digits than the terms already have.
+    base_exp = exp1 |> Kernel.min(exp2) |> Kernel.min(exp3)
+    top_exp = exp1 |> Kernel.max(exp2) |> Kernel.max(exp3)
+
+    if top_exp - base_exp <= @compare_align_limit do
+      diff = sign1 * coef1 * pow10(exp1 - base_exp) - sign2 * coef2 * pow10(exp2 - base_exp)
+      threshold = sign3 * coef3 * pow10(exp3 - base_exp)
+
+      cond do
+        diff > threshold -> :gt
+        diff < -threshold -> :lt
+        true -> :eq
+      end
+    else
+      cond do
+        sum_sign([{sign1, coef1, exp1}, {-sign3, coef3, exp3}, {-sign2, coef2, exp2}]) > 0 -> :gt
+        sum_sign([{sign1, coef1, exp1}, {sign3, coef3, exp3}, {-sign2, coef2, exp2}]) < 0 -> :lt
+        true -> :eq
+      end
     end
   end
 
@@ -1003,22 +1025,17 @@ defmodule Decimal do
     %Decimal{sign: sign1, coef: coef1, exp: exp1} = num1
     %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2
     div_sign = if sign1 == sign2, do: 1, else: -1
+    ctx = Context.get()
 
-    cond do
-      compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == :lt ->
-        context(%Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2})
+    case integer_division(div_sign, coef1, exp1, coef2, exp2, ctx.precision) do
+      {:ok, result} ->
+        result
 
-      coef1 == 0 ->
-        context(%{num1 | sign: div_sign})
+      :zero ->
+        context(%Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2}, [], false, ctx)
 
-      true ->
-        case integer_division(div_sign, coef1, exp1, coef2, exp2) do
-          {:ok, result} ->
-            result
-
-          {:error, error, reason, num} ->
-            error(error, reason, num)
-        end
+      {:error, error, reason, num} ->
+        error(error, reason, num, ctx)
     end
   end
 
@@ -1068,23 +1085,18 @@ defmodule Decimal do
     %Decimal{sign: sign1, coef: coef1, exp: exp1} = num1
     %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2
 
-    cond do
-      compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == :lt ->
-        context(%{num1 | sign: sign1})
+    div_sign = if sign1 == sign2, do: 1, else: -1
+    ctx = Context.get()
 
-      coef1 == 0 ->
-        context(%{num2 | sign: sign1})
+    case integer_division(div_sign, coef1, exp1, coef2, exp2, ctx.precision) do
+      {:ok, result} ->
+        exact_rem(num1, num2, result, ctx)
 
-      true ->
-        div_sign = if sign1 == sign2, do: 1, else: -1
+      :zero ->
+        context(num1, [], false, ctx)
 
-        case integer_division(div_sign, coef1, exp1, coef2, exp2) do
-          {:ok, result} ->
-            exact_rem(num1, num2, result)
-
-          {:error, error, reason, num} ->
-            error(error, reason, num)
-        end
+      {:error, error, reason, num} ->
+        error(error, reason, num, ctx)
     end
   end
 
@@ -1150,22 +1162,17 @@ defmodule Decimal do
     %Decimal{sign: sign1, coef: coef1, exp: exp1} = num1
     %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2
     div_sign = if sign1 == sign2, do: 1, else: -1
+    ctx = Context.get()
 
-    cond do
-      compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == :lt ->
-        {context(%Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2}), %{num1 | sign: sign1}}
+    case integer_division(div_sign, coef1, exp1, coef2, exp2, ctx.precision) do
+      {:ok, result} ->
+        {result, exact_rem(num1, num2, result, ctx)}
 
-      coef1 == 0 ->
-        {context(%{num1 | sign: div_sign}), context(%{num2 | sign: sign1})}
+      :zero ->
+        {context(%Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2}, [], false, ctx), num1}
 
-      true ->
-        case integer_division(div_sign, coef1, exp1, coef2, exp2) do
-          {:ok, result} ->
-            {result, exact_rem(num1, num2, result)}
-
-          {:error, error, reason, num} ->
-            error(error, reason, {num, num})
-        end
+      {:error, error, reason, num} ->
+        error(error, reason, {num, num}, ctx)
     end
   end
 
@@ -1722,9 +1729,8 @@ defmodule Decimal do
   @spec from_float(float) :: t
   def from_float(float) when is_float(float) do
     float
-    |> :io_lib_format.fwrite_g()
+    |> float_to_shortest()
     |> fix_float_exp()
-    |> IO.iodata_to_binary()
     |> new()
   end
 
@@ -2225,6 +2231,17 @@ defmodule Decimal do
 
   """
   @spec to_float(t) :: float
+  # A coefficient of at most 2^53 and a power of ten of at most 10^22 are both
+  # exact doubles, so a single IEEE multiplication or division rounds the exact
+  # value once, to nearest with ties to even, as the conversion below does.
+  # Zero is left to that conversion, which returns 0.0 for either sign.
+  def to_float(%Decimal{sign: sign, coef: coef, exp: exp})
+      when is_integer(coef) and coef > 0 and coef <= @power_of_2_to_53 and exp >= -22 and
+             exp <= 22 do
+    float = if exp >= 0, do: coef * float_pow10(exp), else: coef / float_pow10(-exp)
+    if sign == -1, do: -float, else: float
+  end
+
   def to_float(%Decimal{coef: coef} = decimal) when is_integer(coef) do
     %Decimal{sign: sign, coef: coef, exp: exp} = check_dbl_min_max(decimal)
     # Convert back to float without loss
@@ -2551,24 +2568,32 @@ defmodule Decimal do
     end
   end
 
-  defp integer_division(div_sign, coef1, exp1, coef2, exp2) do
+  # `:zero` when the dividend's magnitude is below the divisor's, which leaves
+  # the callers to give the zero quotient its exponent.
+  defp integer_division(_div_sign, 0, _exp1, _coef2, _exp2, _precision), do: :zero
+
+  defp integer_division(div_sign, coef1, exp1, coef2, exp2, precision) do
     {coef1, coef2, adjust} = div_adjust(coef1, coef2)
     # The quotient has exactly `exp1 - exp2 - adjust + 1` digits, so it can
     # be rejected as too large from digit counts alone, before the possibly
-    # huge quotient is materialized.
+    # huge quotient is materialized. No digits at all means it is below one.
     digits = exp1 - exp2 - adjust + 1
-    precision = Context.get().precision
 
-    if digits > precision + 1 do
-      integer_division_error()
-    else
-      coef = Kernel.div(coef1 * pow10(digits - 1), coef2)
+    cond do
+      digits <= 0 ->
+        :zero
 
-      if coef > pow10(precision) do
+      digits > precision + 1 ->
         integer_division_error()
-      else
-        {:ok, %Decimal{sign: div_sign, coef: coef, exp: 0}}
-      end
+
+      true ->
+        coef = Kernel.div(coef1 * pow10(digits - 1), coef2)
+
+        if coef > pow10(precision) do
+          integer_division_error()
+        else
+          {:ok, %Decimal{sign: div_sign, coef: coef, exp: 0}}
+        end
     end
   end
 
@@ -2593,12 +2618,18 @@ defmodule Decimal do
   # The quotient is floor(|num1| / |num2|), so the difference is non-negative
   # and the remainder carries the dividend's sign - also when the remainder
   # is zero, as IEEE 754 defines it.
-  defp exact_rem(%Decimal{} = num1, %Decimal{} = num2, %Decimal{coef: qcoef}) do
+  defp exact_rem(%Decimal{} = num1, %Decimal{} = num2, %Decimal{coef: qcoef}, ctx) do
     %Decimal{sign: sign1, coef: coef1, exp: exp1} = num1
     %Decimal{coef: coef2, exp: exp2} = num2
 
     {coef1, prod} = add_align(coef1, exp1, coef2 * qcoef, exp2)
-    context(%Decimal{sign: sign1, coef: coef1 - prod, exp: Kernel.min(exp1, exp2)})
+
+    context(
+      %Decimal{sign: sign1, coef: coef1 - prod, exp: Kernel.min(exp1, exp2)},
+      [],
+      false,
+      ctx
+    )
   end
 
   defp do_normalize(coef, exp) when coef >= @normalize_chunk_pow do
@@ -2646,6 +2677,11 @@ defmodule Decimal do
 
   Enum.reduce(0..104, 1, fn int, acc ->
     defp pow10(unquote(int)), do: unquote(acc)
+    acc * 10
+  end)
+
+  Enum.reduce(0..22, 1, fn int, acc ->
+    defp float_pow10(unquote(int)), do: unquote(:erlang.float(acc))
     acc * 10
   end)
 
@@ -3265,12 +3301,20 @@ defmodule Decimal do
     end
   end
 
-  # `:io_lib_format.fwrite_g/1` renders exponent notation with a redundant
-  # fraction: `1.0e5`. Dropping it keeps `from_float/1` from reading that as a
-  # coefficient of 10 with the exponent one lower.
-  defp fix_float_exp([?., ?0, ?e | rest]), do: [?e | fix_float_exp(rest)]
-  defp fix_float_exp([char | rest]), do: [char | fix_float_exp(rest)]
-  defp fix_float_exp([]), do: []
+  # The `:short` option, added in OTP 25, renders the same digits as
+  # `:io_lib_format.fwrite_g/1` straight into a binary.
+  if String.to_integer(System.otp_release()) >= 25 do
+    defp float_to_shortest(float), do: :erlang.float_to_binary(float, [:short])
+  else
+    defp float_to_shortest(float), do: IO.iodata_to_binary(:io_lib_format.fwrite_g(float))
+  end
+
+  # Exponent notation has one digit before the point and a redundant fraction
+  # when that digit is all there is: `1.0e5`. Dropping it keeps `from_float/1`
+  # from reading that as a coefficient of 10 with the exponent one lower.
+  defp fix_float_exp(<<?-, digit, ".0e", rest::binary>>), do: <<?-, digit, ?e, rest::binary>>
+  defp fix_float_exp(<<digit, ".0e", rest::binary>>), do: <<digit, ?e, rest::binary>>
+  defp fix_float_exp(binary), do: binary
 
   # An adjusted exponent strictly inside ±308 puts the value between
   # 10^adjusted and 10^(adjusted+1), clear of both DBL_MAX and DBL_MIN. Only

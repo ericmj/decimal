@@ -16,6 +16,18 @@
   one bit at a time: ~1.6x faster for typical values and ~11x for exponents
   near the ends of the double range, with 96% fewer collections.
 
+* Make `Decimal.to_float/1` convert a coefficient of at most 2^53 with an
+  exponent within ±22 with a single float multiplication or division, which
+  rounds exactly as the full conversion does: ~10x faster for money amounts.
+  `Decimal.from_float/1` formats the float with `:erlang.float_to_binary/2` on
+  OTP 25 and later: ~1.3x faster.
+
+* Make `Decimal.compare/3` compare its bounds as integers when the three
+  exponents are within 104 of each other: ~3x faster for same-scale values and
+  ~2.3x for mixed exponents. `Decimal.div_int/2`, `Decimal.rem/2` and
+  `Decimal.div_rem/2` detect a zero quotient from digit counts they already
+  compute instead of comparing the operands: ~1.4x faster.
+
 * Add the `:subnormal` and `:clamped` signals from the General Decimal
   Arithmetic spec, so that crossing the context's `emin` or `emax` is always
   signalled. `:subnormal` is signalled for every result whose adjusted

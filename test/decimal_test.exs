@@ -723,6 +723,19 @@ defmodule DecimalTest do
     end
   end
 
+  test "div_int/2, rem/2 and div_rem/2 with a dividend smaller than the divisor" do
+    assert Decimal.div_int(~d"0.001", ~d"7") == d(1, 0, -3)
+    assert Decimal.div_int(~d"-6.99", ~d"7") == d(-1, 0, -2)
+    assert Decimal.div_int(~d"7.00", ~d"7") == d(1, 1, 0)
+    assert Decimal.rem(~d"-6.99", ~d"7") == d(-1, 699, -2)
+    assert Decimal.rem(~d"7.00", ~d"7") == d(1, 0, -2)
+    assert Decimal.rem(~d"-0.00", ~d"7") == d(-1, 0, -2)
+    assert Decimal.div_rem(~d"-6.99", ~d"-7") == {d(1, 0, -2), d(-1, 699, -2)}
+    assert Decimal.div_rem(~d"7.00", ~d"-7") == {d(-1, 1, 0), d(1, 0, -2)}
+    assert Decimal.div_rem(~d"0", ~d"-7") == {d(-1, 0, 0), d(1, 0, 0)}
+    assert Context.get().flags == []
+  end
+
   test "rem/2 and div_rem/2 compute the remainder exactly" do
     # 34-digit operands whose divisor * quotient spans 67 digits: rounding
     # that intermediate product to the context precision yields exactly the
@@ -1168,6 +1181,26 @@ defmodule DecimalTest do
     # keep rounding to the even significand.
     assert Decimal.to_float(~d"9007199254740993") === 9_007_199_254_740_992.0
     assert Decimal.to_float(~d"9007199254740995") === 9_007_199_254_740_996.0
+  end
+
+  test "to_float/1 does not depend on the representation of the value" do
+    # Padding the coefficient takes each value past 2^53, and past an exponent
+    # of -22 for the lower ones.
+    for {coef, exp} <- [
+          {9_007_199_254_740_992, 22},
+          {9_007_199_254_740_991, -22},
+          {1, 22},
+          {1, -22},
+          {3, -1},
+          {123_456_789, -7}
+        ] do
+      expected = String.to_float("#{coef}.0e#{exp}")
+      padded = Decimal.new(-1, coef * Integer.pow(10, 20), exp - 20)
+
+      assert Decimal.to_float(Decimal.new(1, coef, exp)) === expected
+      assert Decimal.to_float(Decimal.new(-1, coef, exp)) === -expected
+      assert Decimal.to_float(padded) === -expected
+    end
   end
 
   test "round/3: special" do

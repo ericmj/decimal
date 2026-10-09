@@ -345,6 +345,22 @@ defmodule Decimal.PropertyTest do
       end
     end
 
+    property "to_float/1 agrees with the runtime's conversion for coefficients up to 2^53" do
+      # Values up to 2^53 with exponents within ±22 convert with a single float
+      # operation, and the exponents here also reach past ±22.
+      check all(
+              coef <- StreamData.integer(1..9_007_199_254_740_992),
+              exp <- StreamData.integer(-25..25),
+              max_runs: 500
+            ) do
+        expected = String.to_float("#{coef}.0e#{exp}")
+        decimal = %Decimal{coef: coef, exp: exp}
+
+        assert Decimal.to_float(decimal) === expected
+        assert Decimal.to_float(%{decimal | sign: -1}) === -expected
+      end
+    end
+
     property "parse/1 agrees with building the coefficient from the digits" do
       check all(
               int_digits <- StreamData.string(?0..?9, min_length: 1, max_length: 17),
@@ -363,10 +379,12 @@ defmodule Decimal.PropertyTest do
 
   describe "compare/3" do
     property "agrees with exact integer arithmetic on the bounds" do
+      # The exponent gaps reach past the point where compare/3 stops aligning
+      # the operands directly, so both of its paths are checked.
       check all(
-              a <- decimal(exp_min: -40, exp_max: 40),
-              b <- decimal(exp_min: -40, exp_max: 40),
-              threshold <- non_negative_decimal(exp_min: -40, exp_max: 40),
+              a <- decimal(exp_min: -120, exp_max: 120),
+              b <- decimal(exp_min: -120, exp_max: 120),
+              threshold <- non_negative_decimal(exp_min: -120, exp_max: 120),
               precision <- StreamData.integer(1..34),
               max_runs: 500
             ) do
