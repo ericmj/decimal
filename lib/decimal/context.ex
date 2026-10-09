@@ -26,14 +26,20 @@ defmodule Decimal.Context do
     * `emax` - maximum adjusted exponent. If the adjusted exponent of a result
       is larger than `emax`, overflow is signalled. `:infinity` disables this
       limit. Must not be smaller than `emin`.
-    * `emin` - minimum adjusted exponent. If the adjusted exponent of a result
-      is smaller than `emin`, underflow is signalled. `:infinity` disables this
-      limit.
+    * `emin` - minimum adjusted exponent of a normal result. A result whose
+      adjusted exponent is smaller is subnormal: it is rounded at the exponent
+      `emin - precision + 1` with the rounding algorithm in `rounding`.
+      Subnormal is signalled for it, and underflow too if that rounding is
+      inexact. `:infinity` disables this limit.
     * `flags` - a list of signals that for which the flag is sent. When an
       exceptional condition is signalled its flag is set. The flags are sticky
       and will be set until explicitly cleared.
     * `traps` - a list of set trap enablers for signals. When a signal's trap
       enabler is set the condition causes `Decimal.Error` to be raised.
+
+  A zero result has no digits to round, so `emax` and `emin` bound its exponent
+  instead: an exponent above `emax` is lowered to `emax`, one below
+  `emin - precision + 1` is raised to it, and clamped is signalled.
 
   ## Rounding algorithms
 
