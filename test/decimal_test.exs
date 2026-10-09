@@ -820,6 +820,37 @@ defmodule DecimalTest do
     end
   end
 
+  test "integer division decides zero and too large quotients at the exponent gap" do
+    Context.with(%Context{precision: 3, traps: []}, fn ->
+      assert Decimal.div_int(d(1, 5, 1), d(1, 600, 0)) == d(1, 0, 1)
+      assert Decimal.div_int(d(1, 5, 2), d(1, 600, 0)) == d(1, 0, 2)
+      assert Decimal.div_int(d(1, 7, 2), d(1, 600, 0)) == d(1, 1, 0)
+      assert Decimal.rem(d(-1, 5, 2), d(1, 600, 0)) == d(-1, 5, 2)
+      assert Decimal.div_int(d(1, 1, 3), d(1, 1, 0)) == d(1, 1000, 0)
+      assert Context.get().flags == []
+
+      assert Decimal.div_int(d(1, 1, 4), d(1, 1, 0)) == d(1, :NaN, 0)
+      assert Decimal.div_rem(d(1, 1, 5), d(1, 1, 0)) == {d(1, :NaN, 0), d(1, :NaN, 0)}
+      assert Context.get().flags == [:invalid_operation]
+    end)
+  end
+
+  @tag timeout: @bounded_smoke_timeout
+  test "integer division by a much longer divisor doesn't scale the dividend" do
+    huge = Integer.pow(10, 1_000_000) - 1
+
+    # At equal exponents a smaller dividend is a zero quotient. Scaling it to
+    # the divisor's million digits instead costs about 100 ms a call, so these
+    # calls would together exceed the limit.
+    assert_runs_quickly("integer division by a much longer divisor", fn ->
+      for _ <- 1..20 do
+        assert Decimal.div_int(d(1, 7, 0), d(1, huge, 0)) == d(1, 0, 0)
+        assert Decimal.rem(d(1, 7, 5), d(-1, huge, 5)) == d(1, 7, 5)
+        assert Decimal.div_rem(d(-1, 7, 3), d(1, huge, 3)) == {d(-1, 0, 0), d(-1, 7, 3)}
+      end
+    end)
+  end
+
   test "rem/2 and div_rem/2 compute the remainder exactly" do
     # 34-digit operands whose divisor * quotient spans 67 digits: rounding
     # that intermediate product to the context precision yields exactly the

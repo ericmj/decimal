@@ -2555,7 +2555,11 @@ defmodule Decimal do
   # `adjust` is the net number of powers of ten applied to `coef1` relative
   # to `coef2`.
   defp div_adjust(coef1, coef2) do
-    shift = coef_length(coef2) - coef_length(coef1)
+    div_adjust(coef1, coef_length(coef1), coef2, coef_length(coef2))
+  end
+
+  defp div_adjust(coef1, length1, coef2, length2) do
+    shift = length2 - length1
 
     {coef1, coef2} =
       if shift >= 0 do
@@ -2610,6 +2614,11 @@ defmodule Decimal do
   # the callers to give the zero quotient its exponent.
   defp integer_division(_div_sign, 0, _exp1, _coef2, _exp2, _precision), do: :zero
 
+  # With equal exponents a dividend below the divisor is a zero quotient,
+  # however many digits the coefficients have.
+  defp integer_division(_div_sign, coef1, exp, coef2, exp, _precision) when coef1 < coef2,
+    do: :zero
+
   # With equal exponents the quotient is the coefficients' integer quotient,
   # and coefficients below 10^9 keep it below 10^9: one native division gives
   # it, and only a precision below 9 can find it too large.
@@ -2625,26 +2634,43 @@ defmodule Decimal do
   end
 
   defp integer_division(div_sign, coef1, exp1, coef2, exp2, precision) do
-    {coef1, coef2, adjust} = div_adjust(coef1, coef2)
-    # The quotient has exactly `exp1 - exp2 - adjust + 1` digits, so it can
-    # be rejected as too large from digit counts alone, before the possibly
-    # huge quotient is materialized. No digits at all means it is below one.
-    digits = exp1 - exp2 - adjust + 1
+    length1 = coef_length(coef1)
+    length2 = coef_length(coef2)
+    # The quotient lies between 10^(gap - 1) and 10^(gap + 1), so a negative
+    # gap means a zero quotient and a gap above `precision + 1` one that is
+    # too large, both decided before either coefficient is scaled by the
+    # difference in their lengths.
+    gap = exp1 + length1 - (exp2 + length2)
 
     cond do
-      digits <= 0 ->
+      gap < 0 ->
         :zero
 
-      digits > precision + 1 ->
+      gap > precision + 1 ->
         integer_division_error()
 
       true ->
-        coef = Kernel.div(coef1 * pow10(digits - 1), coef2)
+        {coef1, coef2, adjust} = div_adjust(coef1, length1, coef2, length2)
+        # The quotient has exactly `exp1 - exp2 - adjust + 1` digits, so it
+        # can be rejected as too large from digit counts alone, before the
+        # quotient is materialized. No digits at all means it is below one.
+        digits = exp1 - exp2 - adjust + 1
 
-        if coef > pow10(precision) do
-          integer_division_error()
-        else
-          {:ok, %Decimal{sign: div_sign, coef: coef, exp: 0}}
+        cond do
+          digits <= 0 ->
+            :zero
+
+          digits > precision + 1 ->
+            integer_division_error()
+
+          true ->
+            coef = Kernel.div(coef1 * pow10(digits - 1), coef2)
+
+            if coef > pow10(precision) do
+              integer_division_error()
+            else
+              {:ok, %Decimal{sign: div_sign, coef: coef, exp: 0}}
+            end
         end
     end
   end
@@ -2663,7 +2689,7 @@ defmodule Decimal do
   # the subtraction, and a rounded product can cancel the true remainder
   # entirely (for 34-digit operands the rounded product may equal `num1`).
   # Only the final remainder goes through the context, like any result. The
-  # intermediates stay input-proportional: `integer_division/5` caps the
+  # intermediates stay input-proportional: `integer_division/6` caps the
   # quotient at `precision + 1` digits, which also bounds the exponent gap
   # the alignment bridges.
   #

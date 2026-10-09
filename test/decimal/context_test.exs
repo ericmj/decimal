@@ -544,6 +544,9 @@ defmodule Decimal.ContextTest do
              ~r/^invalid :rounding, expected one of \[.*\], got: :bogus$/},
             {%Context{emax: 1.0}, "invalid :emax, expected an integer or :infinity, got: 1.0"},
             {%Context{emin: nil}, "invalid :emin, expected an integer or :infinity, got: nil"},
+            {%Context{emin: 1.5}, "invalid :emin, expected an integer or :infinity, got: 1.5"},
+            {%Context{emin: :foo, emax: :infinity},
+             "invalid :emin, expected an integer or :infinity, got: :foo"},
             {%Context{emin: 10, emax: 5},
              "invalid :emin and :emax, emin must not be greater than emax, got: emin 10 and emax 5"}
           ] do
@@ -559,6 +562,19 @@ defmodule Decimal.ContextTest do
       Context.with(%Context{precision: 5}, fn ->
         assert_raise ArgumentError, fn ->
           Context.with(%Context{precision: 0}, fn -> :ok end)
+        end
+
+        assert Context.get().precision == 5
+      end)
+    end
+
+    test "with/2 puts the previous context back after returning or raising" do
+      Context.with(%Context{precision: 5}, fn ->
+        assert Context.with(%Context{precision: 3}, fn -> Context.get().precision end) == 3
+        assert Context.get().precision == 5
+
+        assert_raise RuntimeError, fn ->
+          Context.with(%Context{precision: 3}, fn -> raise "boom" end)
         end
 
         assert Context.get().precision == 5
