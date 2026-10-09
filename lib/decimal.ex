@@ -2838,14 +2838,46 @@ defmodule Decimal do
   end
 
   # `digits` is the coefficient's digit count when the caller already knows it,
-  # `nil` when it has to be counted. A zero without a sticky bit has no digits
-  # to round, so only the exponent limits apply to it.
+  # `nil` when it has to be counted. A sticky bit means digits beyond the
+  # coefficient, so the result is always rounded.
+  defp context(num, signals, true, %Context{} = context, digits) do
+    round_to_context(num, signals, true, context, digits)
+  end
+
+  # A zero without a sticky bit has no digits to round, so only the exponent
+  # limits apply to it.
   defp context(%Decimal{coef: 0} = num, signals, false, %Context{} = context, _digits) do
     {result, exp_signals} = exponent_limits(num, 1, context, num, false)
     error(merge_signals(signals, [], exp_signals), nil, result, context)
   end
 
-  defp context(num, signals, sticky?, %Context{} = context, digits) do
+  # A nonzero result that fits the precision, with its adjusted exponent between
+  # emin and emax, is returned unchanged with only the caller's signals, which
+  # is what the clause below concludes for it after building its intermediate
+  # results.
+  defp context(%Decimal{coef: coef, exp: exp} = num, signals, false, %Context{} = context, digits)
+       when is_integer(coef) do
+    digits = digits || coef_length(coef)
+    adjusted_exp = exp + digits - 1
+
+    if digits <= context.precision and not above_emax?(adjusted_exp, context.emax) and
+         not below_emin?(adjusted_exp, context.emin) do
+      case signals do
+        [] -> num
+        _ -> error(signals, nil, num, context)
+      end
+    else
+      round_to_context(num, signals, false, context, digits)
+    end
+  end
+
+  defp context(num, signals, false, %Context{} = context, digits) do
+    round_to_context(num, signals, false, context, digits)
+  end
+
+  @compile {:inline, round_to_context: 5}
+
+  defp round_to_context(num, signals, sticky?, context, digits) do
     {result, prec_signals, digits} =
       precision(num, digits, context.precision, context.rounding, sticky?)
 

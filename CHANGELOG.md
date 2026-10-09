@@ -32,6 +32,11 @@
   operation's signals: operations that signal, such as inexact rounding and
   division, are 4-10% faster.
 
+* Return a result that already fits the context's precision and exponent
+  range without running it through the rounding and exponent steps: `add`,
+  `sub`, `mult`, `normalize`, `abs`, `negate`, `max`, `min` and exact `round`
+  are ~1.25-1.7x faster on money amounts.
+
 * Add the `:subnormal` and `:clamped` signals from the General Decimal
   Arithmetic spec, so that crossing the context's `emin` or `emax` is always
   signalled. `:subnormal` is signalled for every result whose adjusted
