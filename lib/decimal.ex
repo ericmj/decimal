@@ -1584,17 +1584,22 @@ defmodule Decimal do
   # `sqrt_seed/2` does, without converting the scaled operand to a float: the
   # estimate, the power of ten and their product are off by a few ULPs at
   # most, far below the 1e-12 margin. A shift within `float_pow10/1`'s table
-  # keeps the scaled estimate inside the double range.
-  defp do_sqrt(coef, shift, exp, ctx)
-       when coef <= @power_of_2_to_53 and shift >= 0 and shift <= @float_pow10_limit do
+  # keeps the scaled estimate inside the double range; a larger one goes back
+  # to `sqrt_seed/2`.
+  defp do_sqrt(coef, shift, exp, ctx) when coef <= @power_of_2_to_53 and shift >= 0 do
     estimate = :math.sqrt(coef * 1.0)
     root = trunc(estimate)
 
-    if root * root == coef do
-      context(%Decimal{sign: 1, coef: root, exp: exp >>> 1}, [], false, ctx)
-    else
-      seed = trunc(estimate * float_pow10(shift) * 1.000000000001) + 1
-      do_sqrt(coef * pow10(shift <<< 1), shift, exp, true, ctx, seed)
+    cond do
+      root * root == coef ->
+        context(%Decimal{sign: 1, coef: root, exp: exp >>> 1}, [], false, ctx)
+
+      shift <= @float_pow10_limit ->
+        seed = trunc(estimate * float_pow10(shift) * 1.000000000001) + 1
+        do_sqrt(coef * pow10(shift <<< 1), shift, exp, true, ctx, seed)
+
+      true ->
+        do_sqrt(coef * pow10(shift <<< 1), shift, exp, true, ctx)
     end
   end
 

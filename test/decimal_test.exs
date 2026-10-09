@@ -1553,6 +1553,16 @@ defmodule DecimalTest do
     end)
   end
 
+  test "sqrt/1 exact small squares above the float seed's range" do
+    for precision <- [160, 200] do
+      Context.with(%Context{precision: precision}, fn ->
+        assert Decimal.sqrt(d(1, 144, -4)) == d(1, 12, -2)
+        assert Decimal.sqrt(d(1, 1440, 1)) == d(1, 120, 0)
+        assert Context.get().flags == []
+      end)
+    end
+  end
+
   test "sqrt/1 scaled small-coefficient seeds bound the truncated root" do
     root = 94_906_265
 
