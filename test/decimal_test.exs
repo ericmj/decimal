@@ -2248,6 +2248,20 @@ defmodule DecimalTest do
     assert Decimal.parse("1e" <> String.duplicate("0", 20) <> "5") == {d(1, 1, 5), ""}
   end
 
+  test "the first trapped signal raises after every signal is recorded behind existing flags" do
+    context = %Context{
+      precision: 3,
+      emin: -2,
+      traps: [:underflow, :rounded],
+      flags: [:clamped, :inexact]
+    }
+
+    Context.with(context, fn ->
+      assert_raise Error, "rounded", fn -> Decimal.apply_context(~d"1e-10") end
+      assert Context.get().flags == [:underflow, :subnormal, :rounded, :clamped, :inexact]
+    end)
+  end
+
   test "flags accumulate across operations" do
     Context.with(%Context{traps: []}, fn ->
       assert Context.get().flags == []
