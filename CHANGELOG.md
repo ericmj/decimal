@@ -30,7 +30,9 @@
   compute instead of comparing the operands: ~1.4x faster.
 
 * Make `Decimal.sqrt/1` take the root of a coefficient of at most 2^53 from
-  its float estimate: ~10x faster for exact squares.
+  its float estimate: ~10x faster for exact squares. `Decimal.div_int/2`, `Decimal.rem/2` and
+  `Decimal.div_rem/2` divide coefficients below 10^9 at equal exponents
+  directly: ~1.25-1.45x faster.
 
 * Record the flags and look for a trapped signal in one pass over an
   operation's signals: operations that signal, such as inexact rounding and

@@ -2601,6 +2601,20 @@ defmodule Decimal do
   # the callers to give the zero quotient its exponent.
   defp integer_division(_div_sign, 0, _exp1, _coef2, _exp2, _precision), do: :zero
 
+  # With equal exponents the quotient is the coefficients' integer quotient,
+  # and coefficients below 10^9 keep it below 10^9: one native division gives
+  # it, and only a precision below 9 can find it too large.
+  defp integer_division(div_sign, coef1, exp, coef2, exp, precision)
+       when coef1 < 1_000_000_000 and coef2 < 1_000_000_000 do
+    coef = Kernel.div(coef1, coef2)
+
+    cond do
+      coef == 0 -> :zero
+      precision < 9 and coef > pow10(precision) -> integer_division_error()
+      true -> {:ok, %Decimal{sign: div_sign, coef: coef, exp: 0}}
+    end
+  end
+
   defp integer_division(div_sign, coef1, exp1, coef2, exp2, precision) do
     {coef1, coef2, adjust} = div_adjust(coef1, coef2)
     # The quotient has exactly `exp1 - exp2 - adjust + 1` digits, so it can

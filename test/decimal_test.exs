@@ -736,6 +736,66 @@ defmodule DecimalTest do
     assert Context.get().flags == []
   end
 
+  test "integer division with equal exponents preserves the quotient size boundary" do
+    for precision <- [1, 2, 8], op <- [:div_int, :rem, :div_rem] do
+      boundary = Integer.pow(10, precision)
+
+      expected = %{
+        div_int: d(1, boundary, 0),
+        rem: d(1, 0, -2),
+        div_rem: {d(1, boundary, 0), d(1, 0, -2)}
+      }
+
+      Context.with(%Context{precision: precision}, fn ->
+        assert apply(Decimal, op, [d(1, boundary, -2), d(1, 1, -2)]) == expected[op]
+        assert Context.get().flags == []
+
+        assert_raise Error,
+                     "invalid_operation: integer division impossible, quotient too large",
+                     fn ->
+                       apply(Decimal, op, [d(1, boundary + 1, -2), d(1, 1, -2)])
+                     end
+
+        assert Context.get().flags == [:invalid_operation]
+      end)
+
+      Context.with(%Context{precision: precision, traps: []}, fn ->
+        result = apply(Decimal, op, [d(1, boundary + 1, -2), d(1, 1, -2)])
+
+        assert result ==
+                 if(op == :div_rem, do: {d(1, :NaN, 0), d(1, :NaN, 0)}, else: d(1, :NaN, 0))
+
+        assert Context.get().flags == [:invalid_operation]
+      end)
+    end
+
+    for coef <- [999_999_999, 1_000_000_000] do
+      assert Decimal.div_rem(d(-1, coef, -2), d(-1, 1, -2)) == {d(1, coef, 0), d(-1, 0, -2)}
+    end
+  end
+
+  @tag timeout: @bounded_smoke_timeout
+  test "integer division with equal huge exponents preserves zero clamping" do
+    for exp <- [-10_000_000, 10_000_000],
+        {emin, emax, clamped} <- [{-2, 2, 0}, {-6, -2, -2}, {4, 6, 2}] do
+      Context.with(%Context{precision: 3, emin: emin, emax: emax}, fn ->
+        assert_runs_quickly("integer division at equal huge exponents", fn ->
+          assert Decimal.div_rem(d(-1, 3, exp), d(1, 7, exp)) ==
+                   {d(-1, 0, clamped), d(-1, 3, exp)}
+
+          assert Context.get().flags == if(clamped == 0, do: [], else: [:clamped])
+        end)
+      end)
+
+      if clamped != 0 do
+        Context.with(%Context{precision: 3, emin: emin, emax: emax, traps: [:clamped]}, fn ->
+          assert_raise Error, "clamped", fn -> Decimal.div_int(d(-1, 3, exp), d(1, 7, exp)) end
+          assert Context.get().flags == [:clamped]
+        end)
+      end
+    end
+  end
+
   test "rem/2 and div_rem/2 compute the remainder exactly" do
     # 34-digit operands whose divisor * quotient spans 67 digits: rounding
     # that intermediate product to the context precision yields exactly the
