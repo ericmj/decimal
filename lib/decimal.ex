@@ -118,8 +118,8 @@ defmodule Decimal do
   # up to 10^22 are exact doubles, the others the nearest double.
   @float_pow10_limit 140
 
-  # `compare/3` aligns its operands at the lowest exponent when their exponents
-  # are this close, the range `pow10/1` answers from its table.
+  # `compare/2` and `compare/3` align their operands at the lowest exponent when
+  # their exponents are this close, the range `pow10/1` answers from its table.
   @compare_align_limit 104
 
   @typedoc """
@@ -486,6 +486,15 @@ defmodule Decimal do
   def compare(_, _, %Decimal{sign: -1, coef: coef}) when coef != 0,
     do: raise(Error, reason: "threshold cannot be negative")
 
+  # Equal exponents need no alignment.
+  def compare(
+        %Decimal{sign: sign1, coef: coef1, exp: exp},
+        %Decimal{sign: sign2, coef: coef2, exp: exp},
+        %Decimal{sign: sign3, coef: coef3, exp: exp}
+      )
+      when is_integer(coef1) and is_integer(coef2) and is_integer(coef3),
+      do: compare_difference(sign1 * coef1 - sign2 * coef2, sign3 * coef3)
+
   def compare(
         %Decimal{sign: sign1, coef: coef1, exp: exp1},
         %Decimal{sign: sign2, coef: coef2, exp: exp2},
@@ -500,13 +509,7 @@ defmodule Decimal do
 
     if top_exp - base_exp <= @compare_align_limit do
       diff = sign1 * coef1 * pow10(exp1 - base_exp) - sign2 * coef2 * pow10(exp2 - base_exp)
-      threshold = sign3 * coef3 * pow10(exp3 - base_exp)
-
-      cond do
-        diff > threshold -> :gt
-        diff < -threshold -> :lt
-        true -> :eq
-      end
+      compare_difference(diff, sign3 * coef3 * pow10(exp3 - base_exp))
     else
       cond do
         sum_sign([{sign1, coef1, exp1}, {-sign3, coef3, exp3}, {-sign2, coef2, exp2}]) > 0 -> :gt
@@ -589,12 +592,15 @@ defmodule Decimal do
   # With equal exponents the adjusted exponents differ exactly as the
   # coefficient lengths do, so the coefficients decide it on their own and no
   # digits need counting.
-  def compare(%Decimal{sign: sign, coef: coef1, exp: exp}, %Decimal{coef: coef2, exp: exp}) do
-    cond do
-      coef1 == coef2 -> :eq
-      coef1 < coef2 -> if sign == 1, do: :lt, else: :gt
-      true -> if sign == 1, do: :gt, else: :lt
-    end
+  def compare(%Decimal{sign: sign, coef: coef1, exp: exp}, %Decimal{coef: coef2, exp: exp}),
+    do: compare_coefs(sign, coef1, coef2)
+
+  # Close exponents cost at most `@compare_align_limit` digits to align, which
+  # is cheaper than counting both coefficients' digits.
+  def compare(%Decimal{sign: sign, coef: coef1, exp: exp1}, %Decimal{coef: coef2, exp: exp2})
+      when exp1 - exp2 <= @compare_align_limit and exp2 - exp1 <= @compare_align_limit do
+    {coef1, coef2} = add_align(coef1, exp1, coef2, exp2)
+    compare_coefs(sign, coef1, coef2)
   end
 
   def compare(%Decimal{} = num1, %Decimal{} = num2) do
@@ -629,6 +635,22 @@ defmodule Decimal do
   def compare(num1, num2) do
     compare(decimal(num1), decimal(num2))
   end
+
+  @compile {:inline, compare_coefs: 3, compare_difference: 2}
+
+  # Orders `n1 - n2` against the bounds `-threshold` and `threshold`, all three
+  # aligned at one exponent.
+  defp compare_difference(diff, threshold) when diff > threshold, do: :gt
+  defp compare_difference(diff, threshold) when diff < -threshold, do: :lt
+  defp compare_difference(_diff, _threshold), do: :eq
+
+  # Orders two numbers of the same sign by their coefficients aligned at one
+  # exponent.
+  defp compare_coefs(_sign, coef, coef), do: :eq
+  defp compare_coefs(1, coef1, coef2) when coef1 < coef2, do: :lt
+  defp compare_coefs(1, _coef1, _coef2), do: :gt
+  defp compare_coefs(-1, coef1, coef2) when coef1 < coef2, do: :gt
+  defp compare_coefs(-1, _coef1, _coef2), do: :lt
 
   # The flag is recorded and a trap raises as for any invalid operation, but an
   # untrapped signal raises too: an ordering has no NaN to return.
