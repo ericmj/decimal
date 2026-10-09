@@ -57,6 +57,9 @@
   (`Decimal.add(1, 1)` returned `0E+1`), and the other cases failed with
   `FunctionClauseError` inside the next operation.
 
+* Make `Decimal.to_integer/1` raise `ArgumentError` for NaN and ±Infinity,
+  like `Decimal.to_float/1`, instead of `FunctionClauseError`.
+
 * Make `Decimal.compare/3` exact. It computed `num1 ± threshold` through the
   context, so the bounds were rounded to the context precision and numbers
   near the threshold compared wrong: `Decimal.compare(1,
