@@ -478,14 +478,14 @@ defmodule Decimal do
     do: raise(Error, reason: "threshold cannot be negative")
 
   def compare(
-        %Decimal{coef: coef1} = n1,
-        %Decimal{coef: coef2} = n2,
-        %Decimal{coef: coef3} = threshold
+        %Decimal{sign: sign1, coef: coef1, exp: exp1},
+        %Decimal{sign: sign2, coef: coef2, exp: exp2},
+        %Decimal{sign: sign3, coef: coef3, exp: exp3}
       )
       when is_integer(coef1) and is_integer(coef2) and is_integer(coef3) do
     cond do
-      sum_sign([n1, negate_sign(threshold), negate_sign(n2)]) > 0 -> :gt
-      sum_sign([n1, threshold, negate_sign(n2)]) < 0 -> :lt
+      sum_sign([{sign1, coef1, exp1}, {-sign3, coef3, exp3}, {-sign2, coef2, exp2}]) > 0 -> :gt
+      sum_sign([{sign1, coef1, exp1}, {sign3, coef3, exp3}, {-sign2, coef2, exp2}]) < 0 -> :lt
       true -> :eq
     end
   end
@@ -510,8 +510,6 @@ defmodule Decimal do
   end
 
   def compare(n1, n2, threshold), do: compare(decimal(n1), decimal(n2), decimal(threshold))
-
-  defp negate_sign(%Decimal{sign: sign} = num), do: %{num | sign: -sign}
 
   @doc """
   Compares two numbers numerically. If the first number is greater than the second
@@ -613,8 +611,8 @@ defmodule Decimal do
     raise Error, signal: :invalid_operation, reason: "operation on NaN"
   end
 
-  # The sign (-1, 0 or 1) of the exact sum of finite decimals, without rounding
-  # and without materializing the gap between their exponents.
+  # The sign (-1, 0 or 1) of the exact sum of finite `{sign, coef, exp}` terms,
+  # without rounding and without materializing the gap between their exponents.
   #
   # Terms are added from the largest adjusted exponent down. A nonzero partial
   # sum is a nonzero multiple of 10^exp, so its magnitude is at least 10^exp.
@@ -625,24 +623,33 @@ defmodule Decimal do
   # digits than the terms already have.
   defp sum_sign(terms) do
     terms
-    |> Enum.reject(&(&1.coef == 0))
-    |> Enum.sort_by(&adjust_exp/1, :desc)
+    |> sum_terms([])
+    |> List.keysort(0)
+    |> :lists.reverse()
     |> sum_sign(0, nil)
+  end
+
+  # Drops the zero terms and keys the others by adjusted exponent, as
+  # `{adjusted_exp, signed_coef, exp}`.
+  defp sum_terms([], acc), do: acc
+  defp sum_terms([{_sign, 0, _exp} | rest], acc), do: sum_terms(rest, acc)
+
+  defp sum_terms([{sign, coef, exp} | rest], acc) do
+    sum_terms(rest, [{exp + coef_length(coef) - 1, sign * coef, exp} | acc])
   end
 
   defp sum_sign([], int, _exp), do: integer_sign(int)
 
-  defp sum_sign([%Decimal{sign: sign, coef: coef, exp: term_exp} | rest], 0, _exp) do
-    sum_sign(rest, sign * coef, term_exp)
+  defp sum_sign([{_adjusted_exp, value, term_exp} | rest], 0, _exp) do
+    sum_sign(rest, value, term_exp)
   end
 
-  defp sum_sign([%Decimal{} = term | rest], int, exp) do
-    if adjust_exp(term) < exp - 1 do
+  defp sum_sign([{adjusted_exp, value, term_exp} | rest], int, exp) do
+    if adjusted_exp < exp - 1 do
       integer_sign(int)
     else
-      %Decimal{sign: sign, coef: coef, exp: term_exp} = term
       base = Kernel.min(exp, term_exp)
-      int = int * pow10(exp - base) + sign * coef * pow10(term_exp - base)
+      int = int * pow10(exp - base) + value * pow10(term_exp - base)
       sum_sign(rest, int, base)
     end
   end
@@ -2795,7 +2802,13 @@ defmodule Decimal do
   end
 
   # `digits` is the coefficient's digit count when the caller already knows it,
-  # `nil` when it has to be counted.
+  # `nil` when it has to be counted. A zero without a sticky bit has no digits
+  # to round, so only the exponent limits apply to it.
+  defp context(%Decimal{coef: 0} = num, signals, false, %Context{} = context, _digits) do
+    {result, exp_signals} = exponent_limits(num, 1, context, num, false)
+    error(merge_signals(signals, [], exp_signals), nil, result, context)
+  end
+
   defp context(num, signals, sticky?, %Context{} = context, digits) do
     {result, prec_signals, digits} =
       precision(num, digits, context.precision, context.rounding, sticky?)
