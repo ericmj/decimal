@@ -49,6 +49,9 @@
   the precision, as every operation does, and still does not signal for the
   digits it discards itself.
 
+* Make `Decimal.to_integer/1` raise `ArgumentError` for NaN and ±Infinity,
+  like `Decimal.to_float/1`, instead of `FunctionClauseError`.
+
 ## v3.1.1 (2026-05-27)
 
 ### Bug fixes

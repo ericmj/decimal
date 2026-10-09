@@ -945,11 +945,21 @@ defmodule DecimalTest do
         fn -> Decimal.to_integer(d(1, 1001, -2)) end
       )
 
-      # apply/3 keeps the intentionally invalid argument opaque to the
-      # type checker; the raise is the point.
-      assert_raise FunctionClauseError, fn ->
-        apply(Decimal, :to_integer, [d(1, :NaN, 0)])
+      assert_raise ArgumentError, "Decimal.new(\"NaN\") cannot be converted to integer", fn ->
+        Decimal.to_integer(d(1, :NaN, 0))
       end
+
+      assert_raise ArgumentError,
+                   "Decimal.new(\"Infinity\") cannot be converted to integer",
+                   fn ->
+                     Decimal.to_integer(d(1, :inf, 0))
+                   end
+
+      assert_raise ArgumentError,
+                   "Decimal.new(\"-Infinity\") cannot be converted to integer",
+                   fn ->
+                     Decimal.to_integer(d(-1, :inf, 0))
+                   end
     end)
   end
 
