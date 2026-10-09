@@ -420,6 +420,33 @@ defmodule Decimal.ContextTest do
       end
     end
 
+    test "round/3 rounds an input below etiny once, with the caller's mode" do
+      Context.with(%Context{precision: 3, emin: -2}, fn ->
+        assert Decimal.round(~d"0.000499", 3, :half_up) == d(1, 0, -3)
+        assert Decimal.round(~d"0.000999", 3, :half_up) == d(1, 1, -3)
+        assert Context.get().flags == [:subnormal]
+      end)
+
+      Context.with(%Context{precision: 3, emin: -2}, fn ->
+        assert Decimal.round(~d"0.00012345", 5, :down) == d(1, 1, -4)
+        assert Enum.sort(Context.get().flags) == [:inexact, :rounded, :subnormal, :underflow]
+      end)
+
+      Context.with(%Context{}, fn ->
+        assert Decimal.round(Decimal.new(1, 15, -6177), 6176, :down) == d(1, 1, -6176)
+        assert Decimal.round(Decimal.new(-1, 15, -6177), 6176, :half_even) == d(-1, 2, -6176)
+        assert Decimal.round(Decimal.new(1, 1, -7000), 2) == d(1, 0, -2)
+        assert Context.get().flags == [:subnormal]
+      end)
+    end
+
+    test "round/3 keeps the flags its input signalled" do
+      Context.with(%Context{precision: 3, emax: 2, rounding: :down}, fn ->
+        assert Decimal.round(Decimal.new(1, 1, 5), -4, :down) == d(1, 0, 2)
+        assert Enum.sort(Context.get().flags) == [:clamped, :inexact, :overflow, :rounded]
+      end)
+    end
+
     @tag timeout: @bounded_smoke_timeout
     test "far below etiny stays bounded" do
       tiny = Decimal.new(1, 1, -@bounded_smoke_exp)
@@ -431,6 +458,8 @@ defmodule Decimal.ContextTest do
 
         assert Decimal.apply_context(tiny) == d(1, 0, -6176)
         assert Decimal.round(tiny, 2) == d(1, 0, -2)
+        assert Decimal.round(tiny, 6176, :up) == d(1, 1, -6176)
+        assert Decimal.round(tiny, 6200, :up) == d(1, 0, -6176)
         assert Decimal.mult(tiny, tiny) == d(1, 0, -6176)
       end)
     end

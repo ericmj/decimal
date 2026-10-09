@@ -1377,14 +1377,14 @@ defmodule Decimal do
   def round(%Decimal{} = num, n, mode) do
     ctx = Context.get()
 
-    case exponent_limited(num, ctx) do
-      %Decimal{coef: :inf} = num ->
+    case exponent_limited(num, -n, ctx) do
+      {%Decimal{coef: :inf} = num, _signals} ->
         num
 
-      %Decimal{sign: sign, coef: coef, exp: exp} ->
+      {%Decimal{sign: sign, coef: coef, exp: exp}, signals} ->
         {coef, exp} = strip_trailing_zeros(coef, exp)
         value = do_round(sign, coef, exp, -n, mode)
-        context(value, [], false, ctx)
+        context(value, signals, false, ctx)
     end
   end
 
@@ -2719,21 +2719,40 @@ defmodule Decimal do
     signals |> put_uniq(prec_signals) |> put_uniq(exp_signals)
   end
 
-  # The exponent half of `context/5` without the precision half, for `round/3`.
-  # The limits still have to be applied to the input: an adjusted exponent past
-  # `emax` must overflow, and an exponent below etiny must be raised to it,
-  # before `do_round/5` aligns the coefficient with the target exponent, which
-  # is otherwise unbounded for an exponent built through `new/3`. The precision
-  # half must not run, because the caller's `mode` is the only rounding
-  # `round/3` was asked to perform. A subnormal input that is representable
-  # passes through unchanged.
+  # The exponent half of `context/5` without the precision half, for the input
+  # of `round/3`. The precision half must not run, because the caller's `mode`
+  # is the only rounding `round/3` was asked to perform. An adjusted exponent
+  # past `emax` overflows as in every other operation, before `do_round/5`
+  # aligns the coefficient with `target_exp`, which is otherwise unbounded for
+  # an exponent built through `new/3`.
   #
-  # Subnormal and clamped describe how a result is represented, so they are not
-  # signalled for the input: the result of `round/3` signals them on its own way
-  # through the context.
-  defp exponent_limited(%Decimal{coef: coef} = num, %Context{} = context) do
-    {result, signals} = exponent_limits(num, coef_length(coef), context, num, false)
-    error(signals -- [:subnormal, :clamped], nil, result, context)
+  # An input below etiny is not rounded here, since rounding it at etiny and
+  # then at `target_exp` would round twice. The result is rounded once at
+  # `target_exp`, and the context rounds it again only if it is subnormal, at
+  # etiny. Below the guard digit of the lower of those two positions, neither
+  # rounding needs more than whether any digit is nonzero, so those digits are
+  # folded into one sticky digit, which bounds the alignment the same way.
+  #
+  # The signals are returned with the value as well as recorded, because the
+  # final context call starts from the context read before they were recorded.
+  defp exponent_limited(%Decimal{coef: 0} = num, _target_exp, _context), do: {num, []}
+
+  defp exponent_limited(%Decimal{coef: coef, exp: exp} = num, target_exp, %Context{} = context) do
+    keep_exp = if context.emin != :infinity, do: Kernel.min(target_exp, etiny(context)) - 1
+
+    cond do
+      above_emax?(exp + coef_length(coef) - 1, context.emax) ->
+        signals = [:overflow, :inexact, :rounded]
+        {error(signals, nil, overflow_result(num, context), context), signals}
+
+      keep_exp != nil and exp < keep_exp ->
+        {signif, guard, rest?} = subnormal_split(coef, keep_exp - exp, false)
+        sticky = if guard != 0 or rest?, do: 1, else: 0
+        {%{num | coef: signif * 10 + sticky, exp: keep_exp - 1}, []}
+
+      true ->
+        {num, []}
+    end
   end
 
   # `result` is the value already rounded to precision, with `digits` digits;
@@ -2753,14 +2772,14 @@ defmodule Decimal do
          _unrounded,
          _sticky?
        ) do
-    %Context{emax: emax, emin: emin, precision: precision} = context
+    %Context{emax: emax, emin: emin} = context
 
     cond do
       emax != :infinity and exp > emax ->
         {%{result | exp: emax}, [:clamped]}
 
-      emin != :infinity and exp < emin - precision + 1 ->
-        {%{result | exp: emin - precision + 1}, [:clamped]}
+      emin != :infinity and exp < etiny(context) ->
+        {%{result | exp: etiny(context)}, [:clamped]}
 
       true ->
         {result, []}
@@ -2805,8 +2824,7 @@ defmodule Decimal do
   # Callers that pass a sticky bit always carry more than `precision` digits,
   # so a subnormal value with a sticky bit has its exponent below etiny.
   defp subnormal(%Decimal{sign: sign, coef: coef, exp: exp} = num, sticky?, context) do
-    etiny = context.emin - context.precision + 1
-    drop = Kernel.max(etiny - exp, 0)
+    drop = Kernel.max(etiny(context) - exp, 0)
 
     if drop == 0 and not sticky? do
       {num, [:subnormal]}
@@ -2846,6 +2864,8 @@ defmodule Decimal do
 
   defp below_emin?(_adjusted_exp, :infinity), do: false
   defp below_emin?(adjusted_exp, emin), do: adjusted_exp < emin
+
+  defp etiny(%Context{emin: emin, precision: precision}), do: emin - precision + 1
 
   defp overflow_result(%Decimal{sign: sign}, %Context{rounding: rounding} = context) do
     if overflow_to_infinity?(rounding, sign) do

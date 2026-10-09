@@ -81,7 +81,9 @@
   default) with the context's rounding, as IEEE 754 and the General Decimal
   Arithmetic spec specify, and signal `:subnormal`, plus `:underflow` when
   that rounding is inexact. A result that rounds to zero keeps that exponent
-  (`0E-6176`).
+  (`0E-6176`). `Decimal.round/3` no longer flushes an input below `emin` to
+  zero before rounding it: the input is rounded once, with the given mode,
+  and only the result is subject to the context.
 
 ## v3.1.1 (2026-05-27)
 
