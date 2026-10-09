@@ -397,6 +397,28 @@ defmodule DecimalTest do
     end
   end
 
+  test "compare/2 raises for NaN even when the signal is not trapped" do
+    for {num1, num2} <- [
+          {~d"nan", ~d"1"},
+          {~d"1", ~d"nan"},
+          {~d"inf", ~d"nan"},
+          {~d"nan", ~d"-inf"},
+          {~d"nan", ~d"nan"}
+        ] do
+      Context.with(%Context{traps: []}, fn ->
+        assert_raise Error, "invalid_operation: operation on NaN", fn ->
+          Decimal.compare(num1, num2)
+        end
+
+        assert Context.get().flags == [:invalid_operation]
+      end)
+
+      assert_raise Error, "invalid_operation: operation on NaN", fn ->
+        Decimal.compare(num1, num2)
+      end
+    end
+  end
+
   test "compare/3" do
     assert Decimal.compare(~d"420.5", ~d"42e1", "0.5") == :eq
     assert Decimal.compare(~d"420.5", ~d"42e1", "0.2") == :gt
@@ -413,6 +435,101 @@ defmodule DecimalTest do
 
     assert Decimal.compare(~d"0.123", ~d"0", "0") == :gt
     assert Decimal.compare(~d"0.123", ~d"0", "0.2") == :eq
+  end
+
+  test "compare/3 does not round the bounds to the context precision" do
+    one = ~d"1"
+    near = Decimal.new("1.0000000000000000000000000000000000000001", max_digits: :infinity)
+
+    assert Decimal.compare(one, near, ~d"1e-40") == :eq
+    assert Decimal.compare(one, near, ~d"2e-40") == :eq
+    assert Decimal.compare(one, near, ~d"5e-41") == :lt
+    assert Decimal.compare(near, one, ~d"1e-40") == :eq
+    assert Decimal.compare(near, one, ~d"5e-41") == :gt
+    assert Decimal.compare(one, near, ~d"0") == :lt
+
+    assert Decimal.compare(1, "1.000000000000000000000000000000002", "1.5e-33") == :lt
+    assert Decimal.compare(1, "1.000000000000000000000000000000002", "2e-33") == :eq
+    assert Context.get().flags == []
+
+    Context.with(%Context{precision: 1}, fn ->
+      assert Decimal.compare(~d"1.4", ~d"1", ~d"0.4") == :eq
+      assert Decimal.compare(~d"1.4", ~d"1", ~d"0.39") == :gt
+      assert Decimal.compare(~d"1", ~d"1.4", ~d"0.39") == :lt
+      assert Context.get().flags == []
+    end)
+  end
+
+  test "compare/3 accepts a negative zero threshold" do
+    assert Decimal.compare(~d"1", ~d"1.0", ~d"-0") == :eq
+    assert Decimal.compare(~d"1", ~d"2", ~d"-0") == :lt
+    assert Decimal.compare(~d"2", ~d"1", ~d"-0.00") == :gt
+    assert Decimal.eq?(~d"1", ~d"1", ~d"-0")
+
+    assert_raise Error, ": threshold cannot be negative", fn ->
+      Decimal.compare(~d"1", ~d"1", ~d"-1e-100")
+    end
+
+    assert_raise Error, ": threshold cannot be negative", fn ->
+      Decimal.compare(~d"1", ~d"1", ~d"-inf")
+    end
+  end
+
+  test "compare/3 with NaN raises even when the signal is not trapped" do
+    for {n1, n2, threshold} <- [
+          {~d"nan", ~d"1", ~d"1"},
+          {~d"1", ~d"nan", ~d"1"},
+          {~d"1", ~d"1", ~d"nan"},
+          {~d"1", ~d"1", ~d"-nan"}
+        ] do
+      Context.with(%Context{traps: []}, fn ->
+        assert_raise Error, "invalid_operation: operation on NaN", fn ->
+          Decimal.compare(n1, n2, threshold)
+        end
+      end)
+
+      assert_raise Error, "invalid_operation: operation on NaN", fn ->
+        Decimal.compare(n1, n2, threshold)
+      end
+    end
+  end
+
+  test "compare/3 with infinities" do
+    assert Decimal.compare(~d"1", ~d"inf", ~d"1e100") == :lt
+    assert Decimal.compare(~d"1", ~d"-inf", ~d"1e100") == :gt
+    assert Decimal.compare(~d"inf", ~d"1e100", ~d"1") == :gt
+    assert Decimal.compare(~d"inf", ~d"inf", ~d"1") == :eq
+    assert Decimal.compare(~d"-inf", ~d"-inf", ~d"1") == :eq
+    assert Decimal.compare(~d"1", ~d"-1e100", ~d"inf") == :eq
+    assert Decimal.compare(~d"1", ~d"inf", ~d"inf") == :eq
+
+    assert_raise Error, "invalid_operation: adding +Infinity and -Infinity", fn ->
+      Decimal.compare(~d"inf", ~d"1", ~d"inf")
+    end
+
+    Context.with(%Context{traps: []}, fn ->
+      assert_raise Error, "invalid_operation: operation on NaN", fn ->
+        Decimal.compare(~d"inf", ~d"1", ~d"inf")
+      end
+    end)
+  end
+
+  @tag timeout: @bounded_smoke_timeout
+  test "compare/3 with huge exponent gaps stays bounded" do
+    huge = Decimal.new(1, 5, 1_000_000_000)
+    tiny = Decimal.new(1, 3, -1_000_000_000)
+
+    assert_runs_quickly("compare/3 bounded exponent gaps", fn ->
+      assert Decimal.compare(huge, tiny, ~d"1") == :gt
+      assert Decimal.compare(tiny, huge, ~d"1") == :lt
+      assert Decimal.compare(huge, huge, tiny) == :eq
+      assert Decimal.compare(huge, Decimal.new(1, 50, 999_999_999), tiny) == :eq
+      assert Decimal.compare(tiny, ~d"0", tiny) == :eq
+      assert Decimal.compare(tiny, Decimal.new(-1, 3, -1_000_000_000), tiny) == :gt
+      assert Decimal.compare(huge, ~d"0", Decimal.new(1, 5, 1_000_000_000)) == :eq
+      assert Decimal.compare(huge, ~d"0", Decimal.new(1, 49, 999_999_999)) == :gt
+      assert Decimal.compare(~d"0", huge, Decimal.new(1, 51, 999_999_999)) == :eq
+    end)
   end
 
   test "equal?/2" do
