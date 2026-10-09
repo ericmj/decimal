@@ -59,8 +59,7 @@
   the exponent limits are now applied to the input. `round/3` no longer
   signals `:inexact`/`:rounded` because its input was wider than the
   precision; it still signals when the result reaches the context wider than
-  the precision, as every operation does, and still does not signal for the
-  digits it discards itself.
+  the precision, as every operation does.
 
 * Make `Decimal.Context.set/1`, `Decimal.Context.with/2` and
   `Decimal.Context.update/1` raise `ArgumentError` for an invalid context: a
@@ -84,6 +83,12 @@
   (`0E-6176`). `Decimal.round/3` no longer flushes an input below `emin` to
   zero before rounding it: the input is rounded once, with the given mode,
   and only the result is subject to the context.
+
+* Make `Decimal.round/3` signal `:rounded` when it discards digits of a
+  nonzero coefficient, and `:inexact` when any of them is nonzero, as the
+  quantize operation of the General Decimal Arithmetic spec does. It
+  signalled nothing for the digits it discarded itself:
+  `Decimal.round("1.25", 1)` returned `1.3` with no flags.
 
 ## v3.1.1 (2026-05-27)
 

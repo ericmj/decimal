@@ -1356,6 +1356,10 @@ defmodule Decimal do
   (default is to round to nearest one). If places is negative, at least that
   many digits to the left of the decimal point will be zero.
 
+  As with the quantize operation of the General Decimal Arithmetic spec,
+  `:rounded` is signalled when digits of a nonzero coefficient are discarded,
+  and `:inexact` when any of them is nonzero.
+
   See `Decimal.Context` for more information about rounding algorithms.
 
   ## Examples
@@ -1382,9 +1386,20 @@ defmodule Decimal do
         num
 
       {%Decimal{sign: sign, coef: coef, exp: exp}, signals} ->
+        # Rounded counts discarded zeros too, so it is decided before the
+        # trailing zeros are stripped.
+        rounded? = coef != 0 and exp < -n
         {coef, exp} = strip_trailing_zeros(coef, exp)
-        value = do_round(sign, coef, exp, -n, mode)
-        context(value, signals, false, ctx)
+        {value, inexact?} = do_round(sign, coef, exp, -n, mode)
+
+        round_signals =
+          cond do
+            inexact? -> [:inexact, :rounded]
+            rounded? -> [:rounded]
+            true -> []
+          end
+
+        context(value, put_uniq(signals, round_signals), false, ctx)
     end
   end
 
@@ -2560,13 +2575,14 @@ defmodule Decimal do
 
   ## ROUNDING ##
 
+  # Returns whether any discarded digit was nonzero along with the result.
   defp do_round(sign, coef, exp, target_exp, rounding) do
     cond do
       exp == target_exp ->
-        %Decimal{sign: sign, coef: coef, exp: exp}
+        {%Decimal{sign: sign, coef: coef, exp: exp}, false}
 
       exp > target_exp ->
-        %Decimal{sign: sign, coef: coef * pow10(exp - target_exp), exp: target_exp}
+        {%Decimal{sign: sign, coef: coef * pow10(exp - target_exp), exp: target_exp}, false}
 
       true ->
         {signif, guard, rest?} = split_digits(coef, target_exp - exp, false)
@@ -2576,7 +2592,7 @@ defmodule Decimal do
             do: signif + 1,
             else: signif
 
-        %Decimal{sign: sign, coef: signif, exp: target_exp}
+        {%Decimal{sign: sign, coef: signif, exp: target_exp}, guard != 0 or rest?}
     end
   end
 

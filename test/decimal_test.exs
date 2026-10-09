@@ -1201,13 +1201,22 @@ defmodule DecimalTest do
     end)
   end
 
-  test "round/3 signals only for what the context rounds" do
-    # The digits `round/3` itself discards never signal: dropping "34" here
-    # sets no flag.
-    Context.with(%Context{precision: 3}, fn ->
-      assert Decimal.round(~d"1.234", 1) == d(1, 12, -1)
-      assert Context.get().flags == []
-    end)
+  test "round/3 signals rounded and inexact like quantize" do
+    # Rounded counts discarded zeros of a nonzero coefficient too, and padding
+    # or a zero coefficient signals nothing.
+    for {num, places, expected, flags} <- [
+          {~d"1.234", 1, d(1, 12, -1), [:inexact, :rounded]},
+          {~d"2.10", 1, d(1, 21, -1), [:rounded]},
+          {~d"2.1", 1, d(1, 21, -1), []},
+          {~d"2.1", 3, d(1, 2100, -3), []},
+          {~d"0.00", 1, d(1, 0, -1), []},
+          {~d"-0.001", 1, d(-1, 0, -1), [:inexact, :rounded]}
+        ] do
+      Context.with(%Context{precision: 9}, fn ->
+        assert Decimal.round(num, places) == expected
+        assert Enum.sort(Context.get().flags) == flags
+      end)
+    end
 
     # The result still goes through the context like any other operation, so a
     # coefficient `places` does not narrow below the precision is rounded there
