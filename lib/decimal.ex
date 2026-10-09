@@ -1781,6 +1781,15 @@ defmodule Decimal do
 
   """
   @spec cast(term) :: {:ok, t} | :error
+  # A float's shortest representation has at most 17 digits and an exponent
+  # within ±324, and an integer below 10^9 in magnitude has at most nine
+  # digits, so both always fit the default parse limits.
+  def cast(term) when is_float(term), do: {:ok, from_float(term)}
+
+  def cast(term)
+      when is_integer(term) and term > -1_000_000_000 and term < 1_000_000_000,
+      do: {:ok, new(term)}
+
   def cast(term), do: cast_with_limits(term, @default_parse_limits)
 
   @doc """

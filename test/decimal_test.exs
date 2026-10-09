@@ -303,6 +303,30 @@ defmodule DecimalTest do
     assert Decimal.cast("1e1000000000000000000000000", max_exponent: 9) == :error
   end
 
+  test "cast/1 preserves numeric representations and default limits" do
+    Context.with(%Context{precision: 1, emin: 0, emax: 0, traps: [:inexact, :overflow]}, fn ->
+      for integer <- [-1_000_000_000, -999_999_999, 0, 999_999_999, 1_000_000_000] do
+        assert Decimal.cast(integer) == {:ok, Decimal.new(integer)}
+      end
+
+      limit = Integer.pow(10, 34)
+
+      for sign <- [1, -1] do
+        assert Decimal.cast(sign * (limit - 1)) == {:ok, d(sign, limit - 1, 0)}
+        assert Decimal.cast(sign * limit) == :error
+      end
+
+      assert Decimal.cast(-0.0) == {:ok, d(-1, 0, -1)}
+      assert Decimal.cast(0.0) == {:ok, d(1, 0, -1)}
+      assert Decimal.cast(5.0e-324) == {:ok, d(1, 5, -324)}
+      assert Decimal.cast(-5.0e-324) == {:ok, d(-1, 5, -324)}
+      assert Decimal.cast(1.7976931348623157e308) == {:ok, d(1, 17_976_931_348_623_157, 292)}
+      assert Decimal.cast(5.0e-324, max_exponent: 323) == :error
+      assert Decimal.cast(999_999_999, max_digits: 8) == :error
+      assert Context.get().flags == []
+    end)
+  end
+
   test "abs/1" do
     assert Decimal.abs(~d"123") == d(1, 123, 0)
     assert Decimal.abs(~d"-123") == d(1, 123, 0)

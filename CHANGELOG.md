@@ -32,7 +32,9 @@
 * Make `Decimal.sqrt/1` take the root of a coefficient of at most 2^53 from
   its float estimate: ~10x faster for exact squares. `Decimal.div_int/2`, `Decimal.rem/2` and
   `Decimal.div_rem/2` divide coefficients below 10^9 at equal exponents
-  directly: ~1.25-1.45x faster.
+  directly: ~1.25-1.45x faster. `Decimal.cast/1` skips the limit checks for
+  floats and for integers below 10^9, which always pass them: ~1.75x faster
+  for such integers and ~1.15x for floats.
 
 * Record the flags and look for a trapped signal in one pass over an
   operation's signals: operations that signal, such as inexact rounding and
