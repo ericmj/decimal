@@ -72,6 +72,19 @@
 * Make `Decimal.to_integer/1` raise `ArgumentError` for NaN and ±Infinity,
   like `Decimal.to_float/1`, instead of `FunctionClauseError`.
 
+* Make `Decimal.compare/3` exact. It computed `num1 ± threshold` through the
+  context, so the bounds were rounded to the context precision and numbers
+  near the threshold compared wrong: `Decimal.compare(1,
+  "1.000000000000000000000000000000002", "1.5e-33")` returned `:eq` although
+  the numbers differ by `2e-33`. It no longer sets `:inexact`/`:rounded`
+  flags, accepts `-0` as a threshold, and raises `Decimal.Error` instead of
+  `CondClauseError` for a NaN when `:invalid_operation` is not trapped.
+
+* Make `Decimal.compare/2` raise `Decimal.Error` for a NaN operand even when
+  `:invalid_operation` is not trapped, instead of returning the NaN, which is
+  not a `t:compare_result/0`. Comparing a NaN with ±Infinity now raises too,
+  instead of returning `:lt` or `:gt`.
+
 * Keep subnormal results instead of flushing them to zero. Since v3.0.0
   made `emin` default to -6 143, every result whose adjusted exponent fell
   below it became 0 with `:underflow`, even an exact one:
