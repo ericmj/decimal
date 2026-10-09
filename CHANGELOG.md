@@ -70,6 +70,9 @@
   (`Decimal.add(1, 1)` returned `0E+1`), and the other cases failed with
   `FunctionClauseError` inside the next operation.
 
+* Make `Decimal.to_integer/1` raise `ArgumentError` for NaN and ±Infinity,
+  like `Decimal.to_float/1`, instead of `FunctionClauseError`.
+
 * Keep subnormal results instead of flushing them to zero. Since v3.0.0
   made `emin` default to -6 143, every result whose adjusted exponent fell
   below it became 0 with `:underflow`, even an exact one:

@@ -2047,7 +2047,8 @@ defmodule Decimal do
   @doc """
   Returns the decimal represented as an integer.
 
-  Raises when loss of precision will occur.
+  Raises when loss of precision will occur, or when the decimal is NaN or
+  ±Infinity.
 
   ## Examples
 
@@ -2059,6 +2060,9 @@ defmodule Decimal do
 
       iex> Decimal.to_integer(Decimal.new("1.10"))
       ** (ArgumentError) cannot convert Decimal.new("1.1") without losing precision. Use Decimal.round/3 first.
+
+      iex> Decimal.to_integer(Decimal.new("Infinity"))
+      ** (ArgumentError) Decimal.new("Infinity") cannot be converted to integer
 
   """
   @spec to_integer(t) :: integer
@@ -2082,6 +2086,10 @@ defmodule Decimal do
       raise ArgumentError,
             "cannot convert #{inspect(normalized)} without losing precision. Use Decimal.round/3 first."
     end
+  end
+
+  def to_integer(%Decimal{} = decimal) do
+    raise ArgumentError, "#{inspect(decimal)} cannot be converted to integer"
   end
 
   @doc """
