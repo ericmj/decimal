@@ -10,11 +10,11 @@
   digits than the precision. A caller controlling `places` could exhaust
   memory with one call: `Decimal.round(Decimal.new("1.5"), -50_000_000)`
   allocated about 5.5 GB, and positive `places` above about 1.26 million
-  built the padding and then raised `SystemLimitError`. The coefficient is
-  now padded to at most the context precision, and dropping more digits than
-  the coefficient has no longer builds a power of ten of that size. Results
-  and flags are unchanged, except that those calls now return a value. This
-  is a fix for **CVE-2026-97853** (GitHub advisory
+  built the padding and then raised `SystemLimitError`. A result wider than
+  the precision is now rejected before the coefficient is padded (see the
+  `:invalid_operation` entry under Bug fixes), and dropping more digits than
+  the coefficient has no longer builds a power of ten of that size. This is a
+  fix for **CVE-2026-97853** (GitHub advisory
   [GHSA-6c27-994x-c52f](https://github.com/ericmj/decimal/security/advisories/GHSA-6c27-994x-c52f)).
 
 * Make `Decimal.to_integer/1` and `Decimal.to_float/1` return `0` and `0.0`
@@ -108,8 +108,7 @@
   `0.5`. Such inputs come from `new/3`, which performs no digit count. Only
   the exponent limits are now applied to the input. `round/3` no longer
   signals `:inexact`/`:rounded` because its input was wider than the
-  precision; it still signals when the result reaches the context wider than
-  the precision, as every operation does.
+  precision.
 
 * Make `Decimal.Context.set/1`, `Decimal.Context.with/2` and
   `Decimal.Context.update/1` raise `ArgumentError` for an invalid context: a
@@ -152,6 +151,18 @@
   quantize operation of the General Decimal Arithmetic spec does. It
   signalled nothing for the digits it discarded itself:
   `Decimal.round("1.25", 1)` returned `1.3` with no flags.
+
+* Make `Decimal.round/3` signal `:invalid_operation` and return NaN where the
+  quantize operation of the General Decimal Arithmetic spec does: for
+  ±Infinity, for `places` that put the exponent outside the context's range
+  of `emin - precision + 1` to `emax`, and for a result that would need more
+  digits than the precision or an adjusted exponent above `emax`. The signal
+  is trapped by default, so these calls now raise `Decimal.Error`. Such
+  results were rounded by the context to an exponent other than `-places`:
+  `Decimal.round(Decimal.new("1e40"), 2)` returned
+  `1.000000000000000000000000000000000E+40`, and `Decimal.round("1.5", 7000)`
+  returned `1.500000000000000000000000000000000`. ±Infinity was returned
+  unchanged.
 
 ## v3.1.2 (2026-10-10)
 

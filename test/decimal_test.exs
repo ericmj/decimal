@@ -1319,15 +1319,25 @@ defmodule DecimalTest do
   end
 
   test "round/3: special" do
-    assert Decimal.round(~d"inf", 2, :down) == d(1, :inf, 0)
     assert Decimal.round(~d"nan", 2, :down) == d(1, :NaN, 0)
+
+    assert_raise Error, "invalid_operation: rounding ±Infinity", fn ->
+      Decimal.round(~d"inf", 2, :down)
+    end
+
+    Context.with(%Context{traps: []}, fn ->
+      assert Decimal.round(~d"-inf", 2, :down) == d(1, :NaN, 0)
+      assert Context.get().flags == [:invalid_operation]
+    end)
   end
 
-  test "round/3: normalization overflow" do
+  test "round/3: a number above emax is invalid" do
     Context.with(%Context{emax: 2, traps: []}, fn ->
       for places <- [-1, 0, 1] do
-        assert Decimal.round(Decimal.new(1, 1, 3), places) == d(1, :inf, 0)
+        assert Decimal.round(Decimal.new(1, 1, 3), places) == d(1, :NaN, 0)
       end
+
+      assert Context.get().flags == [:invalid_operation]
     end)
   end
 
@@ -1455,13 +1465,15 @@ defmodule DecimalTest do
   end
 
   @tag timeout: @bounded_smoke_timeout
-  test "round/3 applies the exponent limits to the input" do
-    # An input past `emax` (`new/3` performs no limit check) overflows instead
-    # of being rounded.
+  test "round/3 checks the result against the context before scaling the coefficient" do
+    # Without the check `do_round/5` would build `coef * pow10(exp - target_exp)`,
+    # ten million digits here, for a result the context cannot hold.
     num = %Decimal{sign: 1, coef: 1, exp: 10_000_000}
 
     assert_runs_quickly("round/3 bounded huge exponent", fn ->
-      assert Decimal.round(num, 0) == d(1, :inf, 0)
+      Context.with(%Context{traps: []}, fn ->
+        assert Decimal.round(num, 0) == d(1, :NaN, 0)
+      end)
     end)
   end
 
@@ -1481,49 +1493,64 @@ defmodule DecimalTest do
         assert Enum.sort(Context.get().flags) == flags
       end)
     end
+  end
 
-    # The result still goes through the context like any other operation, so a
-    # coefficient `places` does not narrow below the precision is rounded there
-    # - under `ctx.rounding` rather than the mode passed here - and signals.
+  test "round/3 is invalid where quantize is" do
+    # The result always has the exponent `-places`, so one the context cannot
+    # hold is NaN instead of being rounded to the precision or clamped.
+    for {num, places, context} <- [
+          {~d"1e40", 2, %Context{}},
+          {~d"1.5", 7000, %Context{}},
+          {~d"1.5", 10, %Context{precision: 5}},
+          {~d"1.5", -6145, %Context{}},
+          {~d"0", 7000, %Context{}},
+          {~d"0.4995", 4, %Context{precision: 3}},
+          # A carry adds a digit, or pushes the adjusted exponent past emax.
+          {~d"9.995", 2, %Context{precision: 3}},
+          {~d"999.5", 0, %Context{precision: 5, emax: 2}}
+        ] do
+      Context.with(%{context | traps: []}, fn ->
+        assert Decimal.round(num, places) == d(1, :NaN, 0)
+        assert Context.get().flags == [:invalid_operation]
+      end)
+    end
+
     Context.with(%Context{precision: 3}, fn ->
-      assert Decimal.round(~d"0.4995", 4, :down) == d(1, 500, -3)
-
-      flags = Context.get().flags
-      assert :inexact in flags
-      assert :rounded in flags
+      assert Decimal.round(~d"9.995", 2, :down) == d(1, 999, -2)
     end)
 
-    # Zeros padded past the precision are rounded away like any other digits.
-    Context.with(%Context{precision: 5}, fn ->
-      assert Decimal.round(~d"1.5", 10) == d(1, 15000, -4)
-      assert Context.get().flags == [:rounded]
-    end)
+    assert Decimal.round(Decimal.new(1, 0, 1_000_000_000), 2) == d(1, 0, -2)
+
+    assert_raise Error, "invalid_operation: result has more digits than the precision", fn ->
+      Decimal.round(~d"1e40", 2)
+    end
   end
 
   @tag timeout: @bounded_smoke_timeout
   test "round/3 does work bounded by the precision, not by places" do
-    one_and_a_half = 15 * Integer.pow(10, 32)
+    huge = Integer.pow(10, 100)
 
-    assert_runs_quickly("round/3 huge positive places", fn ->
-      assert Decimal.round(~d"1.5", 1_000_000_000) == d(1, one_and_a_half, -33)
-      assert Decimal.round(~d"1.5", Integer.pow(10, 100)) == d(1, one_and_a_half, -33)
-      assert Decimal.round(~d"0", 1_000_000_000) == d(1, 0, -6176)
+    # `-places` outside etiny..emax is invalid before any digit is looked at.
+    Context.with(%Context{traps: []}, fn ->
+      assert_runs_quickly("round/3 huge places", fn ->
+        for places <- [1_000_000_000, -1_000_000_000, huge, -huge],
+            num <- [~d"1.5", ~d"0", ~d"-1.5"],
+            mode <- [:half_up, :floor] do
+          assert Decimal.round(num, places, mode) == d(1, :NaN, 0)
+        end
+      end)
+
+      assert Context.get().flags == [:invalid_operation]
     end)
 
-    assert_runs_quickly("round/3 huge negative places", fn ->
-      assert Decimal.round(~d"1.5", -1_000_000_000) == d(1, 0, 6144)
-      assert Decimal.round(~d"1.5", -Integer.pow(10, 100)) == d(1, 0, 6144)
-      assert Decimal.round(~d"0", -1_000_000_000) == d(1, 0, 6144)
-      assert Decimal.round(~d"-1.5", -1_000_000_000, :floor) == d(-1, :inf, 0)
-    end)
-
-    # Without exponent limits the results keep the exponent `places` asks for.
-    Context.with(%Context{emax: :infinity, emin: :infinity}, fn ->
+    # Without exponent limits only the precision bounds the result.
+    Context.with(%Context{emax: :infinity, emin: :infinity, traps: []}, fn ->
       assert_runs_quickly("round/3 huge places without exponent limits", fn ->
-        assert Decimal.round(~d"1.5", 1_000_000_000) == d(1, one_and_a_half, -33)
+        assert Decimal.round(~d"1.5", 1_000_000_000) == d(1, :NaN, 0)
+        assert Decimal.round(~d"1.5", huge) == d(1, :NaN, 0)
         assert Decimal.round(~d"0", 1_000_000_000) == d(1, 0, -1_000_000_000)
         assert Decimal.round(~d"1.5", -1_000_000_000) == d(1, 0, 1_000_000_000)
-        assert Decimal.round(~d"1.5", -Integer.pow(10, 100)) == d(1, 0, Integer.pow(10, 100))
+        assert Decimal.round(~d"1.5", -huge) == d(1, 0, huge)
         assert Decimal.round(~d"-1.5", -1_000_000_000, :floor) == d(-1, 1, 1_000_000_000)
       end)
     end)
@@ -1551,8 +1578,8 @@ defmodule DecimalTest do
   property "round/3 matches exact padding or division followed by the context" do
     modes = [:down, :up, :ceiling, :floor, :half_up, :half_even, :half_down]
 
-    # The exponents and digit counts stay inside the default emin/emax, so the
-    # input's exponent limits never apply and the reference leaves them out.
+    # The exponents stay inside the default emin/emax, so only a result wider
+    # than the precision is invalid.
     check all(
             sign <- member_of([1, -1]),
             coef <- bind(integer(1..45), &integer(0..(Integer.pow(10, &1) - 1))),
@@ -1576,8 +1603,13 @@ defmodule DecimalTest do
       expected =
         Context.with(context, fn ->
           {rounded, round_flags} = reference_round(num, places, mode)
-          rounded = Decimal.apply_context(rounded)
-          {rounded, round_flags ++ (Context.get().flags -- round_flags)}
+
+          if rounded.coef != 0 and length(Integer.digits(rounded.coef)) > precision do
+            {d(1, :NaN, 0), [:invalid_operation]}
+          else
+            rounded = Decimal.apply_context(rounded)
+            {rounded, round_flags ++ (Context.get().flags -- round_flags)}
+          end
         end)
 
       assert actual == expected, """

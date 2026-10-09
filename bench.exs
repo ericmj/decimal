@@ -43,6 +43,10 @@ sampled_pairs = Enum.take_every(decimal_pairs, 199)
 
 positive_decimals = Enum.filter(decimals, &(&1.sign == 1))
 
+# `round/3` is invalid for a result wider than the default precision of 34
+# digits, so it only gets the decimals whose two-decimal result fits.
+round_decimals = Enum.filter(decimals, &(&1.exp + length(Integer.digits(&1.coef)) + 2 <= 34))
+
 # High-precision operands at the decimal128 default precision (34 digits),
 # where division and rounding costs dominate.
 high_precision_coefs = [
@@ -116,7 +120,7 @@ jobs = %{
   "add high precision" => each_pair.(high_precision_pairs, &Decimal.add/2),
   "mult high precision" => each_pair.(high_precision_pairs, &Decimal.mult/2),
   "div high precision" => each_pair.(high_precision_pairs, &Decimal.div/2),
-  "round" => each.(decimals, &Decimal.round(&1, 2, :half_even)),
+  "round" => each.(round_decimals, &Decimal.round(&1, 2, :half_even)),
   "normalize" => each.(decimals, &Decimal.normalize/1),
   "sqrt" => each.(positive_decimals, &Decimal.sqrt/1),
   "to_string scientific" => each.(decimals, &Decimal.to_string(&1, :scientific)),

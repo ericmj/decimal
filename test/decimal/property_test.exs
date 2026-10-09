@@ -265,17 +265,20 @@ defmodule Decimal.PropertyTest do
               places <- StreamData.integer(0..10),
               max_runs: 100
             ) do
-        floor = Decimal.round(a, places, :floor)
-        ceiling = Decimal.round(a, places, :ceiling)
+        # Wide enough for every result, which would otherwise be invalid.
+        Decimal.Context.with(%Decimal.Context{precision: 200}, fn ->
+          floor = Decimal.round(a, places, :floor)
+          ceiling = Decimal.round(a, places, :ceiling)
 
-        assert Decimal.compare(floor, a) in [:lt, :eq]
-        assert Decimal.compare(a, ceiling) in [:lt, :eq]
+          assert Decimal.compare(floor, a) in [:lt, :eq]
+          assert Decimal.compare(a, ceiling) in [:lt, :eq]
 
-        for mode <- [:down, :up, :half_up, :half_down, :half_even] do
-          rounded = Decimal.round(a, places, mode)
-          assert Decimal.compare(floor, rounded) in [:lt, :eq]
-          assert Decimal.compare(rounded, ceiling) in [:lt, :eq]
-        end
+          for mode <- [:down, :up, :half_up, :half_down, :half_even] do
+            rounded = Decimal.round(a, places, mode)
+            assert Decimal.compare(floor, rounded) in [:lt, :eq]
+            assert Decimal.compare(rounded, ceiling) in [:lt, :eq]
+          end
+        end)
       end
     end
   end

@@ -378,7 +378,7 @@ defmodule Decimal.ContextTest do
       end)
     end
 
-    test "round/3 signals subnormal and clamped for the result, not the input" do
+    test "round/3 signals subnormal for the result, not the input" do
       tiny = Decimal.new(1, 15, -6145)
 
       Context.with(%Context{}, fn ->
@@ -394,26 +394,17 @@ defmodule Decimal.ContextTest do
         assert Decimal.round(Decimal.new(-1, 0, -1_000_000_000), 2) == d(-1, 0, -2)
         assert Enum.sort(Context.get().flags) == [:inexact, :rounded]
       end)
-
-      Context.with(%Context{}, fn ->
-        assert Decimal.round(Decimal.new(1, 0, -6200), 6200) == d(1, 0, -6176)
-        assert Context.get().flags == [:clamped]
-      end)
     end
 
-    test "round/3 results padded below etiny keep the digits at or above it" do
+    test "round/3 results below emin keep the requested exponent down to etiny" do
       for {num, places, expected, flags} <- [
-            {Decimal.new(1, 1, -6150), 7000, d(1, Integer.pow(10, 26), -6176),
-             [:rounded, :subnormal]},
-            {Decimal.new(1, 15, -6175), 6200, d(1, 150, -6176), [:rounded, :subnormal]},
             {Decimal.new(1, 15, -6175), 6176, d(1, 150, -6176), [:subnormal]},
             {Decimal.new(1, 15, -6175), 6174, d(1, 2, -6174), [:inexact, :rounded, :subnormal]},
             {Decimal.new(1, 96, -6145), 6144, d(1, 10, -6144), [:inexact, :rounded]},
-            {Decimal.new(1, 123, -6146), 7000, d(1, 123 * Integer.pow(10, 30), -6176),
-             [:rounded, :subnormal]},
-            {Decimal.new(-1, 7, -6143), 6200, d(-1, 7 * Integer.pow(10, 33), -6176), [:rounded]}
+            {Decimal.new(1, 1, -6150), 7000, d(1, :NaN, 0), [:invalid_operation]},
+            {Decimal.new(1, 0, -6200), 6200, d(1, :NaN, 0), [:invalid_operation]}
           ] do
-        Context.with(%Context{}, fn ->
+        Context.with(%Context{traps: []}, fn ->
           assert Decimal.round(num, places) == expected
           assert Enum.sort(Context.get().flags) == flags
         end)
@@ -428,8 +419,8 @@ defmodule Decimal.ContextTest do
       end)
 
       Context.with(%Context{precision: 3, emin: -2}, fn ->
-        assert Decimal.round(~d"0.00012345", 5, :down) == d(1, 1, -4)
-        assert Enum.sort(Context.get().flags) == [:inexact, :rounded, :subnormal, :underflow]
+        assert Decimal.round(~d"0.00012345", 4, :down) == d(1, 1, -4)
+        assert Enum.sort(Context.get().flags) == [:inexact, :rounded, :subnormal]
       end)
 
       Context.with(%Context{}, fn ->
@@ -437,13 +428,6 @@ defmodule Decimal.ContextTest do
         assert Decimal.round(Decimal.new(-1, 15, -6177), 6176, :half_even) == d(-1, 2, -6176)
         assert Decimal.round(Decimal.new(1, 1, -7000), 2) == d(1, 0, -2)
         assert Enum.sort(Context.get().flags) == [:inexact, :rounded, :subnormal]
-      end)
-    end
-
-    test "round/3 keeps the flags its input signalled" do
-      Context.with(%Context{precision: 3, emax: 2, rounding: :down}, fn ->
-        assert Decimal.round(Decimal.new(1, 1, 5), -4, :down) == d(1, 0, 2)
-        assert Enum.sort(Context.get().flags) == [:clamped, :inexact, :overflow, :rounded]
       end)
     end
 
@@ -459,7 +443,6 @@ defmodule Decimal.ContextTest do
         assert Decimal.apply_context(tiny) == d(1, 0, -6176)
         assert Decimal.round(tiny, 2) == d(1, 0, -2)
         assert Decimal.round(tiny, 6176, :up) == d(1, 1, -6176)
-        assert Decimal.round(tiny, 6200, :up) == d(1, 0, -6176)
         assert Decimal.mult(tiny, tiny) == d(1, 0, -6176)
       end)
     end

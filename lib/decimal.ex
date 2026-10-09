@@ -1472,9 +1472,16 @@ defmodule Decimal do
   (default is to round to nearest one). If places is negative, at least that
   many digits to the left of the decimal point will be zero.
 
-  As with the quantize operation of the General Decimal Arithmetic spec,
-  `:rounded` is signalled when digits of a nonzero coefficient are discarded,
-  and `:inexact` when any of them is nonzero.
+  This is the quantize operation of the General Decimal Arithmetic spec, so
+  the result always has the exponent `-places`. `:rounded` is signalled when
+  digits of a nonzero coefficient are discarded, and `:inexact` when any of
+  them is nonzero.
+
+  `:invalid_operation` is signalled and the result is NaN when the number is
+  ±Infinity, when `-places` is outside the exponent range of the context,
+  `emin - precision + 1` to `emax`, or when the result would need more digits
+  than the precision or an adjusted exponent above `emax`. The signal is
+  trapped by default, raising `Decimal.Error`.
 
   See `Decimal.Context` for more information about rounding algorithms.
 
@@ -1486,29 +1493,50 @@ defmodule Decimal do
       iex> Decimal.round("1.234", 1)
       Decimal.new("1.2")
 
+      iex> Decimal.round("1.5", 40)
+      ** (Decimal.Error) invalid_operation: result has more digits than the precision
+
   """
   @spec round(decimal, integer, rounding) :: t
   def round(num, places \\ 0, mode \\ :half_up)
 
   def round(%Decimal{coef: :NaN} = num, _, _), do: num
 
-  def round(%Decimal{coef: :inf} = num, _, _), do: num
+  def round(%Decimal{coef: :inf}, _, _),
+    do: error(:invalid_operation, "rounding ±Infinity", %Decimal{coef: :NaN})
 
-  def round(%Decimal{} = num, n, mode) do
+  def round(%Decimal{sign: sign, coef: coef, exp: exp} = num, n, mode) do
     ctx = Context.get()
+    target_exp = -n
 
-    case exponent_limited(num, -n, ctx) do
-      {%Decimal{coef: :inf} = num, _signals} ->
-        num
+    cond do
+      not exponent_in_range?(target_exp, ctx) ->
+        error(:invalid_operation, "places outside the exponent range", %Decimal{coef: :NaN}, ctx)
 
-      {%Decimal{sign: sign, coef: coef, exp: exp}, signals} ->
+      coef == 0 ->
+        %Decimal{sign: sign, coef: 0, exp: target_exp}
+
+      reason = quantize_invalid(adjust_exp(num), target_exp, ctx) ->
+        error(:invalid_operation, reason, %Decimal{coef: :NaN}, ctx)
+
+      true ->
         # Rounded counts discarded zeros too, so it is decided before the
         # trailing zeros are stripped.
-        rounded? = coef != 0 and exp < -n
+        rounded? = exp < target_exp
         {coef, exp} = strip_trailing_zeros(coef, exp)
-        {value, round_signals, digits} = do_round(sign, coef, exp, -n, mode, ctx.precision)
-        round_signals = if rounded?, do: put_uniq(round_signals, :rounded), else: round_signals
-        context(value, put_uniq(signals, round_signals), false, ctx, digits)
+        {value, signals, digits} = do_round(sign, coef, exp, target_exp, mode)
+        signals = if rounded?, do: put_uniq(signals, :rounded), else: signals
+
+        # A carry can still add a digit, or push the adjusted exponent past
+        # `emax`. Otherwise the result fits the context, which only adds
+        # `:subnormal`.
+        if reason = quantize_invalid(adjust_exp(value), target_exp, ctx) do
+          error(:invalid_operation, reason, %Decimal{coef: :NaN}, ctx)
+        else
+          # Reversed as `merge_signals/3` reverses the precision step's signals,
+          # so the flags read `[:inexact, :rounded]` as for a rounded `add/2`.
+          context(value, :lists.reverse(signals), false, ctx, digits)
+        end
     end
   end
 
@@ -2807,24 +2835,23 @@ defmodule Decimal do
 
   ## ROUNDING ##
 
-  # The context keeps at most `precision` digits of the result, so neither
-  # branch does work proportional to how far `target_exp` is from `exp`, which
-  # comes from the caller's `places` and can be arbitrarily large. Returns the
+  # `round/3` checks that the result has at most `precision` digits before
+  # calling this, so padding is bounded by the precision, and `drop_digits/3`
+  # drops any number of digits without a power of ten that size. Returns the
   # signals for the context to merge, `:inexact` and `:rounded` when a
   # discarded digit is nonzero, and the result's digit count when it is known.
-  defp do_round(sign, coef, exp, target_exp, rounding, precision) do
+  defp do_round(sign, coef, exp, target_exp, rounding) do
     cond do
       exp == target_exp ->
         {%Decimal{sign: sign, coef: coef, exp: exp}, [], nil}
 
-      coef == 0 ->
-        {%Decimal{sign: sign, coef: 0, exp: target_exp}, [], nil}
-
       exp > target_exp ->
-        pad_coef(sign, coef, exp, exp - target_exp, precision)
+        shift = exp - target_exp
+        value = %Decimal{sign: sign, coef: coef * pow10(shift), exp: target_exp}
+        {value, [], coef_length(coef) + shift}
 
       true ->
-        {signif, guard, rest?} = drop_digits(coef, target_exp - exp)
+        {signif, guard, rest?} = drop_digits(coef, target_exp - exp, false)
 
         signif =
           if increment?(rounding, sign, signif, guard, rest?),
@@ -2834,36 +2861,6 @@ defmodule Decimal do
         signals = if guard != 0 or rest?, do: [:inexact, :rounded], else: []
         {%Decimal{sign: sign, coef: signif, exp: target_exp}, signals, nil}
     end
-  end
-
-  # Zeros padded past `precision` digits would only be dropped again by the
-  # context, so pad to at most `precision` digits and signal the `:rounded`
-  # dropping them would have signalled. A coefficient already wider than the
-  # precision is left for the context to round, which drops the same digits
-  # the padded one would have lost.
-  defp pad_coef(sign, coef, exp, shift, precision) do
-    digits = coef_length(coef)
-
-    cond do
-      digits + shift <= precision ->
-        {%Decimal{sign: sign, coef: coef * pow10(shift), exp: exp - shift}, [], digits + shift}
-
-      digits <= precision ->
-        shift = precision - digits
-        {%Decimal{sign: sign, coef: coef * pow10(shift), exp: exp - shift}, [:rounded], precision}
-
-      true ->
-        {%Decimal{sign: sign, coef: coef, exp: exp}, [], digits}
-    end
-  end
-
-  # Dropping more digits than the nonzero `coef` has leaves no significant
-  # digits and a zero guard digit, with all of `coef` in the rest, so it needs
-  # no power of ten the size of `drop`.
-  defp drop_digits(coef, drop) do
-    if drop > coef_length(coef),
-      do: {0, 0, true},
-      else: split_digits(coef, drop, false)
   end
 
   # The result's digit count comes back too, since the caller needs it for the
@@ -3043,37 +3040,26 @@ defmodule Decimal do
     signals |> put_uniq(prec_signals) |> put_uniq(exp_signals)
   end
 
-  # The exponent half of `context/5` without the precision half, for the input
-  # of `round/3`. The precision half must not run, because the caller's `mode`
-  # is the only rounding `round/3` was asked to perform. An adjusted exponent
-  # past `emax` overflows as in every other operation.
-  #
-  # An input below etiny is not rounded here, since rounding it at etiny and
-  # then at `target_exp` would round twice. The result is rounded once at
-  # `target_exp`, and the context rounds it again only if it is subnormal, at
-  # etiny. Below the guard digit of the lower of those two positions, neither
-  # rounding needs more than whether any digit is nonzero, so those digits are
-  # folded into one sticky digit.
-  #
-  # The signals are returned with the value as well as recorded, because the
-  # final context call starts from the context read before they were recorded.
-  defp exponent_limited(%Decimal{coef: 0} = num, _target_exp, _context), do: {num, []}
+  # The exponent of a quantize result must be one a result can have:
+  # `emin - precision + 1` to `emax`.
+  defp exponent_in_range?(exp, %Context{emin: emin, emax: emax} = context) do
+    (emin == :infinity or exp >= etiny(context)) and (emax == :infinity or exp <= emax)
+  end
 
-  defp exponent_limited(%Decimal{coef: coef, exp: exp} = num, target_exp, %Context{} = context) do
-    keep_exp = if context.emin != :infinity, do: Kernel.min(target_exp, etiny(context)) - 1
-
+  # Why a nonzero quantize result with adjusted exponent `adjusted_exp` and
+  # exponent `target_exp` cannot be represented in the context, or `nil` if it
+  # can. Checked before rounding, the digit count also bounds the zeros
+  # `do_round/5` pads with by the precision.
+  defp quantize_invalid(adjusted_exp, target_exp, %Context{} = context) do
     cond do
-      above_emax?(exp + coef_length(coef) - 1, context.emax) ->
-        signals = [:overflow, :inexact, :rounded]
-        {error(signals, nil, overflow_result(num, context), context), signals}
+      above_emax?(adjusted_exp, context.emax) ->
+        "result exponent above emax"
 
-      keep_exp != nil and exp < keep_exp ->
-        {signif, guard, rest?} = subnormal_split(coef, keep_exp - exp, false)
-        sticky = if guard != 0 or rest?, do: 1, else: 0
-        {%{num | coef: signif * 10 + sticky, exp: keep_exp - 1}, []}
+      adjusted_exp - target_exp + 1 > context.precision ->
+        "result has more digits than the precision"
 
       true ->
-        {num, []}
+        nil
     end
   end
 
@@ -3151,7 +3137,7 @@ defmodule Decimal do
     if drop == 0 and not sticky? do
       {num, [:subnormal]}
     else
-      {signif, guard, rest?} = subnormal_split(coef, drop, sticky?)
+      {signif, guard, rest?} = drop_digits(coef, drop, sticky?)
 
       signif =
         if increment?(context.rounding, sign, signif, guard, rest?),
@@ -3170,10 +3156,12 @@ defmodule Decimal do
     end
   end
 
-  # An exponent built through `new/3` can sit arbitrarily far below etiny. When
-  # every digit is dropped, the guard digit is a leading zero and the nonzero
-  # coefficient is all rest, without computing the power of ten.
-  defp subnormal_split(coef, drop, sticky?) do
+  # `split_digits/3` for a nonzero `coef` and a `drop` that can be far larger
+  # than its digit count, from an exponent built through `new/3` or a large
+  # negative `places` in `round/3`. When every digit is dropped, the guard digit
+  # is a leading zero and the coefficient is all rest, without computing the
+  # power of ten.
+  defp drop_digits(coef, drop, sticky?) do
     if drop > coef_length(coef) do
       {0, 0, true}
     else
