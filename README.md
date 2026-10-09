@@ -34,6 +34,10 @@ Decimal.parse(input, max_digits: 100, max_exponent: 1000)
 Decimal.cast(input, max_digits: 100, max_exponent: 1000)
 ```
 
+`Decimal.new/1` with an integer and `Decimal.new/3` take their arguments as
+given, without limits. Use `Decimal.cast/2`, which applies the limits to
+integers and decimals as well as strings, when those come from untrusted input.
+
 Use bounded output when rendering decimals in formats that may expand the
 exponent:
 

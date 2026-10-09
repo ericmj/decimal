@@ -58,6 +58,10 @@ defmodule Decimal do
   CVE-2026-32686 without materializing them. Pass options on the explicit
   arities to override; pass `:infinity` to disable a limit entirely.
 
+  `new/1` with an integer and `new/3` take their arguments as given, without
+  these limits. Use `cast/1` or `cast/2` to apply them to integers and decimals
+  from untrusted input.
+
   ## Protocol Implementations
 
   `Decimal` implements the following protocols:
@@ -1607,6 +1611,11 @@ defmodule Decimal do
   A decimal number will always be created exactly as specified with all digits
   kept - it will not be rounded with the context.
 
+  A string is parsed with the limits of `parse/2`, which `opts` can override.
+  An integer is taken as given, without limits, so the result may have more
+  digits than the context and `to_string/2` accept. Use `cast/2` to apply the
+  parse limits to an integer from untrusted input.
+
   ## Backus–Naur form
 
       sign           ::=  "+" | "-"
@@ -1662,7 +1671,8 @@ defmodule Decimal do
   the number will be: `sign * coefficient * 10 ^ exponent`.
 
   A decimal number will always be created exactly as specified with all digits
-  kept - it will not be rounded with the context.
+  kept - it will not be rounded with the context. The parse limits do not
+  apply; use `cast/2` on the result to check it against them.
 
   ## Examples
 
