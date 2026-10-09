@@ -304,6 +304,49 @@ defmodule Decimal.ContextTest do
     end
   end
 
+  describe "validation" do
+    test "set/1, with/2 and update/1 reject invalid fields" do
+      for {context, message} <- [
+            {%Context{precision: 0}, "invalid :precision, expected a positive integer, got: 0"},
+            {%Context{precision: -1}, "invalid :precision, expected a positive integer, got: -1"},
+            {%Context{precision: 1.5},
+             "invalid :precision, expected a positive integer, got: 1.5"},
+            {%Context{rounding: :bogus},
+             ~r/^invalid :rounding, expected one of \[.*\], got: :bogus$/},
+            {%Context{emax: 1.0}, "invalid :emax, expected an integer or :infinity, got: 1.0"},
+            {%Context{emin: nil}, "invalid :emin, expected an integer or :infinity, got: nil"},
+            {%Context{emin: 10, emax: 5},
+             "invalid :emin and :emax, emin must not be greater than emax, got: emin 10 and emax 5"}
+          ] do
+        assert_raise ArgumentError, message, fn -> Context.set(context) end
+        assert_raise ArgumentError, message, fn -> Context.with(context, fn -> :ok end) end
+        assert_raise ArgumentError, message, fn -> Context.update(fn _ -> context end) end
+      end
+
+      assert Context.get() == %Context{}
+    end
+
+    test "a rejected with/2 leaves the current context in place" do
+      Context.with(%Context{precision: 5}, fn ->
+        assert_raise ArgumentError, fn ->
+          Context.with(%Context{precision: 0}, fn -> :ok end)
+        end
+
+        assert Context.get().precision == 5
+      end)
+    end
+
+    test "accepts boundary values" do
+      Context.with(%Context{precision: 1, emin: 0, emax: 0}, fn ->
+        assert Decimal.add(1, 1) == d(1, 2, 0)
+      end)
+
+      Context.with(%Context{emin: :infinity, emax: :infinity}, fn ->
+        assert Decimal.add(1, 1) == d(1, 2, 0)
+      end)
+    end
+  end
+
   defp assert_runs_quickly(name, fun) do
     {elapsed_us, _result} = :timer.tc(fun)
 
