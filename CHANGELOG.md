@@ -29,6 +29,9 @@
   `Decimal.div_rem/2` detect a zero quotient from digit counts they already
   compute instead of comparing the operands: ~1.4x faster.
 
+* Make `Decimal.sqrt/1` take the root of a coefficient of at most 2^53 from
+  its float estimate: ~10x faster for exact squares.
+
 * Record the flags and look for a trapped signal in one pass over an
   operation's signals: operations that signal, such as inexact rounding and
   division, are 4-10% faster.

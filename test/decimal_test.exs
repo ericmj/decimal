@@ -1403,6 +1403,61 @@ defmodule DecimalTest do
     assert Decimal.sqrt(~d"1e33") == d(1, 3_162_277_660_168_379_331_998_893_544_432_719, -17)
   end
 
+  test "sqrt/1 exact small squares keep their preferred exponent" do
+    for precision <- [8, 34, 141] do
+      Context.with(%Context{precision: precision}, fn ->
+        assert Decimal.sqrt(d(1, 144, -4)) == d(1, 12, -2)
+        assert Decimal.sqrt(d(1, 1440, 1)) == d(1, 120, 0)
+        root = 94_906_265
+        assert Decimal.sqrt(d(1, root * root, 0)) == d(1, root, 0)
+        assert Context.get().flags == []
+      end)
+    end
+  end
+
+  test "sqrt/1 exact small squares still round and signal at context limits" do
+    Context.with(%Context{precision: 1}, fn ->
+      assert Decimal.sqrt(d(1, 144, 0)) == d(1, 1, 1)
+      assert Context.get().flags == [:inexact, :rounded]
+    end)
+
+    Context.with(%Context{precision: 1, traps: [:inexact, :rounded]}, fn ->
+      error = assert_raise Error, fn -> Decimal.sqrt(d(1, 144, 0)) end
+      assert error.signal == :rounded
+      assert Context.get().flags == [:inexact, :rounded]
+    end)
+
+    Context.with(%Context{precision: 3, emin: -2, emax: 2, traps: []}, fn ->
+      assert Decimal.sqrt(d(1, 100, -10)) == d(1, 1, -4)
+      assert Context.get().flags == [:subnormal, :rounded]
+    end)
+
+    Context.with(%Context{precision: 3, emin: -2, emax: 2, traps: []}, fn ->
+      assert Decimal.sqrt(d(1, 144, 10)) == d(1, :inf, 0)
+      assert Context.get().flags == [:overflow, :inexact, :rounded]
+    end)
+  end
+
+  test "sqrt/1 scaled small-coefficient seeds bound the truncated root" do
+    root = 94_906_265
+
+    Context.with(%Context{precision: 8, rounding: :ceiling}, fn ->
+      assert Decimal.sqrt(d(1, root * root + 1, 0)) == d(1, root + 1, 0)
+      assert Context.get().flags == [:inexact, :rounded]
+    end)
+
+    for precision <- [141, 142] do
+      Context.with(%Context{precision: precision, rounding: :down}, fn ->
+        result = Decimal.sqrt(d(1, 145, 0))
+        scaled = 145 * Integer.pow(10, 2 * (precision - 2))
+        assert result.exp == 2 - precision
+        assert result.coef * result.coef <= scaled
+        assert (result.coef + 1) * (result.coef + 1) > scaled
+        assert Context.get().flags == [:inexact, :rounded]
+      end)
+    end
+  end
+
   test "sqrt/1 uses the power-of-ten seed above the float range" do
     # At precision 200 the scaled operand has ~400 digits, past the 10^300
     # float-seed limit, so this exercises the pow10 fallback seed. Exact

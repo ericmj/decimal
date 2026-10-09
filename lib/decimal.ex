@@ -114,6 +114,10 @@ defmodule Decimal do
   @power_of_2_to_52 4_503_599_627_370_496
   @power_of_2_to_53 9_007_199_254_740_992
 
+  # `float_pow10/1` answers from a table up to this power of ten. The powers
+  # up to 10^22 are exact doubles, the others the nearest double.
+  @float_pow10_limit 140
+
   # `compare/3` aligns its operands at the lowest exponent when their exponents
   # are this close, the range `pow10/1` answers from its table.
   @compare_align_limit 104
@@ -1550,6 +1554,28 @@ defmodule Decimal do
     sqrt(decimal(num))
   end
 
+  # A coefficient of at most 2^53 is an exact double, so `:math.sqrt/1` returns
+  # the root of an exact square exactly, and the scaled operand is a square
+  # exactly when the coefficient is. Such a root needs no scaling and is the
+  # coefficient the scaled calculation ends up with. Otherwise the estimate
+  # scaled by 10^shift seeds the integer iteration from above, as
+  # `sqrt_seed/2` does, without converting the scaled operand to a float: the
+  # estimate, the power of ten and their product are off by a few ULPs at
+  # most, far below the 1e-12 margin. A shift within `float_pow10/1`'s table
+  # keeps the scaled estimate inside the double range.
+  defp do_sqrt(coef, shift, exp, ctx)
+       when coef <= @power_of_2_to_53 and shift >= 0 and shift <= @float_pow10_limit do
+    estimate = :math.sqrt(coef * 1.0)
+    root = trunc(estimate)
+
+    if root * root == coef do
+      context(%Decimal{sign: 1, coef: root, exp: exp >>> 1}, [], false, ctx)
+    else
+      seed = trunc(estimate * float_pow10(shift) * 1.000000000001) + 1
+      do_sqrt(coef * pow10(shift <<< 1), shift, exp, true, ctx, seed)
+    end
+  end
+
   defp do_sqrt(coef, shift, exp, ctx) do
     if shift >= 0 do
       # shift `coef` up by `shift * 2` digits
@@ -1562,9 +1588,13 @@ defmodule Decimal do
   end
 
   defp do_sqrt(shifted_coef, shift, exp, exact, ctx) do
+    do_sqrt(shifted_coef, shift, exp, exact, ctx, sqrt_seed(shifted_coef, ctx.precision))
+  end
+
+  defp do_sqrt(shifted_coef, shift, exp, exact, ctx, seed) do
     # the preferred exponent is `exp / 2` as per IEEE 754
     exp = exp >>> 1
-    root = sqrt_loop(shifted_coef, sqrt_seed(shifted_coef, ctx.precision))
+    root = sqrt_loop(shifted_coef, seed)
 
     if exact and root * root === shifted_coef do
       # if the root is exact, use preferred `exp` and shift `coef` to match
@@ -2679,7 +2709,7 @@ defmodule Decimal do
     acc * 10
   end)
 
-  Enum.reduce(0..22, 1, fn int, acc ->
+  Enum.reduce(0..@float_pow10_limit, 1, fn int, acc ->
     defp float_pow10(unquote(int)), do: unquote(:erlang.float(acc))
     acc * 10
   end)
