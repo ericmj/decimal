@@ -49,6 +49,14 @@
   the precision, as every operation does, and still does not signal for the
   digits it discards itself.
 
+* Make `Decimal.Context.set/1`, `Decimal.Context.with/2` and
+  `Decimal.Context.update/1` raise `ArgumentError` for an invalid context: a
+  precision that is not a positive integer, an unknown rounding algorithm, an
+  `emax` or `emin` that is neither an integer nor `:infinity`, or an `emin`
+  greater than `emax`. A precision of 0 used to give wrong results silently
+  (`Decimal.add(1, 1)` returned `0E+1`), and the other cases failed with
+  `FunctionClauseError` inside the next operation.
+
 ## v3.1.1 (2026-05-27)
 
 ### Bug fixes

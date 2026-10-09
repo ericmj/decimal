@@ -19,12 +19,13 @@ defmodule Decimal.Context do
 
     * `precision` - maximum number of decimal digits in the coefficient. If an
       operation result has more digits it will be rounded to `precision`
-      digits with the rounding algorithm in `rounding`.
+      digits with the rounding algorithm in `rounding`. Must be a positive
+      integer.
     * `rounding` - the rounding algorithm used when the coefficient's number of
       exceeds `precision`. Strategies explained below.
     * `emax` - maximum adjusted exponent. If the adjusted exponent of a result
       is larger than `emax`, overflow is signalled. `:infinity` disables this
-      limit.
+      limit. Must not be smaller than `emin`.
     * `emin` - minimum adjusted exponent. If the adjusted exponent of a result
       is smaller than `emin`, underflow is signalled. `:infinity` disables this
       limit.
@@ -95,12 +96,18 @@ defmodule Decimal.Context do
 
   @context_key :"$decimal_context"
 
+  @roundings [:down, :half_up, :half_even, :ceiling, :floor, :half_down, :up]
+
   @doc """
   Runs function with given context.
+
+  Raises `ArgumentError` if a field of the context is invalid, see the
+  module documentation.
   """
   doc_since("1.9.0")
   @spec with(t(), (-> x)) :: x when x: var
   def with(%Context{} = context, fun) when is_function(fun, 0) do
+    validate!(context)
     old = Process.put(@context_key, context)
 
     try do
@@ -121,10 +128,14 @@ defmodule Decimal.Context do
 
   @doc """
   Set the process' context.
+
+  Raises `ArgumentError` if a field of the context is invalid, see the
+  module documentation.
   """
   doc_since("1.9.0")
   @spec set(t()) :: :ok
   def set(%Context{} = context) do
+    validate!(context)
     Process.put(@context_key, context)
     :ok
   end
@@ -136,5 +147,33 @@ defmodule Decimal.Context do
   @spec update((t() -> t())) :: :ok
   def update(fun) when is_function(fun, 1) do
     get() |> fun.() |> set()
+  end
+
+  defp validate!(%Context{precision: precision, rounding: rounding, emax: emax, emin: emin}) do
+    cond do
+      not (is_integer(precision) and precision > 0) ->
+        invalid!(:precision, "a positive integer", precision)
+
+      rounding not in @roundings ->
+        invalid!(:rounding, "one of #{inspect(@roundings)}", rounding)
+
+      not (is_integer(emax) or emax == :infinity) ->
+        invalid!(:emax, "an integer or :infinity", emax)
+
+      not (is_integer(emin) or emin == :infinity) ->
+        invalid!(:emin, "an integer or :infinity", emin)
+
+      is_integer(emax) and is_integer(emin) and emin > emax ->
+        raise ArgumentError,
+              "invalid :emin and :emax, emin must not be greater than emax, " <>
+                "got: emin #{emin} and emax #{emax}"
+
+      true ->
+        :ok
+    end
+  end
+
+  defp invalid!(field, expected, value) do
+    raise ArgumentError, "invalid #{inspect(field)}, expected #{expected}, got: #{inspect(value)}"
   end
 end
