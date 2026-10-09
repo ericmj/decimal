@@ -303,6 +303,30 @@ defmodule DecimalTest do
     assert Decimal.cast("1e1000000000000000000000000", max_exponent: 9) == :error
   end
 
+  test "cast/1 preserves numeric representations and default limits" do
+    Context.with(%Context{precision: 1, emin: 0, emax: 0, traps: [:inexact, :overflow]}, fn ->
+      for integer <- [-1_000_000_000, -999_999_999, 0, 999_999_999, 1_000_000_000] do
+        assert Decimal.cast(integer) == {:ok, Decimal.new(integer)}
+      end
+
+      limit = Integer.pow(10, 34)
+
+      for sign <- [1, -1] do
+        assert Decimal.cast(sign * (limit - 1)) == {:ok, d(sign, limit - 1, 0)}
+        assert Decimal.cast(sign * limit) == :error
+      end
+
+      assert Decimal.cast(-0.0) == {:ok, d(-1, 0, -1)}
+      assert Decimal.cast(0.0) == {:ok, d(1, 0, -1)}
+      assert Decimal.cast(5.0e-324) == {:ok, d(1, 5, -324)}
+      assert Decimal.cast(-5.0e-324) == {:ok, d(-1, 5, -324)}
+      assert Decimal.cast(1.7976931348623157e308) == {:ok, d(1, 17_976_931_348_623_157, 292)}
+      assert Decimal.cast(5.0e-324, max_exponent: 323) == :error
+      assert Decimal.cast(999_999_999, max_digits: 8) == :error
+      assert Context.get().flags == []
+    end)
+  end
+
   test "abs/1" do
     assert Decimal.abs(~d"123") == d(1, 123, 0)
     assert Decimal.abs(~d"-123") == d(1, 123, 0)
@@ -721,6 +745,110 @@ defmodule DecimalTest do
     assert_raise Error, fn ->
       Decimal.rem(~d"0", ~d"-0")
     end
+  end
+
+  test "div_int/2, rem/2 and div_rem/2 with a dividend smaller than the divisor" do
+    assert Decimal.div_int(~d"0.001", ~d"7") == d(1, 0, -3)
+    assert Decimal.div_int(~d"-6.99", ~d"7") == d(-1, 0, -2)
+    assert Decimal.div_int(~d"7.00", ~d"7") == d(1, 1, 0)
+    assert Decimal.rem(~d"-6.99", ~d"7") == d(-1, 699, -2)
+    assert Decimal.rem(~d"7.00", ~d"7") == d(1, 0, -2)
+    assert Decimal.rem(~d"-0.00", ~d"7") == d(-1, 0, -2)
+    assert Decimal.div_rem(~d"-6.99", ~d"-7") == {d(1, 0, -2), d(-1, 699, -2)}
+    assert Decimal.div_rem(~d"7.00", ~d"-7") == {d(-1, 1, 0), d(1, 0, -2)}
+    assert Decimal.div_rem(~d"0", ~d"-7") == {d(-1, 0, 0), d(1, 0, 0)}
+    assert Context.get().flags == []
+  end
+
+  test "integer division with equal exponents preserves the quotient size boundary" do
+    for precision <- [1, 2, 8], op <- [:div_int, :rem, :div_rem] do
+      boundary = Integer.pow(10, precision)
+
+      expected = %{
+        div_int: d(1, boundary, 0),
+        rem: d(1, 0, -2),
+        div_rem: {d(1, boundary, 0), d(1, 0, -2)}
+      }
+
+      Context.with(%Context{precision: precision}, fn ->
+        assert apply(Decimal, op, [d(1, boundary, -2), d(1, 1, -2)]) == expected[op]
+        assert Context.get().flags == []
+
+        assert_raise Error,
+                     "invalid_operation: integer division impossible, quotient too large",
+                     fn ->
+                       apply(Decimal, op, [d(1, boundary + 1, -2), d(1, 1, -2)])
+                     end
+
+        assert Context.get().flags == [:invalid_operation]
+      end)
+
+      Context.with(%Context{precision: precision, traps: []}, fn ->
+        result = apply(Decimal, op, [d(1, boundary + 1, -2), d(1, 1, -2)])
+
+        assert result ==
+                 if(op == :div_rem, do: {d(1, :NaN, 0), d(1, :NaN, 0)}, else: d(1, :NaN, 0))
+
+        assert Context.get().flags == [:invalid_operation]
+      end)
+    end
+
+    for coef <- [999_999_999, 1_000_000_000] do
+      assert Decimal.div_rem(d(-1, coef, -2), d(-1, 1, -2)) == {d(1, coef, 0), d(-1, 0, -2)}
+    end
+  end
+
+  @tag timeout: @bounded_smoke_timeout
+  test "integer division with equal huge exponents preserves zero clamping" do
+    for exp <- [-10_000_000, 10_000_000],
+        {emin, emax, clamped} <- [{-2, 2, 0}, {-6, -2, -2}, {4, 6, 2}] do
+      Context.with(%Context{precision: 3, emin: emin, emax: emax}, fn ->
+        assert_runs_quickly("integer division at equal huge exponents", fn ->
+          assert Decimal.div_rem(d(-1, 3, exp), d(1, 7, exp)) ==
+                   {d(-1, 0, clamped), d(-1, 3, exp)}
+
+          assert Context.get().flags == if(clamped == 0, do: [], else: [:clamped])
+        end)
+      end)
+
+      if clamped != 0 do
+        Context.with(%Context{precision: 3, emin: emin, emax: emax, traps: [:clamped]}, fn ->
+          assert_raise Error, "clamped", fn -> Decimal.div_int(d(-1, 3, exp), d(1, 7, exp)) end
+          assert Context.get().flags == [:clamped]
+        end)
+      end
+    end
+  end
+
+  test "integer division decides zero and too large quotients at the exponent gap" do
+    Context.with(%Context{precision: 3, traps: []}, fn ->
+      assert Decimal.div_int(d(1, 5, 1), d(1, 600, 0)) == d(1, 0, 1)
+      assert Decimal.div_int(d(1, 5, 2), d(1, 600, 0)) == d(1, 0, 2)
+      assert Decimal.div_int(d(1, 7, 2), d(1, 600, 0)) == d(1, 1, 0)
+      assert Decimal.rem(d(-1, 5, 2), d(1, 600, 0)) == d(-1, 5, 2)
+      assert Decimal.div_int(d(1, 1, 3), d(1, 1, 0)) == d(1, 1000, 0)
+      assert Context.get().flags == []
+
+      assert Decimal.div_int(d(1, 1, 4), d(1, 1, 0)) == d(1, :NaN, 0)
+      assert Decimal.div_rem(d(1, 1, 5), d(1, 1, 0)) == {d(1, :NaN, 0), d(1, :NaN, 0)}
+      assert Context.get().flags == [:invalid_operation]
+    end)
+  end
+
+  @tag timeout: @bounded_smoke_timeout
+  test "integer division by a much longer divisor doesn't scale the dividend" do
+    huge = Integer.pow(10, 1_000_000) - 1
+
+    # At equal exponents a smaller dividend is a zero quotient. Scaling it to
+    # the divisor's million digits instead costs about 100 ms a call, so these
+    # calls would together exceed the limit.
+    assert_runs_quickly("integer division by a much longer divisor", fn ->
+      for _ <- 1..20 do
+        assert Decimal.div_int(d(1, 7, 0), d(1, huge, 0)) == d(1, 0, 0)
+        assert Decimal.rem(d(1, 7, 5), d(-1, huge, 5)) == d(1, 7, 5)
+        assert Decimal.div_rem(d(-1, 7, 3), d(1, huge, 3)) == {d(-1, 0, 0), d(-1, 7, 3)}
+      end
+    end)
   end
 
   test "rem/2 and div_rem/2 compute the remainder exactly" do
@@ -1170,6 +1298,26 @@ defmodule DecimalTest do
     assert Decimal.to_float(~d"9007199254740995") === 9_007_199_254_740_996.0
   end
 
+  test "to_float/1 does not depend on the representation of the value" do
+    # Padding the coefficient takes each value past 2^53, and past an exponent
+    # of -22 for the lower ones.
+    for {coef, exp} <- [
+          {9_007_199_254_740_992, 22},
+          {9_007_199_254_740_991, -22},
+          {1, 22},
+          {1, -22},
+          {3, -1},
+          {123_456_789, -7}
+        ] do
+      expected = String.to_float("#{coef}.0e#{exp}")
+      padded = Decimal.new(-1, coef * Integer.pow(10, 20), exp - 20)
+
+      assert Decimal.to_float(Decimal.new(1, coef, exp)) === expected
+      assert Decimal.to_float(Decimal.new(-1, coef, exp)) === -expected
+      assert Decimal.to_float(padded) === -expected
+    end
+  end
+
   test "round/3: special" do
     assert Decimal.round(~d"inf", 2, :down) == d(1, :inf, 0)
     assert Decimal.round(~d"nan", 2, :down) == d(1, :NaN, 0)
@@ -1368,6 +1516,71 @@ defmodule DecimalTest do
     assert Decimal.sqrt(~d"2") == d(1, 1_414_213_562_373_095_048_801_688_724_209_698, -33)
     assert Decimal.sqrt(~d"3") == d(1, 1_732_050_807_568_877_293_527_446_341_505_872, -33)
     assert Decimal.sqrt(~d"1e33") == d(1, 3_162_277_660_168_379_331_998_893_544_432_719, -17)
+  end
+
+  test "sqrt/1 exact small squares keep their preferred exponent" do
+    for precision <- [8, 34, 141] do
+      Context.with(%Context{precision: precision}, fn ->
+        assert Decimal.sqrt(d(1, 144, -4)) == d(1, 12, -2)
+        assert Decimal.sqrt(d(1, 1440, 1)) == d(1, 120, 0)
+        root = 94_906_265
+        assert Decimal.sqrt(d(1, root * root, 0)) == d(1, root, 0)
+        assert Context.get().flags == []
+      end)
+    end
+  end
+
+  test "sqrt/1 exact small squares still round and signal at context limits" do
+    Context.with(%Context{precision: 1}, fn ->
+      assert Decimal.sqrt(d(1, 144, 0)) == d(1, 1, 1)
+      assert Context.get().flags == [:inexact, :rounded]
+    end)
+
+    Context.with(%Context{precision: 1, traps: [:inexact, :rounded]}, fn ->
+      error = assert_raise Error, fn -> Decimal.sqrt(d(1, 144, 0)) end
+      assert error.signal == :rounded
+      assert Context.get().flags == [:inexact, :rounded]
+    end)
+
+    Context.with(%Context{precision: 3, emin: -2, emax: 2, traps: []}, fn ->
+      assert Decimal.sqrt(d(1, 100, -10)) == d(1, 1, -4)
+      assert Context.get().flags == [:subnormal, :rounded]
+    end)
+
+    Context.with(%Context{precision: 3, emin: -2, emax: 2, traps: []}, fn ->
+      assert Decimal.sqrt(d(1, 144, 10)) == d(1, :inf, 0)
+      assert Context.get().flags == [:overflow, :inexact, :rounded]
+    end)
+  end
+
+  test "sqrt/1 exact small squares above the float seed's range" do
+    for precision <- [160, 200] do
+      Context.with(%Context{precision: precision}, fn ->
+        assert Decimal.sqrt(d(1, 144, -4)) == d(1, 12, -2)
+        assert Decimal.sqrt(d(1, 1440, 1)) == d(1, 120, 0)
+        assert Context.get().flags == []
+      end)
+    end
+  end
+
+  test "sqrt/1 scaled small-coefficient seeds bound the truncated root" do
+    root = 94_906_265
+
+    Context.with(%Context{precision: 8, rounding: :ceiling}, fn ->
+      assert Decimal.sqrt(d(1, root * root + 1, 0)) == d(1, root + 1, 0)
+      assert Context.get().flags == [:inexact, :rounded]
+    end)
+
+    for precision <- [141, 142] do
+      Context.with(%Context{precision: precision, rounding: :down}, fn ->
+        result = Decimal.sqrt(d(1, 145, 0))
+        scaled = 145 * Integer.pow(10, 2 * (precision - 2))
+        assert result.exp == 2 - precision
+        assert result.coef * result.coef <= scaled
+        assert (result.coef + 1) * (result.coef + 1) > scaled
+        assert Context.get().flags == [:inexact, :rounded]
+      end)
+    end
   end
 
   test "sqrt/1 uses the power-of-ten seed above the float range" do
@@ -2033,6 +2246,20 @@ defmodule DecimalTest do
 
     # exponent digits go through the same scan
     assert Decimal.parse("1e" <> String.duplicate("0", 20) <> "5") == {d(1, 1, 5), ""}
+  end
+
+  test "the first trapped signal raises after every signal is recorded behind existing flags" do
+    context = %Context{
+      precision: 3,
+      emin: -2,
+      traps: [:underflow, :rounded],
+      flags: [:clamped, :inexact]
+    }
+
+    Context.with(context, fn ->
+      assert_raise Error, "rounded", fn -> Decimal.apply_context(~d"1e-10") end
+      assert Context.get().flags == [:underflow, :subnormal, :rounded, :clamped, :inexact]
+    end)
   end
 
   test "flags accumulate across operations" do

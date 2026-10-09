@@ -116,10 +116,12 @@ defmodule Decimal.Context do
     validate!(context)
     old = Process.put(@context_key, context)
 
+    # The previous context was validated when it was set, so it is restored
+    # as is.
     try do
       fun.()
     after
-      set(old || %Context{})
+      Process.put(@context_key, old || %Context{})
     end
   end
 
@@ -155,6 +157,14 @@ defmodule Decimal.Context do
     get() |> fun.() |> set()
   end
 
+  # Every context passes through here on `with/2` and `set/1`, so a valid one is
+  # matched by a single clause.
+  defp validate!(%Context{precision: precision, rounding: rounding, emax: emax, emin: emin})
+       when is_integer(precision) and precision > 0 and rounding in @roundings and
+              (is_integer(emax) or emax == :infinity) and (is_integer(emin) or emin == :infinity) and
+              (emax == :infinity or emin == :infinity or emin <= emax),
+       do: :ok
+
   defp validate!(%Context{precision: precision, rounding: rounding, emax: emax, emin: emin}) do
     cond do
       not (is_integer(precision) and precision > 0) ->
@@ -169,13 +179,10 @@ defmodule Decimal.Context do
       not (is_integer(emin) or emin == :infinity) ->
         invalid!(:emin, "an integer or :infinity", emin)
 
-      is_integer(emax) and is_integer(emin) and emin > emax ->
+      true ->
         raise ArgumentError,
               "invalid :emin and :emax, emin must not be greater than emax, " <>
                 "got: emin #{emin} and emax #{emax}"
-
-      true ->
-        :ok
     end
   end
 

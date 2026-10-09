@@ -112,6 +112,15 @@ defmodule Decimal do
   alias Decimal.Error
 
   @power_of_2_to_52 4_503_599_627_370_496
+  @power_of_2_to_53 9_007_199_254_740_992
+
+  # `float_pow10/1` answers from a table up to this power of ten. The powers
+  # up to 10^22 are exact doubles, the others the nearest double.
+  @float_pow10_limit 140
+
+  # `compare/2` and `compare/3` align their operands at the lowest exponent when
+  # their exponents are this close, the range `pow10/1` answers from its table.
+  @compare_align_limit 104
 
   @typedoc """
   The coefficient of the power of `10`. Non-negative because the sign is stored separately in `sign`.
@@ -477,16 +486,36 @@ defmodule Decimal do
   def compare(_, _, %Decimal{sign: -1, coef: coef}) when coef != 0,
     do: raise(Error, reason: "threshold cannot be negative")
 
+  # Equal exponents need no alignment.
   def compare(
-        %Decimal{coef: coef1} = n1,
-        %Decimal{coef: coef2} = n2,
-        %Decimal{coef: coef3} = threshold
+        %Decimal{sign: sign1, coef: coef1, exp: exp},
+        %Decimal{sign: sign2, coef: coef2, exp: exp},
+        %Decimal{sign: sign3, coef: coef3, exp: exp}
+      )
+      when is_integer(coef1) and is_integer(coef2) and is_integer(coef3),
+      do: compare_difference(sign1 * coef1 - sign2 * coef2, sign3 * coef3)
+
+  def compare(
+        %Decimal{sign: sign1, coef: coef1, exp: exp1},
+        %Decimal{sign: sign2, coef: coef2, exp: exp2},
+        %Decimal{sign: sign3, coef: coef3, exp: exp3}
       )
       when is_integer(coef1) and is_integer(coef2) and is_integer(coef3) do
-    cond do
-      sum_sign([n1, negate_sign(threshold), negate_sign(n2)]) > 0 -> :gt
-      sum_sign([n1, threshold, negate_sign(n2)]) < 0 -> :lt
-      true -> :eq
+    # Close exponents cost at most `@compare_align_limit` digits to align, so
+    # the bounds are compared as integers. Wider gaps go through `sum_sign/1`,
+    # which never aligns more digits than the terms already have.
+    base_exp = exp1 |> Kernel.min(exp2) |> Kernel.min(exp3)
+    top_exp = exp1 |> Kernel.max(exp2) |> Kernel.max(exp3)
+
+    if top_exp - base_exp <= @compare_align_limit do
+      diff = sign1 * coef1 * pow10(exp1 - base_exp) - sign2 * coef2 * pow10(exp2 - base_exp)
+      compare_difference(diff, sign3 * coef3 * pow10(exp3 - base_exp))
+    else
+      cond do
+        sum_sign([{sign1, coef1, exp1}, {-sign3, coef3, exp3}, {-sign2, coef2, exp2}]) > 0 -> :gt
+        sum_sign([{sign1, coef1, exp1}, {sign3, coef3, exp3}, {-sign2, coef2, exp2}]) < 0 -> :lt
+        true -> :eq
+      end
     end
   end
 
@@ -510,8 +539,6 @@ defmodule Decimal do
   end
 
   def compare(n1, n2, threshold), do: compare(decimal(n1), decimal(n2), decimal(threshold))
-
-  defp negate_sign(%Decimal{sign: sign} = num), do: %{num | sign: -sign}
 
   @doc """
   Compares two numbers numerically. If the first number is greater than the second
@@ -565,12 +592,15 @@ defmodule Decimal do
   # With equal exponents the adjusted exponents differ exactly as the
   # coefficient lengths do, so the coefficients decide it on their own and no
   # digits need counting.
-  def compare(%Decimal{sign: sign, coef: coef1, exp: exp}, %Decimal{coef: coef2, exp: exp}) do
-    cond do
-      coef1 == coef2 -> :eq
-      coef1 < coef2 -> if sign == 1, do: :lt, else: :gt
-      true -> if sign == 1, do: :gt, else: :lt
-    end
+  def compare(%Decimal{sign: sign, coef: coef1, exp: exp}, %Decimal{coef: coef2, exp: exp}),
+    do: compare_coefs(sign, coef1, coef2)
+
+  # Close exponents cost at most `@compare_align_limit` digits to align, which
+  # is cheaper than counting both coefficients' digits.
+  def compare(%Decimal{sign: sign, coef: coef1, exp: exp1}, %Decimal{coef: coef2, exp: exp2})
+      when exp1 - exp2 <= @compare_align_limit and exp2 - exp1 <= @compare_align_limit do
+    {coef1, coef2} = add_align(coef1, exp1, coef2, exp2)
+    compare_coefs(sign, coef1, coef2)
   end
 
   def compare(%Decimal{} = num1, %Decimal{} = num2) do
@@ -606,6 +636,22 @@ defmodule Decimal do
     compare(decimal(num1), decimal(num2))
   end
 
+  @compile {:inline, compare_coefs: 3, compare_difference: 2}
+
+  # Orders `n1 - n2` against the bounds `-threshold` and `threshold`, all three
+  # aligned at one exponent.
+  defp compare_difference(diff, threshold) when diff > threshold, do: :gt
+  defp compare_difference(diff, threshold) when diff < -threshold, do: :lt
+  defp compare_difference(_diff, _threshold), do: :eq
+
+  # Orders two numbers of the same sign by their coefficients aligned at one
+  # exponent.
+  defp compare_coefs(_sign, coef, coef), do: :eq
+  defp compare_coefs(1, coef1, coef2) when coef1 < coef2, do: :lt
+  defp compare_coefs(1, _coef1, _coef2), do: :gt
+  defp compare_coefs(-1, coef1, coef2) when coef1 < coef2, do: :gt
+  defp compare_coefs(-1, _coef1, _coef2), do: :lt
+
   # The flag is recorded and a trap raises as for any invalid operation, but an
   # untrapped signal raises too: an ordering has no NaN to return.
   defp compare_nan(num) do
@@ -613,8 +659,8 @@ defmodule Decimal do
     raise Error, signal: :invalid_operation, reason: "operation on NaN"
   end
 
-  # The sign (-1, 0 or 1) of the exact sum of finite decimals, without rounding
-  # and without materializing the gap between their exponents.
+  # The sign (-1, 0 or 1) of the exact sum of finite `{sign, coef, exp}` terms,
+  # without rounding and without materializing the gap between their exponents.
   #
   # Terms are added from the largest adjusted exponent down. A nonzero partial
   # sum is a nonzero multiple of 10^exp, so its magnitude is at least 10^exp.
@@ -625,24 +671,33 @@ defmodule Decimal do
   # digits than the terms already have.
   defp sum_sign(terms) do
     terms
-    |> Enum.reject(&(&1.coef == 0))
-    |> Enum.sort_by(&adjust_exp/1, :desc)
+    |> sum_terms([])
+    |> List.keysort(0)
+    |> :lists.reverse()
     |> sum_sign(0, nil)
+  end
+
+  # Drops the zero terms and keys the others by adjusted exponent, as
+  # `{adjusted_exp, signed_coef, exp}`.
+  defp sum_terms([], acc), do: acc
+  defp sum_terms([{_sign, 0, _exp} | rest], acc), do: sum_terms(rest, acc)
+
+  defp sum_terms([{sign, coef, exp} | rest], acc) do
+    sum_terms(rest, [{exp + coef_length(coef) - 1, sign * coef, exp} | acc])
   end
 
   defp sum_sign([], int, _exp), do: integer_sign(int)
 
-  defp sum_sign([%Decimal{sign: sign, coef: coef, exp: term_exp} | rest], 0, _exp) do
-    sum_sign(rest, sign * coef, term_exp)
+  defp sum_sign([{_adjusted_exp, value, term_exp} | rest], 0, _exp) do
+    sum_sign(rest, value, term_exp)
   end
 
-  defp sum_sign([%Decimal{} = term | rest], int, exp) do
-    if adjust_exp(term) < exp - 1 do
+  defp sum_sign([{adjusted_exp, value, term_exp} | rest], int, exp) do
+    if adjusted_exp < exp - 1 do
       integer_sign(int)
     else
-      %Decimal{sign: sign, coef: coef, exp: term_exp} = term
       base = Kernel.min(exp, term_exp)
-      int = int * pow10(exp - base) + sign * coef * pow10(term_exp - base)
+      int = int * pow10(exp - base) + value * pow10(term_exp - base)
       sum_sign(rest, int, base)
     end
   end
@@ -996,22 +1051,17 @@ defmodule Decimal do
     %Decimal{sign: sign1, coef: coef1, exp: exp1} = num1
     %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2
     div_sign = if sign1 == sign2, do: 1, else: -1
+    ctx = Context.get()
 
-    cond do
-      compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == :lt ->
-        context(%Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2})
+    case integer_division(div_sign, coef1, exp1, coef2, exp2, ctx.precision) do
+      {:ok, result} ->
+        result
 
-      coef1 == 0 ->
-        context(%{num1 | sign: div_sign})
+      :zero ->
+        context(%Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2}, [], false, ctx)
 
-      true ->
-        case integer_division(div_sign, coef1, exp1, coef2, exp2) do
-          {:ok, result} ->
-            result
-
-          {:error, error, reason, num} ->
-            error(error, reason, num)
-        end
+      {:error, error, reason, num} ->
+        error(error, reason, num, ctx)
     end
   end
 
@@ -1061,23 +1111,18 @@ defmodule Decimal do
     %Decimal{sign: sign1, coef: coef1, exp: exp1} = num1
     %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2
 
-    cond do
-      compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == :lt ->
-        context(%{num1 | sign: sign1})
+    div_sign = if sign1 == sign2, do: 1, else: -1
+    ctx = Context.get()
 
-      coef1 == 0 ->
-        context(%{num2 | sign: sign1})
+    case integer_division(div_sign, coef1, exp1, coef2, exp2, ctx.precision) do
+      {:ok, result} ->
+        exact_rem(num1, num2, result, ctx)
 
-      true ->
-        div_sign = if sign1 == sign2, do: 1, else: -1
+      :zero ->
+        context(num1, [], false, ctx)
 
-        case integer_division(div_sign, coef1, exp1, coef2, exp2) do
-          {:ok, result} ->
-            exact_rem(num1, num2, result)
-
-          {:error, error, reason, num} ->
-            error(error, reason, num)
-        end
+      {:error, error, reason, num} ->
+        error(error, reason, num, ctx)
     end
   end
 
@@ -1143,22 +1188,17 @@ defmodule Decimal do
     %Decimal{sign: sign1, coef: coef1, exp: exp1} = num1
     %Decimal{sign: sign2, coef: coef2, exp: exp2} = num2
     div_sign = if sign1 == sign2, do: 1, else: -1
+    ctx = Context.get()
 
-    cond do
-      compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == :lt ->
-        {context(%Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2}), %{num1 | sign: sign1}}
+    case integer_division(div_sign, coef1, exp1, coef2, exp2, ctx.precision) do
+      {:ok, result} ->
+        {result, exact_rem(num1, num2, result, ctx)}
 
-      coef1 == 0 ->
-        {context(%{num1 | sign: div_sign}), context(%{num2 | sign: sign1})}
+      :zero ->
+        {context(%Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2}, [], false, ctx), num1}
 
-      true ->
-        case integer_division(div_sign, coef1, exp1, coef2, exp2) do
-          {:ok, result} ->
-            {result, exact_rem(num1, num2, result)}
-
-          {:error, error, reason, num} ->
-            error(error, reason, {num, num})
-        end
+      {:error, error, reason, num} ->
+        error(error, reason, {num, num}, ctx)
     end
   end
 
@@ -1536,6 +1576,33 @@ defmodule Decimal do
     sqrt(decimal(num))
   end
 
+  # A coefficient of at most 2^53 is an exact double, so `:math.sqrt/1` returns
+  # the root of an exact square exactly, and the scaled operand is a square
+  # exactly when the coefficient is. Such a root needs no scaling and is the
+  # coefficient the scaled calculation ends up with. Otherwise the estimate
+  # scaled by 10^shift seeds the integer iteration from above, as
+  # `sqrt_seed/2` does, without converting the scaled operand to a float: the
+  # estimate, the power of ten and their product are off by a few ULPs at
+  # most, far below the 1e-12 margin. A shift within `float_pow10/1`'s table
+  # keeps the scaled estimate inside the double range; a larger one goes back
+  # to `sqrt_seed/2`.
+  defp do_sqrt(coef, shift, exp, ctx) when coef <= @power_of_2_to_53 and shift >= 0 do
+    estimate = :math.sqrt(coef * 1.0)
+    root = trunc(estimate)
+
+    cond do
+      root * root == coef ->
+        context(%Decimal{sign: 1, coef: root, exp: exp >>> 1}, [], false, ctx)
+
+      shift <= @float_pow10_limit ->
+        seed = trunc(estimate * float_pow10(shift) * 1.000000000001) + 1
+        do_sqrt(coef * pow10(shift <<< 1), shift, exp, true, ctx, seed)
+
+      true ->
+        do_sqrt(coef * pow10(shift <<< 1), shift, exp, true, ctx)
+    end
+  end
+
   defp do_sqrt(coef, shift, exp, ctx) do
     if shift >= 0 do
       # shift `coef` up by `shift * 2` digits
@@ -1548,9 +1615,13 @@ defmodule Decimal do
   end
 
   defp do_sqrt(shifted_coef, shift, exp, exact, ctx) do
+    do_sqrt(shifted_coef, shift, exp, exact, ctx, sqrt_seed(shifted_coef, ctx.precision))
+  end
+
+  defp do_sqrt(shifted_coef, shift, exp, exact, ctx, seed) do
     # the preferred exponent is `exp / 2` as per IEEE 754
     exp = exp >>> 1
-    root = sqrt_loop(shifted_coef, sqrt_seed(shifted_coef, ctx.precision))
+    root = sqrt_loop(shifted_coef, seed)
 
     if exact and root * root === shifted_coef do
       # if the root is exact, use preferred `exp` and shift `coef` to match
@@ -1715,10 +1786,8 @@ defmodule Decimal do
   @spec from_float(float) :: t
   def from_float(float) when is_float(float) do
     float
-    |> :io_lib_format.fwrite_g()
-    |> fix_float_exp()
-    |> IO.iodata_to_binary()
-    |> new()
+    |> float_to_shortest()
+    |> shortest_to_decimal()
   end
 
   @doc """
@@ -1739,6 +1808,15 @@ defmodule Decimal do
 
   """
   @spec cast(term) :: {:ok, t} | :error
+  # A float's shortest representation has at most 17 digits and an exponent
+  # within ±324, and an integer below 10^9 in magnitude has at most nine
+  # digits, so both always fit the default parse limits.
+  def cast(term) when is_float(term), do: {:ok, from_float(term)}
+
+  def cast(term)
+      when is_integer(term) and term > -1_000_000_000 and term < 1_000_000_000,
+      do: {:ok, new(term)}
+
   def cast(term), do: cast_with_limits(term, @default_parse_limits)
 
   @doc """
@@ -2218,6 +2296,17 @@ defmodule Decimal do
 
   """
   @spec to_float(t) :: float
+  # A coefficient of at most 2^53 and a power of ten of at most 10^22 are both
+  # exact doubles, so a single IEEE multiplication or division rounds the exact
+  # value once, to nearest with ties to even, as the conversion below does.
+  # Zero is left to that conversion, which returns 0.0 for either sign.
+  def to_float(%Decimal{sign: sign, coef: coef, exp: exp})
+      when is_integer(coef) and coef > 0 and coef <= @power_of_2_to_53 and exp >= -22 and
+             exp <= 22 do
+    float = if exp >= 0, do: coef * float_pow10(exp), else: coef / float_pow10(-exp)
+    if sign == -1, do: -float, else: float
+  end
+
   def to_float(%Decimal{coef: coef} = decimal) when is_integer(coef) do
     %Decimal{sign: sign, coef: coef, exp: exp} = check_dbl_min_max(decimal)
     # Convert back to float without loss
@@ -2493,7 +2582,11 @@ defmodule Decimal do
   # `adjust` is the net number of powers of ten applied to `coef1` relative
   # to `coef2`.
   defp div_adjust(coef1, coef2) do
-    shift = coef_length(coef2) - coef_length(coef1)
+    div_adjust(coef1, coef_length(coef1), coef2, coef_length(coef2))
+  end
+
+  defp div_adjust(coef1, length1, coef2, length2) do
+    shift = length2 - length1
 
     {coef1, coef2} =
       if shift >= 0 do
@@ -2544,24 +2637,68 @@ defmodule Decimal do
     end
   end
 
-  defp integer_division(div_sign, coef1, exp1, coef2, exp2) do
-    {coef1, coef2, adjust} = div_adjust(coef1, coef2)
-    # The quotient has exactly `exp1 - exp2 - adjust + 1` digits, so it can
-    # be rejected as too large from digit counts alone, before the possibly
-    # huge quotient is materialized.
-    digits = exp1 - exp2 - adjust + 1
-    precision = Context.get().precision
+  # `:zero` when the dividend's magnitude is below the divisor's, which leaves
+  # the callers to give the zero quotient its exponent.
+  defp integer_division(_div_sign, 0, _exp1, _coef2, _exp2, _precision), do: :zero
 
-    if digits > precision + 1 do
-      integer_division_error()
-    else
-      coef = Kernel.div(coef1 * pow10(digits - 1), coef2)
+  # With equal exponents a dividend below the divisor is a zero quotient,
+  # however many digits the coefficients have.
+  defp integer_division(_div_sign, coef1, exp, coef2, exp, _precision) when coef1 < coef2,
+    do: :zero
 
-      if coef > pow10(precision) do
+  # With equal exponents the quotient is the coefficients' integer quotient,
+  # and coefficients below 10^9 keep it below 10^9: one native division gives
+  # it, and only a precision below 9 can find it too large.
+  defp integer_division(div_sign, coef1, exp, coef2, exp, precision)
+       when coef1 < 1_000_000_000 and coef2 < 1_000_000_000 do
+    coef = Kernel.div(coef1, coef2)
+
+    cond do
+      coef == 0 -> :zero
+      precision < 9 and coef > pow10(precision) -> integer_division_error()
+      true -> {:ok, %Decimal{sign: div_sign, coef: coef, exp: 0}}
+    end
+  end
+
+  defp integer_division(div_sign, coef1, exp1, coef2, exp2, precision) do
+    length1 = coef_length(coef1)
+    length2 = coef_length(coef2)
+    # The quotient lies between 10^(gap - 1) and 10^(gap + 1), so a negative
+    # gap means a zero quotient and a gap above `precision + 1` one that is
+    # too large, both decided before either coefficient is scaled by the
+    # difference in their lengths.
+    gap = exp1 + length1 - (exp2 + length2)
+
+    cond do
+      gap < 0 ->
+        :zero
+
+      gap > precision + 1 ->
         integer_division_error()
-      else
-        {:ok, %Decimal{sign: div_sign, coef: coef, exp: 0}}
-      end
+
+      true ->
+        {coef1, coef2, adjust} = div_adjust(coef1, length1, coef2, length2)
+        # The quotient has exactly `exp1 - exp2 - adjust + 1` digits, so it
+        # can be rejected as too large from digit counts alone, before the
+        # quotient is materialized. No digits at all means it is below one.
+        digits = exp1 - exp2 - adjust + 1
+
+        cond do
+          digits <= 0 ->
+            :zero
+
+          digits > precision + 1 ->
+            integer_division_error()
+
+          true ->
+            coef = Kernel.div(coef1 * pow10(digits - 1), coef2)
+
+            if coef > pow10(precision) do
+              integer_division_error()
+            else
+              {:ok, %Decimal{sign: div_sign, coef: coef, exp: 0}}
+            end
+        end
     end
   end
 
@@ -2579,19 +2716,25 @@ defmodule Decimal do
   # the subtraction, and a rounded product can cancel the true remainder
   # entirely (for 34-digit operands the rounded product may equal `num1`).
   # Only the final remainder goes through the context, like any result. The
-  # intermediates stay input-proportional: `integer_division/5` caps the
+  # intermediates stay input-proportional: `integer_division/6` caps the
   # quotient at `precision + 1` digits, which also bounds the exponent gap
   # the alignment bridges.
   #
   # The quotient is floor(|num1| / |num2|), so the difference is non-negative
   # and the remainder carries the dividend's sign - also when the remainder
   # is zero, as IEEE 754 defines it.
-  defp exact_rem(%Decimal{} = num1, %Decimal{} = num2, %Decimal{coef: qcoef}) do
+  defp exact_rem(%Decimal{} = num1, %Decimal{} = num2, %Decimal{coef: qcoef}, ctx) do
     %Decimal{sign: sign1, coef: coef1, exp: exp1} = num1
     %Decimal{coef: coef2, exp: exp2} = num2
 
     {coef1, prod} = add_align(coef1, exp1, coef2 * qcoef, exp2)
-    context(%Decimal{sign: sign1, coef: coef1 - prod, exp: Kernel.min(exp1, exp2)})
+
+    context(
+      %Decimal{sign: sign1, coef: coef1 - prod, exp: Kernel.min(exp1, exp2)},
+      [],
+      false,
+      ctx
+    )
   end
 
   defp do_normalize(coef, exp) when coef >= @normalize_chunk_pow do
@@ -2639,6 +2782,11 @@ defmodule Decimal do
 
   Enum.reduce(0..104, 1, fn int, acc ->
     defp pow10(unquote(int)), do: unquote(acc)
+    acc * 10
+  end)
+
+  Enum.reduce(0..@float_pow10_limit, 1, fn int, acc ->
+    defp float_pow10(unquote(int)), do: unquote(:erlang.float(acc))
     acc * 10
   end)
 
@@ -2795,8 +2943,46 @@ defmodule Decimal do
   end
 
   # `digits` is the coefficient's digit count when the caller already knows it,
-  # `nil` when it has to be counted.
-  defp context(num, signals, sticky?, %Context{} = context, digits) do
+  # `nil` when it has to be counted. A sticky bit means digits beyond the
+  # coefficient, so the result is always rounded.
+  defp context(num, signals, true, %Context{} = context, digits) do
+    round_to_context(num, signals, true, context, digits)
+  end
+
+  # A zero without a sticky bit has no digits to round, so only the exponent
+  # limits apply to it.
+  defp context(%Decimal{coef: 0} = num, signals, false, %Context{} = context, _digits) do
+    {result, exp_signals} = exponent_limits(num, 1, context, num, false)
+    error(merge_signals(signals, [], exp_signals), nil, result, context)
+  end
+
+  # A nonzero result that fits the precision, with its adjusted exponent between
+  # emin and emax, is returned unchanged with only the caller's signals, which
+  # is what the clause below concludes for it after building its intermediate
+  # results.
+  defp context(%Decimal{coef: coef, exp: exp} = num, signals, false, %Context{} = context, digits)
+       when is_integer(coef) do
+    digits = digits || coef_length(coef)
+    adjusted_exp = exp + digits - 1
+
+    if digits <= context.precision and not above_emax?(adjusted_exp, context.emax) and
+         not below_emin?(adjusted_exp, context.emin) do
+      case signals do
+        [] -> num
+        _ -> error(signals, nil, num, context)
+      end
+    else
+      round_to_context(num, signals, false, context, digits)
+    end
+  end
+
+  defp context(num, signals, false, %Context{} = context, digits) do
+    round_to_context(num, signals, false, context, digits)
+  end
+
+  @compile {:inline, round_to_context: 5}
+
+  defp round_to_context(num, signals, sticky?, context, digits) do
     {result, prec_signals, digits} =
       precision(num, digits, context.precision, context.rounding, sticky?)
 
@@ -3225,39 +3411,64 @@ defmodule Decimal do
   end
 
   defp do_handle_error(signals, reason, result, context) do
-    context = context || Context.get()
-
-    flags = put_uniq(context.flags, signals)
+    %Context{flags: old_flags, traps: traps} = context = context || Context.get()
+    {flags, trap} = record_signals(signals, old_flags, traps, nil)
 
     # Flags are sticky, so an already recorded signal leaves the context
     # untouched: in a loop that keeps signalling the same thing, only the first
     # operation writes.
-    if flags !== context.flags do
+    if flags !== old_flags do
       Context.set(%{context | flags: flags})
     end
 
-    case find_trap(signals, context.traps) do
+    case trap do
       nil -> {:ok, result}
       error_signal -> {:error, [signal: error_signal, reason: reason]}
     end
   end
 
-  defp find_trap([], _traps), do: nil
+  # Adds each signal to the flags unless already there, and finds the first
+  # signal that is trapped, in one pass over the signals.
+  defp record_signals([], flags, _traps, trap), do: {flags, trap}
 
-  defp find_trap([signal | signals], traps) do
-    if :lists.member(signal, traps) do
-      signal
-    else
-      find_trap(signals, traps)
-    end
+  defp record_signals([signal | signals], flags, traps, trap) do
+    flags = if :lists.member(signal, flags), do: flags, else: [signal | flags]
+    trap = if trap == nil and :lists.member(signal, traps), do: signal, else: trap
+    record_signals(signals, flags, traps, trap)
   end
 
-  # `:io_lib_format.fwrite_g/1` renders exponent notation with a redundant
-  # fraction: `1.0e5`. Dropping it keeps `from_float/1` from reading that as a
-  # coefficient of 10 with the exponent one lower.
-  defp fix_float_exp([?., ?0, ?e | rest]), do: [?e | fix_float_exp(rest)]
-  defp fix_float_exp([char | rest]), do: [char | fix_float_exp(rest)]
-  defp fix_float_exp([]), do: []
+  # The `:short` option, added in OTP 25, renders the same digits as
+  # `:io_lib_format.fwrite_g/1` straight into a binary.
+  if String.to_integer(System.otp_release()) >= 25 do
+    defp float_to_shortest(float), do: :erlang.float_to_binary(float, [:short])
+  else
+    defp float_to_shortest(float), do: IO.iodata_to_binary(:io_lib_format.fwrite_g(float))
+  end
+
+  # The shortest representation is always `-?D+.D+` with an optional `e-?D+`,
+  # and at most 17 significant digits with an exponent within ±324, inside the
+  # default parse limits, so it is read in one pass instead of going through
+  # `parse/1`. Exponent notation has one digit before the point and a
+  # redundant fraction when that digit is all there is: `1.0e5` is read as a
+  # coefficient of 1, not 10 with the exponent one lower.
+  defp shortest_to_decimal(<<?-, rest::binary>>), do: %{shortest_to_decimal(rest) | sign: -1}
+  defp shortest_to_decimal(binary), do: shortest_integer_part(binary, 0)
+
+  defp shortest_integer_part(<<?., rest::binary>>, coef), do: shortest_fraction(rest, coef, 0)
+
+  defp shortest_integer_part(<<digit, rest::binary>>, coef),
+    do: shortest_integer_part(rest, coef * 10 + digit - ?0)
+
+  defp shortest_fraction(<<"0e", exp::binary>>, coef, 0),
+    do: %Decimal{coef: coef, exp: :erlang.binary_to_integer(exp)}
+
+  defp shortest_fraction(<<?e, exp::binary>>, coef, digits),
+    do: %Decimal{coef: coef, exp: :erlang.binary_to_integer(exp) - digits}
+
+  defp shortest_fraction(<<digit, rest::binary>>, coef, digits),
+    do: shortest_fraction(rest, coef * 10 + digit - ?0, digits + 1)
+
+  defp shortest_fraction(<<>>, coef, digits), do: %Decimal{coef: coef, exp: -digits}
 
   # An adjusted exponent strictly inside ±308 puts the value between
   # 10^adjusted and 10^(adjusted+1), clear of both DBL_MAX and DBL_MIN. Only
