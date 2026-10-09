@@ -283,11 +283,211 @@ defmodule Decimal.ContextTest do
 
   test "with_context/2 emin underflow" do
     Context.with(%Context{precision: 3, emin: -2, traps: []}, fn ->
-      assert Decimal.div(1, 1000) == d(1, 0, 0)
+      assert Decimal.div(1, 3000) == d(1, 3, -4)
       assert :underflow in Context.get().flags
       assert :inexact in Context.get().flags
       assert :rounded in Context.get().flags
     end)
+  end
+
+  # Expected values and flags of operation results match Python's decimal
+  # module with the same context.
+  describe "subnormal results" do
+    test "keep the digits at or above etiny = emin - precision + 1" do
+      Context.with(%Context{precision: 3, emin: -2, traps: []}, fn ->
+        assert Decimal.div(1, 1000) == d(1, 1, -3)
+        assert Context.get().flags == [:subnormal]
+      end)
+
+      Context.with(%Context{precision: 3, emin: -2, traps: []}, fn ->
+        assert Decimal.apply_context(~d"1.0e-4") == d(1, 1, -4)
+        assert Enum.sort(Context.get().flags) == [:rounded, :subnormal]
+      end)
+    end
+
+    test "are rounded at etiny with the context rounding" do
+      for {rounding, num1, num2, expected} <- [
+            {:half_up, 1, 3000, d(1, 3, -4)},
+            {:half_up, 1, 30000, d(1, 0, -4)},
+            {:half_up, -1, 30000, d(-1, 0, -4)},
+            {:ceiling, 1, 30000, d(1, 1, -4)},
+            {:floor, -1, 30000, d(-1, 1, -4)},
+            {:up, 1, 30000, d(1, 1, -4)},
+            {:half_up, 1, 20000, d(1, 1, -4)},
+            {:half_even, 1, 20000, d(1, 0, -4)},
+            {:half_even, 3, 20000, d(1, 2, -4)}
+          ] do
+        Context.with(%Context{precision: 3, emin: -2, rounding: rounding, traps: []}, fn ->
+          assert Decimal.div(num1, num2) == expected
+
+          flags = [:inexact, :rounded, :subnormal, :underflow]
+          flags = if expected.coef == 0, do: [:clamped | flags], else: flags
+          assert Enum.sort(Context.get().flags) == flags
+        end)
+      end
+    end
+
+    test "underflow when tiny before rounding, even if rounding carries to emin" do
+      for value <- [~d"0.009996", ~d"0.009950", ~d"0.00999"] do
+        Context.with(%Context{precision: 3, emin: -2, traps: []}, fn ->
+          assert Decimal.apply_context(value) == d(1, 100, -4)
+          assert Enum.sort(Context.get().flags) == [:inexact, :rounded, :subnormal, :underflow]
+        end)
+      end
+
+      Context.with(%Context{precision: 3, emin: -2, traps: []}, fn ->
+        assert Decimal.apply_context(~d"0.0100") == d(1, 100, -4)
+        assert Context.get().flags == []
+      end)
+    end
+
+    test "with the default decimal128 context" do
+      Context.with(%Context{}, fn ->
+        assert Decimal.div(~d"1e-6140", 10000) == d(1, 1, -6144)
+        assert Decimal.mult(~d"1e-6000", ~d"1e-150") == d(1, 1, -6150)
+        assert Decimal.sub(~d"2e-6143", ~d"1.5e-6143") == d(1, 5, -6144)
+        assert Decimal.add(Decimal.new(1, 1, -6144), 0) == d(1, 1, -6144)
+        assert Decimal.normalize(Decimal.new(1, 100, -6146)) == d(1, 1, -6144)
+        assert Context.get().flags == [:subnormal]
+      end)
+
+      Context.with(%Context{}, fn ->
+        thirty_three_threes = String.to_integer(String.duplicate("3", 33))
+        assert Decimal.div(1, ~d"3e6143") == d(1, thirty_three_threes, -6176)
+        assert Enum.sort(Context.get().flags) == [:inexact, :rounded, :subnormal, :underflow]
+      end)
+
+      Context.with(%Context{}, fn ->
+        assert Decimal.mult(~d"1e-3100", ~d"1e-3100") == d(1, 0, -6176)
+
+        assert Enum.sort(Context.get().flags) ==
+                 [:clamped, :inexact, :rounded, :subnormal, :underflow]
+      end)
+    end
+
+    test "trap underflow only when inexact" do
+      Context.with(%Context{precision: 3, emin: -2, traps: [:underflow]}, fn ->
+        assert Decimal.div(1, 1000) == d(1, 1, -3)
+      end)
+    end
+
+    test "trap subnormal for every result below emin" do
+      Context.with(%Context{precision: 3, emin: -2, traps: [:subnormal]}, fn ->
+        assert Decimal.div(1, 100) == d(1, 1, -2)
+        assert_raise Error, "subnormal", fn -> Decimal.div(1, 1000) end
+      end)
+    end
+
+    test "round/3 signals subnormal and clamped for the result, not the input" do
+      tiny = Decimal.new(1, 15, -6145)
+
+      Context.with(%Context{}, fn ->
+        assert Decimal.round(tiny, 6145) == tiny
+        assert Decimal.round(tiny, 6144, :half_even) == d(1, 2, -6144)
+        assert Decimal.round(tiny, 6144, :down) == d(1, 1, -6144)
+        assert Context.get().flags == [:subnormal]
+      end)
+
+      Context.with(%Context{}, fn ->
+        assert Decimal.round(tiny, 6140) == d(1, 0, -6140)
+        assert Decimal.round(Decimal.new(1, 0, 1_000_000_000), 2) == d(1, 0, -2)
+        assert Decimal.round(Decimal.new(-1, 0, -1_000_000_000), 2) == d(-1, 0, -2)
+        assert Context.get().flags == []
+      end)
+
+      Context.with(%Context{}, fn ->
+        assert Decimal.round(Decimal.new(1, 0, -6200), 6200) == d(1, 0, -6176)
+        assert Context.get().flags == [:clamped]
+      end)
+    end
+
+    test "round/3 results padded below etiny keep the digits at or above it" do
+      for {num, places, expected, flags} <- [
+            {Decimal.new(1, 1, -6150), 7000, d(1, Integer.pow(10, 26), -6176),
+             [:rounded, :subnormal]},
+            {Decimal.new(1, 15, -6175), 6200, d(1, 150, -6176), [:rounded, :subnormal]},
+            {Decimal.new(1, 15, -6175), 6176, d(1, 150, -6176), [:subnormal]},
+            {Decimal.new(1, 15, -6175), 6174, d(1, 2, -6174), [:subnormal]},
+            {Decimal.new(1, 96, -6145), 6144, d(1, 10, -6144), []},
+            {Decimal.new(1, 123, -6146), 7000, d(1, 123 * Integer.pow(10, 30), -6176),
+             [:rounded, :subnormal]},
+            {Decimal.new(-1, 7, -6143), 6200, d(-1, 7 * Integer.pow(10, 33), -6176), [:rounded]}
+          ] do
+        Context.with(%Context{}, fn ->
+          assert Decimal.round(num, places) == expected
+          assert Enum.sort(Context.get().flags) == flags
+        end)
+      end
+    end
+
+    @tag timeout: @bounded_smoke_timeout
+    test "far below etiny stays bounded" do
+      tiny = Decimal.new(1, 1, -@bounded_smoke_exp)
+
+      assert_runs_quickly("apply_context/1 far below etiny", fn ->
+        Context.with(%Context{rounding: :ceiling}, fn ->
+          assert Decimal.apply_context(tiny) == d(1, 1, -6176)
+        end)
+
+        assert Decimal.apply_context(tiny) == d(1, 0, -6176)
+        assert Decimal.round(tiny, 2) == d(1, 0, -2)
+        assert Decimal.mult(tiny, tiny) == d(1, 0, -6176)
+      end)
+    end
+  end
+
+  describe "zero results" do
+    test "have their exponent clamped to between etiny and emax" do
+      for {fun, expected} <- [
+            {fn -> Decimal.mult(~d"0e-3500", ~d"0e-3500") end, d(1, 0, -6176)},
+            {fn -> Decimal.mult(~d"0e3500", ~d"0e3500") end, d(1, 0, 6144)},
+            {fn -> Decimal.mult(~d"-1e6000", ~d"0e1000") end, d(-1, 0, 6144)},
+            {fn -> Decimal.add(~d"0e-3500", Decimal.new(1, 0, -7000)) end, d(1, 0, -6176)}
+          ] do
+        Context.with(%Context{}, fn ->
+          assert fun.() == expected
+          assert Context.get().flags == [:clamped]
+        end)
+      end
+
+      Context.with(%Context{precision: 3, emin: -2, emax: 5}, fn ->
+        assert Decimal.mult(~d"0e3", ~d"0e3") == d(1, 0, 5)
+        assert Decimal.mult(~d"0e-3", ~d"0e-3") == d(1, 0, -4)
+        assert Context.get().flags == [:clamped]
+      end)
+    end
+
+    test "inside the limits, or without limits, are unchanged" do
+      Context.with(%Context{}, fn ->
+        assert Decimal.mult(~d"0e-3000", ~d"0e-3000") == d(1, 0, -6000)
+        assert Decimal.mult(~d"0e3000", ~d"0e3000") == d(1, 0, 6000)
+        assert Context.get().flags == []
+      end)
+
+      Context.with(%Context{emin: :infinity, emax: :infinity}, fn ->
+        assert Decimal.mult(~d"0e-3500", ~d"0e-3500") == d(1, 0, -7000)
+        assert Decimal.mult(~d"0e3500", ~d"0e3500") == d(1, 0, 7000)
+        assert Context.get().flags == []
+      end)
+    end
+
+    test "that skip rounding are clamped too" do
+      Context.with(%Context{}, fn ->
+        assert Decimal.div(~d"1e-6000", d(1, :inf, 1000)) == d(1, 0, -6176)
+        assert Decimal.div_int(~d"1e-6000", d(1, :inf, 1000)) == d(1, 0, -6176)
+        assert Decimal.div_int(~d"1e-6000", ~d"1e6000") == d(1, 0, -6176)
+        assert {d(1, 0, -6176), _} = Decimal.div_rem(~d"1e-6000", d(1, :inf, 1000))
+        assert Decimal.div_rem(~d"1e-6000", ~d"1e6000") == {d(1, 0, -6176), d(1, 1, -6000)}
+        assert Decimal.sqrt(Decimal.new(1, 0, -13000)) == d(1, 0, -6176)
+        assert Context.get().flags == [:clamped]
+      end)
+    end
+
+    test "trap clamped" do
+      Context.with(%Context{traps: [:clamped]}, fn ->
+        assert_raise Error, "clamped", fn -> Decimal.mult(~d"0e-3500", ~d"0e-3500") end
+      end)
+    end
   end
 
   test "with_context/2 exponent limit traps" do
@@ -299,7 +499,7 @@ defmodule Decimal.ContextTest do
 
     assert_raise Error, "underflow", fn ->
       Context.with(%Context{precision: 3, emin: -2, traps: [:underflow]}, fn ->
-        Decimal.div(1, 1000)
+        Decimal.div(1, 3000)
       end)
     end
   end

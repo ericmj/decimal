@@ -37,8 +37,12 @@ defmodule Decimal do
 
   The default `Decimal.Context` follows IEEE 754 decimal128: `precision` is
   34, `emax` is 6 144, and `emin` is -6 143. Operation results whose adjusted
-  exponent leaves that band signal overflow or underflow. Clamped is still
-  not signalled.
+  exponent is above `emax` overflow. Results whose adjusted exponent is below
+  `emin` are subnormal: they are rounded at the exponent `emin - precision + 1`
+  (-6 176 by default), so they keep fewer digits the smaller they get. They
+  signal subnormal, and also underflow when that rounding is inexact. A zero
+  result's exponent is held between `emin - precision + 1` and `emax`,
+  signalling clamped when it has to be changed.
 
   ## Large exponents and untrusted input
 
@@ -135,6 +139,8 @@ defmodule Decimal do
           | :inexact
           | :overflow
           | :underflow
+          | :subnormal
+          | :clamped
 
   @type compare_result ::
           :lt | :gt | :eq
@@ -821,7 +827,7 @@ defmodule Decimal do
     sign = if sign1 == sign2, do: 1, else: -1
     # TODO: Subnormal
     # exponent?
-    %Decimal{sign: sign, coef: 0, exp: exp1 - exp2}
+    context(%Decimal{sign: sign, coef: 0, exp: exp1 - exp2})
   end
 
   def div(%Decimal{coef: 0}, %Decimal{coef: 0}),
@@ -899,7 +905,7 @@ defmodule Decimal do
     sign = if sign1 == sign2, do: 1, else: -1
     # TODO: Subnormal
     # exponent?
-    %Decimal{sign: sign, coef: 0, exp: exp1 - exp2}
+    context(%Decimal{sign: sign, coef: 0, exp: exp1 - exp2})
   end
 
   def div_int(%Decimal{coef: 0}, %Decimal{coef: 0}),
@@ -917,7 +923,7 @@ defmodule Decimal do
 
     cond do
       compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == :lt ->
-        %Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2}
+        context(%Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2})
 
       coef1 == 0 ->
         context(%{num1 | sign: div_sign})
@@ -1042,7 +1048,7 @@ defmodule Decimal do
     sign = if sign1 == sign2, do: 1, else: -1
     # TODO: Subnormal
     # exponent?
-    {%Decimal{sign: sign, coef: 0, exp: exp1 - exp2}, %{num2 | sign: sign1}}
+    {context(%Decimal{sign: sign, coef: 0, exp: exp1 - exp2}), %{num2 | sign: sign1}}
   end
 
   def div_rem(%Decimal{coef: 0}, %Decimal{coef: 0}) do
@@ -1064,7 +1070,7 @@ defmodule Decimal do
 
     cond do
       compare(%{num1 | sign: 1}, %{num2 | sign: 1}) == :lt ->
-        {%Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2}, %{num1 | sign: sign1}}
+        {context(%Decimal{sign: div_sign, coef: 0, exp: exp1 - exp2}), %{num1 | sign: sign1}}
 
       coef1 == 0 ->
         {context(%{num1 | sign: div_sign}), context(%{num2 | sign: sign1})}
@@ -1401,7 +1407,7 @@ defmodule Decimal do
     do: error(:invalid_operation, "operation on NaN", num)
 
   def sqrt(%Decimal{coef: 0, exp: exp} = num),
-    do: %{num | exp: exp >>> 1}
+    do: context(%{num | exp: exp >>> 1})
 
   def sqrt(%Decimal{sign: -1} = num),
     do: error(:invalid_operation, "less than zero", num)
@@ -2688,7 +2694,7 @@ defmodule Decimal do
     {result, prec_signals, digits} =
       precision(num, digits, context.precision, context.rounding, sticky?)
 
-    {result, exp_signals} = exponent_limits(result, digits, context)
+    {result, exp_signals} = exponent_limits(result, digits, context, num, sticky?)
     error(merge_signals(signals, prec_signals, exp_signals), nil, result, context)
   end
 
@@ -2707,31 +2713,123 @@ defmodule Decimal do
 
   # The exponent half of `context/5` without the precision half, for `round/3`.
   # The limits still have to be applied to the input: an adjusted exponent past
-  # `emax` must overflow before `do_round/5` scales the coefficient by
-  # `pow10(exp - target_exp)`, which is otherwise unbounded for an exponent
-  # built through `new/3`. The precision half must not run, because the
-  # caller's `mode` is the only rounding `round/3` was asked to perform.
+  # `emax` must overflow, and an exponent below etiny must be raised to it,
+  # before `do_round/5` aligns the coefficient with the target exponent, which
+  # is otherwise unbounded for an exponent built through `new/3`. The precision
+  # half must not run, because the caller's `mode` is the only rounding
+  # `round/3` was asked to perform. A subnormal input that is representable
+  # passes through unchanged.
+  #
+  # Subnormal and clamped describe how a result is represented, so they are not
+  # signalled for the input: the result of `round/3` signals them on its own way
+  # through the context.
   defp exponent_limited(%Decimal{coef: coef} = num, %Context{} = context) do
-    {result, signals} = exponent_limits(num, coef_length(coef), context)
-    error(signals, nil, result, context)
+    {result, signals} = exponent_limits(num, coef_length(coef), context, num, false)
+    error(signals -- [:subnormal, :clamped], nil, result, context)
   end
 
-  defp exponent_limits(%Decimal{coef: coef} = num, _digits, _context)
-       when coef in [:NaN, :inf, 0],
-       do: {num, []}
+  # `result` is the value already rounded to precision, with `digits` digits;
+  # `unrounded` and `sticky?` are what it was rounded from, for a subnormal
+  # result that must be rounded again from scratch to avoid double rounding.
+  defp exponent_limits(%Decimal{coef: coef} = result, _digits, _context, _unrounded, _sticky?)
+       when coef in [:NaN, :inf],
+       do: {result, []}
 
-  defp exponent_limits(%Decimal{exp: exp} = num, digits, %Context{} = context) do
+  # A zero has no digits to lose, so the limits bound its exponent alone: an
+  # exponent above emax is lowered to it and one below etiny is raised to it,
+  # signalling Clamped, the range every nonzero result is held to.
+  defp exponent_limits(
+         %Decimal{coef: 0, exp: exp} = result,
+         _digits,
+         context,
+         _unrounded,
+         _sticky?
+       ) do
+    %Context{emax: emax, emin: emin, precision: precision} = context
+
+    cond do
+      emax != :infinity and exp > emax ->
+        {%{result | exp: emax}, [:clamped]}
+
+      emin != :infinity and exp < emin - precision + 1 ->
+        {%{result | exp: emin - precision + 1}, [:clamped]}
+
+      true ->
+        {result, []}
+    end
+  end
+
+  defp exponent_limits(
+         %Decimal{exp: exp} = result,
+         digits,
+         %Context{} = context,
+         unrounded,
+         sticky?
+       ) do
     adjusted_exp = exp + digits - 1
 
     cond do
       above_emax?(adjusted_exp, context.emax) ->
-        {overflow_result(num, context), [:overflow, :inexact, :rounded]}
+        {overflow_result(result, context), [:overflow, :inexact, :rounded]}
 
       below_emin?(adjusted_exp, context.emin) ->
-        {%{num | coef: 0, exp: 0}, [:underflow, :inexact, :rounded]}
+        subnormal(unrounded, sticky?, context)
+
+      # Tininess is judged before rounding, as in IEEE 754 decimal and the
+      # General Decimal Arithmetic spec: a value just below emin that rounding
+      # carried up to it still underflows.
+      adjusted_exp == context.emin and adjust_exp(unrounded) < context.emin ->
+        subnormal(unrounded, sticky?, context)
 
       true ->
-        {num, []}
+        {result, []}
+    end
+  end
+
+  # Gradual underflow: a nonzero value whose adjusted exponent is below emin
+  # keeps the digits at or above etiny = emin - precision + 1 and is rounded
+  # there, so it loses precision as it gets smaller instead of dropping to zero
+  # at emin. Subnormal is signalled for every such value, Underflow only when
+  # the rounding is inexact, and Clamped when it leaves zero. The result never
+  # has more than `precision` digits: below emin there are fewer than
+  # `precision` positions from etiny up, and a rounding carry adds one at most.
+  #
+  # Callers that pass a sticky bit always carry more than `precision` digits,
+  # so a subnormal value with a sticky bit has its exponent below etiny.
+  defp subnormal(%Decimal{sign: sign, coef: coef, exp: exp} = num, sticky?, context) do
+    etiny = context.emin - context.precision + 1
+    drop = Kernel.max(etiny - exp, 0)
+
+    if drop == 0 and not sticky? do
+      {num, [:subnormal]}
+    else
+      {signif, guard, rest?} = subnormal_split(coef, drop, sticky?)
+
+      signif =
+        if increment?(context.rounding, sign, signif, guard, rest?),
+          do: signif + 1,
+          else: signif
+
+      signals =
+        cond do
+          signif == 0 -> [:underflow, :subnormal, :inexact, :rounded, :clamped]
+          guard != 0 or rest? -> [:underflow, :subnormal, :inexact, :rounded]
+          drop > 0 -> [:subnormal, :rounded]
+          true -> [:subnormal]
+        end
+
+      {%Decimal{sign: sign, coef: signif, exp: exp + drop}, signals}
+    end
+  end
+
+  # An exponent built through `new/3` can sit arbitrarily far below etiny. When
+  # every digit is dropped, the guard digit is a leading zero and the nonzero
+  # coefficient is all rest, without computing the power of ten.
+  defp subnormal_split(coef, drop, sticky?) do
+    if drop > coef_length(coef) do
+      {0, 0, true}
+    else
+      split_digits(coef, drop, sticky?)
     end
   end
 

@@ -16,6 +16,19 @@
   one bit at a time: ~1.6x faster for typical values and ~11x for exponents
   near the ends of the double range, with 96% fewer collections.
 
+* Add the `:subnormal` and `:clamped` signals from the General Decimal
+  Arithmetic spec, so that crossing the context's `emin` or `emax` is always
+  signalled. `:subnormal` is signalled for every result whose adjusted
+  exponent is below `emin`, even an exact one, while `:underflow` is only
+  signalled when such a result is rounded inexactly. A zero result's exponent
+  is now held between `emin - precision + 1` and `emax`, the range of every
+  nonzero result, and `:clamped` is signalled when it changes:
+  `Decimal.mult("0e-3500", "0e-3500")` returns `0E-6176` instead of
+  `0E-7000`. This includes the zero results of division by infinity, of
+  `div_int/2` and `div_rem/2` with a smaller dividend, and of `sqrt/1`, which
+  previously skipped the context. A subnormal result that rounds to zero
+  signals `:clamped` too.
+
 ### Bug fixes
 
 * Fix `Decimal.div/2` rounding the wrong way on inexact results. The long
@@ -48,6 +61,16 @@
   precision; it still signals when the result reaches the context wider than
   the precision, as every operation does, and still does not signal for the
   digits it discards itself.
+
+* Keep subnormal results instead of flushing them to zero. Since v3.0.0
+  made `emin` default to -6 143, every result whose adjusted exponent fell
+  below it became 0 with `:underflow`, even an exact one:
+  `Decimal.div("1e-6140", 10000)` returned `0` instead of `1E-6144`. Such
+  results are now rounded at the exponent `emin - precision + 1` (-6 176 by
+  default) with the context's rounding, as IEEE 754 and the General Decimal
+  Arithmetic spec specify, and signal `:subnormal`, plus `:underflow` when
+  that rounding is inexact. A result that rounds to zero keeps that exponent
+  (`0E-6176`).
 
 ## v3.1.1 (2026-05-27)
 
