@@ -28,6 +28,10 @@
   `Decimal.div_rem/2` detect a zero quotient from digit counts they already
   compute instead of comparing the operands: ~1.4x faster.
 
+* Record the flags and look for a trapped signal in one pass over an
+  operation's signals: operations that signal, such as inexact rounding and
+  division, are 4-10% faster.
+
 * Add the `:subnormal` and `:clamped` signals from the General Decimal
   Arithmetic spec, so that crossing the context's `emin` or `emax` is always
   signalled. `:subnormal` is signalled for every result whose adjusted

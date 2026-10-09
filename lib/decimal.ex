@@ -3274,31 +3274,30 @@ defmodule Decimal do
   end
 
   defp do_handle_error(signals, reason, result, context) do
-    context = context || Context.get()
-
-    flags = put_uniq(context.flags, signals)
+    %Context{flags: old_flags, traps: traps} = context = context || Context.get()
+    {flags, trap} = record_signals(signals, old_flags, traps, nil)
 
     # Flags are sticky, so an already recorded signal leaves the context
     # untouched: in a loop that keeps signalling the same thing, only the first
     # operation writes.
-    if flags !== context.flags do
+    if flags !== old_flags do
       Context.set(%{context | flags: flags})
     end
 
-    case find_trap(signals, context.traps) do
+    case trap do
       nil -> {:ok, result}
       error_signal -> {:error, [signal: error_signal, reason: reason]}
     end
   end
 
-  defp find_trap([], _traps), do: nil
+  # Adds each signal to the flags unless already there, and finds the first
+  # signal that is trapped, in one pass over the signals.
+  defp record_signals([], flags, _traps, trap), do: {flags, trap}
 
-  defp find_trap([signal | signals], traps) do
-    if :lists.member(signal, traps) do
-      signal
-    else
-      find_trap(signals, traps)
-    end
+  defp record_signals([signal | signals], flags, traps, trap) do
+    flags = if :lists.member(signal, flags), do: flags, else: [signal | flags]
+    trap = if trap == nil and :lists.member(signal, traps), do: signal, else: trap
+    record_signals(signals, flags, traps, trap)
   end
 
   # The `:short` option, added in OTP 25, renders the same digits as
