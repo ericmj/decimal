@@ -435,10 +435,16 @@ defmodule Decimal do
   end
 
   @doc """
-  Compares two numbers numerically using a threshold. If the first number added
-  to the threshold is greater than the second number, and the first number
-  subtracted by the threshold is smaller than the second number, then the two
-  numbers are considered equal.
+  Compares two numbers numerically using a threshold. The numbers are
+  considered equal when the second number lies between the first number minus
+  the threshold and the first number plus the threshold, inclusive. Otherwise
+  the result is the same as for `compare/2`.
+
+  The comparison is exact: the bounds are not rounded to the context
+  precision.
+
+  The threshold cannot be negative, and none of the numbers can be a NaN. A NaN
+  signals `:invalid_operation` and raises `Decimal.Error` like `compare/2`.
 
   ## Examples
 
@@ -454,13 +460,37 @@ defmodule Decimal do
   @spec compare(decimal :: decimal(), decimal :: decimal(), threshold :: decimal()) ::
           compare_result()
 
-  def compare(_, _, %Decimal{sign: -1}), do: raise(Error, reason: "threshold cannot be negative")
+  def compare(%Decimal{coef: :NaN} = n1, _n2, _threshold), do: compare_nan(n1)
+  def compare(_n1, %Decimal{coef: :NaN} = n2, _threshold), do: compare_nan(n2)
+  def compare(_n1, _n2, %Decimal{coef: :NaN} = threshold), do: compare_nan(threshold)
 
+  def compare(_, _, %Decimal{sign: -1, coef: coef}) when coef != 0,
+    do: raise(Error, reason: "threshold cannot be negative")
+
+  def compare(
+        %Decimal{coef: coef1} = n1,
+        %Decimal{coef: coef2} = n2,
+        %Decimal{coef: coef3} = threshold
+      )
+      when is_integer(coef1) and is_integer(coef2) and is_integer(coef3) do
+    cond do
+      sum_sign([n1, negate_sign(threshold), negate_sign(n2)]) > 0 -> :gt
+      sum_sign([n1, threshold, negate_sign(n2)]) < 0 -> :lt
+      true -> :eq
+    end
+  end
+
+  # Finite bounds against an infinite second number.
+  def compare(%Decimal{coef: coef1} = n1, %Decimal{coef: :inf} = n2, %Decimal{coef: coef3})
+      when is_integer(coef1) and is_integer(coef3),
+      do: compare(n1, n2)
+
+  # The first number or the threshold is infinite, so a bound is infinite (or,
+  # for ±Infinity - Infinity, invalid) and add/2 and sub/2 return it without
+  # rounding.
   def compare(%Decimal{} = n1, %Decimal{} = n2, %Decimal{} = threshold) do
-    add_threshold = n1 |> Decimal.add(threshold)
-    sub_threshold = n1 |> Decimal.sub(threshold)
-    case1 = compare(add_threshold, n2)
-    case2 = compare(sub_threshold, n2)
+    case1 = compare(Decimal.add(n1, threshold), n2)
+    case2 = compare(Decimal.sub(n1, threshold), n2)
 
     cond do
       (case1 == :gt or case1 == :eq) and (case2 == :lt or case2 == :eq) -> :eq
@@ -471,12 +501,16 @@ defmodule Decimal do
 
   def compare(n1, n2, threshold), do: compare(decimal(n1), decimal(n2), decimal(threshold))
 
+  defp negate_sign(%Decimal{sign: sign} = num), do: %{num | sign: -sign}
+
   @doc """
   Compares two numbers numerically. If the first number is greater than the second
   `:gt` is returned, if less than `:lt` is returned, if both numbers are equal
   `:eq` is returned.
 
-  Neither number can be a NaN.
+  Neither number can be a NaN. A NaN has no order, so it signals
+  `:invalid_operation` and raises `Decimal.Error` even when that signal is not
+  trapped.
 
   ## Examples
 
@@ -488,6 +522,9 @@ defmodule Decimal do
 
   """
   @spec compare(decimal, decimal) :: compare_result()
+  def compare(%Decimal{coef: :NaN} = num1, _num2), do: compare_nan(num1)
+  def compare(_num1, %Decimal{coef: :NaN} = num2), do: compare_nan(num2)
+
   def compare(%Decimal{coef: :inf, sign: sign}, %Decimal{coef: :inf, sign: sign}),
     do: :eq
 
@@ -504,12 +541,6 @@ defmodule Decimal do
 
   def compare(_num1, %Decimal{coef: :inf, sign: 1}), do: :lt
   def compare(_num1, %Decimal{coef: :inf, sign: -1}), do: :gt
-
-  def compare(%Decimal{coef: :NaN} = num1, _num2),
-    do: error(:invalid_operation, "operation on NaN", num1)
-
-  def compare(_num1, %Decimal{coef: :NaN} = num2),
-    do: error(:invalid_operation, "operation on NaN", num2)
 
   def compare(%Decimal{coef: 0}, %Decimal{coef: 0}), do: :eq
 
@@ -563,6 +594,47 @@ defmodule Decimal do
 
   def compare(num1, num2) do
     compare(decimal(num1), decimal(num2))
+  end
+
+  # The flag is recorded and a trap raises as for any invalid operation, but an
+  # untrapped signal raises too: an ordering has no NaN to return.
+  defp compare_nan(num) do
+    error(:invalid_operation, "operation on NaN", num)
+    raise Error, signal: :invalid_operation, reason: "operation on NaN"
+  end
+
+  # The sign (-1, 0 or 1) of the exact sum of finite decimals, without rounding
+  # and without materializing the gap between their exponents.
+  #
+  # Terms are added from the largest adjusted exponent down. A nonzero partial
+  # sum is a nonzero multiple of 10^exp, so its magnitude is at least 10^exp.
+  # Once the next term's adjusted exponent is below exp - 1, every remaining
+  # term is below 10^(exp - 1), and fewer than ten of them can't reach 10^exp,
+  # so the partial sum's sign is final. Otherwise the next term's exponent is
+  # within its own digit count of exp, so aligning the two costs no more
+  # digits than the terms already have.
+  defp sum_sign(terms) do
+    terms
+    |> Enum.reject(&(&1.coef == 0))
+    |> Enum.sort_by(&adjust_exp/1, :desc)
+    |> sum_sign(0, nil)
+  end
+
+  defp sum_sign([], int, _exp), do: integer_sign(int)
+
+  defp sum_sign([%Decimal{sign: sign, coef: coef, exp: term_exp} | rest], 0, _exp) do
+    sum_sign(rest, sign * coef, term_exp)
+  end
+
+  defp sum_sign([%Decimal{} = term | rest], int, exp) do
+    if adjust_exp(term) < exp - 1 do
+      integer_sign(int)
+    else
+      %Decimal{sign: sign, coef: coef, exp: term_exp} = term
+      base = Kernel.min(exp, term_exp)
+      int = int * pow10(exp - base) + sign * coef * pow10(term_exp - base)
+      sum_sign(rest, int, base)
+    end
   end
 
   @compile {:inline, adjust_exp: 1}

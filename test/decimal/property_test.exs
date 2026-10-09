@@ -361,6 +361,59 @@ defmodule Decimal.PropertyTest do
     end
   end
 
+  describe "compare/3" do
+    property "agrees with exact integer arithmetic on the bounds" do
+      check all(
+              a <- decimal(exp_min: -40, exp_max: 40),
+              b <- decimal(exp_min: -40, exp_max: 40),
+              threshold <- non_negative_decimal(exp_min: -40, exp_max: 40),
+              precision <- StreamData.integer(1..34),
+              max_runs: 500
+            ) do
+        scale = Enum.min([a.exp, b.exp, threshold.exp])
+        scaled = fn d -> d.sign * d.coef * Integer.pow(10, d.exp - scale) end
+        diff = scaled.(a) - scaled.(b)
+        limit = scaled.(threshold)
+
+        expected =
+          cond do
+            abs(diff) <= limit -> :eq
+            diff > 0 -> :gt
+            true -> :lt
+          end
+
+        Decimal.Context.with(%Decimal.Context{precision: precision}, fn ->
+          assert Decimal.compare(a, b, threshold) == expected
+          assert Decimal.Context.get().flags == []
+        end)
+      end
+    end
+
+    property "nearby values are compared exactly" do
+      check all(
+              a <- decimal(exp_min: -40, exp_max: 40),
+              offset <- decimal(coef_max: 1_000, exp_min: -80, exp_max: 0),
+              threshold <- non_negative_decimal(coef_max: 1_000, exp_min: -80, exp_max: 0),
+              max_runs: 500
+            ) do
+        scale = Enum.min([a.exp, offset.exp, threshold.exp])
+        scaled = fn d -> d.sign * d.coef * Integer.pow(10, d.exp - scale) end
+        sum = scaled.(a) + scaled.(offset)
+        b = Decimal.new(if(sum < 0, do: -1, else: 1), abs(sum), scale)
+        diff = -scaled.(offset)
+
+        expected =
+          cond do
+            abs(diff) <= scaled.(threshold) -> :eq
+            diff > 0 -> :gt
+            true -> :lt
+          end
+
+        assert Decimal.compare(a, b, threshold) == expected
+      end
+    end
+  end
+
   defp scaled_integer_compare(a, b) do
     scale = min(a.exp, b.exp)
     left = a.sign * a.coef * Integer.pow(10, a.exp - scale)
