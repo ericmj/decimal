@@ -57,6 +57,9 @@
   (`Decimal.add(1, 1)` returned `0E+1`), and the other cases failed with
   `FunctionClauseError` inside the next operation.
 
+* Make `Decimal.to_integer/1` raise `ArgumentError` for NaN and ±Infinity,
+  like `Decimal.to_float/1`, instead of `FunctionClauseError`.
+
 ## v3.1.1 (2026-05-27)
 
 ### Bug fixes
