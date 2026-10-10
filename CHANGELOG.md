@@ -2,167 +2,123 @@
 
 ## Unreleased
 
-### Security
-
-* Fix `Decimal.round/3` building its result at the full requested scale
-  before applying the context precision, so its time and memory grew with
-  the `places` argument instead of with the result, which never has more
-  digits than the precision. A caller controlling `places` could exhaust
-  memory with one call: `Decimal.round(Decimal.new("1.5"), -50_000_000)`
-  allocated about 5.5 GB, and positive `places` above about 1.26 million
-  built the padding and then raised `SystemLimitError`. A result wider than
-  the precision is now rejected before the coefficient is padded (see the
-  `:invalid_operation` entry under Bug fixes), and dropping more digits than
-  the coefficient has no longer builds a power of ten of that size. This is a
-  fix for **CVE-2026-97853** (GitHub advisory
-  [GHSA-6c27-994x-c52f](https://github.com/ericmj/decimal/security/advisories/GHSA-6c27-994x-c52f)).
-
-* Make `Decimal.to_integer/1` and `Decimal.to_float/1` return `0` and `0.0`
-  for a zero coefficient without computing a power of ten the size of its
-  exponent. Under a context whose `emin` or `emax` is `:infinity`,
-  `Decimal.round/3` returns zeros such as `0E+1000000000` for large
-  `places`, and converting one spent about 110 ms before raising
-  `SystemLimitError`. This is part of the fix for **CVE-2026-97853** (GitHub
-  advisory
-  [GHSA-6c27-994x-c52f](https://github.com/ericmj/decimal/security/advisories/GHSA-6c27-994x-c52f)).
-
 ### Enhancements
 
-* Reduce the cost of every operation that goes through the context: results
-  that signal nothing no longer copy the context or write it back to the
-  process dictionary, the coefficient's digit count is computed once per
-  operation instead of up to four times, and digit counting no longer walks a
-  ladder of bignum comparisons before falling back to its estimate. Division
-  is ~1.9x faster, `add`/`sub`/`mult`/`round`/`normalize` ~1.3x, comparison of
-  same-scale values ~1.4x, parsing ~1.2x, all with 20-30% less allocation.
-
-* Make `Decimal.to_float/1` scale the operand with a computed shift instead of
-  one bit at a time: ~1.6x faster for typical values and ~11x for exponents
-  near the ends of the double range, with 96% fewer collections.
-
-* Return a result that already fits the context's precision and exponent
-  range without running it through the rounding and exponent steps, and
-  record an operation's flags and find its trapped signal in one pass: on
-  money amounts `add`, `sub` and `mult` are ~1.3-1.4x faster, `normalize`,
-  `abs` and `negate` ~1.5x, and `max`, `min` and `round` ~1.2-1.4x.
-
-* Make `Decimal.to_float/1` convert a coefficient of at most 2^53 with an
-  exponent within ±22 with a single float multiplication or division, which
-  rounds exactly as the full conversion does: ~11x faster for money amounts.
-  `Decimal.from_float/1` formats the float with `:erlang.float_to_binary/2` on
-  OTP 25 and later and reads its digits in one pass: ~3x faster.
-  `Decimal.cast/1` skips the parse limits for floats and for integers below
-  10^9, which always fit them: ~3x faster for floats and ~2x for integers.
-  `Decimal.sqrt/1` takes the root of a coefficient of at most 2^53 from its
-  float estimate: ~10x faster for exact squares.
-
-* Make `Decimal.compare/3` compare its bounds as integers when the exponents
-  are within 104 of each other: ~10x faster for same-scale values and ~4x for
-  mixed exponents. `Decimal.compare/2` aligns exponents within 104 of each
-  other without counting digits: ~1.3x faster when the exponents differ.
-
-* Make `Decimal.div_int/2`, `Decimal.rem/2` and `Decimal.div_rem/2` decide a
-  zero or too large quotient from the exponents and digit counts before
-  scaling either coefficient, and divide coefficients below 10^9 at equal
-  exponents directly: ~2x faster on money amounts.
+* Make most operations faster. Compared with v3.1.2 on OTP 29, on decimals
+  with up to 20 digits and exponents from -20 to 20, `div/2` is about 8x
+  faster, `mult/2` 6x, `add/2` 5x, `round/3` 4x, `compare/2` 2.7x and
+  `normalize/1` 2x. On money amounts with two decimals, `to_float/1` is about
+  23x faster, `compare/3` 18x, `div/2` 15x, `rem/2` and `sqrt/1` 4x,
+  `round/3` 2-3x, `add/2`, `sub/2`, `mult/2`, `div_int/2` and `compare/2`
+  2-2.7x, and parsing 1.4x. `from_float/1` and `cast/1` of a float are about
+  3.4x faster and `cast/1` of an integer 3x. `to_string/1` is unchanged.
 
 * Add the `:subnormal` and `:clamped` signals from the General Decimal
-  Arithmetic spec, so that crossing the context's `emin` or `emax` is always
-  signalled. `:subnormal` is signalled for every result whose adjusted
-  exponent is below `emin`, even an exact one, while `:underflow` is only
-  signalled when such a result is rounded inexactly. A zero result's exponent
-  is now held between `emin - precision + 1` and `emax`, the range of every
-  nonzero result, and `:clamped` is signalled when it changes:
+  Arithmetic spec. `:subnormal` is signalled for every result whose adjusted
+  exponent is below `emin`, even an exact one, and `:underflow` only when
+  such a result is also inexact. A zero result's exponent is kept between
+  `emin - precision + 1` and `emax`, the range of nonzero results, and
+  `:clamped` is signalled when it has to move:
   `Decimal.mult("0e-3500", "0e-3500")` returns `0E-6176` instead of
-  `0E-7000`. This includes the zero results of division by infinity, of
-  `div_int/2` and `div_rem/2` with a smaller dividend, and of `sqrt/1`, which
-  previously skipped the context. A subnormal result that rounds to zero
-  signals `:clamped` too.
+  `0E-7000`. This also applies to the zero results of division by infinity,
+  of `div_int/2` and `div_rem/2` with a smaller dividend, and of `sqrt/1`. A
+  subnormal result that rounds to zero signals `:clamped` too.
 
 ### Bug fixes
 
-* Fix `Decimal.div/2` rounding the wrong way on inexact results. The long
-  division discarded its remainder instead of carrying it into rounding as
-  a sticky bit, so a guard digit of 5 with a nonzero tail was treated as an
-  exact tie (`:half_even`/`:half_down`) and a guard digit of 0 with a
-  nonzero tail was treated as zero (`:ceiling`/`:floor`/`:up`). Roughly 5%
-  of random divisions at the default precision were affected, including
-  `:ceiling`/`:floor` returning a result on the wrong side of the true
-  value. The same remainder is now also reflected in the `:inexact` flag,
-  which was previously suppressed when the remainder was a power of ten.
+* Fix `Decimal.div/2` rounding some inexact results the wrong way. Under
+  `:half_even` and `:half_down`, a result just above a tie was rounded as a
+  tie, and under `:ceiling`, `:floor` and `:up`, a result whose first
+  discarded digit was 0 was treated as exact even when later digits weren't,
+  so `:ceiling` and `:floor` could return a value on the wrong side of the
+  true quotient. About 5% of random divisions at the default precision were
+  affected. `:inexact` was also missing when the remainder was a power of
+  ten.
 
-* Re-round the coefficient when a rounding carry lengthens it past the
-  context precision. Rounding an all-nines coefficient up (e.g. `9.99` to
-  precision 2, or `Decimal.div(95, 10)` at precision 1) produced a
-  coefficient with one digit more than `precision` (`d(1, 100, -1)`,
-  `d(1, 10, 0)`) instead of re-rounding to exactly `precision` significant
-  digits (`d(1, 10, 0)`, `d(1, 1, 1)`). This affects every context
-  operation (`add`, `sub`, `mult`, `div`) and now matches the General
-  Decimal Arithmetic spec and Python's decimal.
+* Fix `:up` rounding changing exact values. A result whose discarded digits
+  were all zero was still rounded away from zero: with `precision: 1` and
+  `rounding: :up`, `Decimal.add(0, Decimal.new("9.0"))` returned `10`
+  instead of `9`, and `Decimal.round(Decimal.new(0), -1, :up)` returned
+  `1E+1` instead of `0E+1`.
 
-* Fix `Decimal.round/3` rounding the input under the context's rounding mode
-  before the caller's. The input went through the full context first, so a
-  coefficient with more significant digits than the precision was rounded
-  twice and the first rounding ignored the `mode` argument: at
-  `precision: 3`, `Decimal.round(Decimal.new("0.4995"), 1, :down)` returned
-  `0.5`. Such inputs come from `new/3`, which performs no digit count. Only
-  the exponent limits are now applied to the input. `round/3` no longer
-  signals `:inexact`/`:rounded` because its input was wider than the
-  precision.
+* Fix rounding carries leaving one digit more than the precision. Rounding
+  `9.99` to precision 2 returned `10.0` instead of `10`, and
+  `Decimal.div(95, 10)` at precision 1 returned `10` instead of `1E+1`. This
+  affected every operation that rounds to the context precision, and the
+  results now match the General Decimal Arithmetic spec and Python's
+  `decimal`.
 
-* Make `Decimal.Context.set/1`, `Decimal.Context.with/2` and
-  `Decimal.Context.update/1` raise `ArgumentError` for an invalid context: a
-  precision that is not a positive integer, an unknown rounding algorithm, an
-  `emax` or `emin` that is neither an integer nor `:infinity`, or an `emin`
-  greater than `emax`. A precision of 0 used to give wrong results silently
-  (`Decimal.add(1, 1)` returned `0E+1`), and the other cases failed with
-  `FunctionClauseError` inside the next operation.
+* Fix `Decimal.sqrt/1` rounding inexact roots as if the first discarded
+  digit were the whole remainder. At precision 9 under `:ceiling`,
+  `Decimal.sqrt(10)` returned `3.16227766` instead of `3.16227767`, and at
+  precision 2 under `:half_even`, `Decimal.sqrt("1.57")` returned `1.2`
+  instead of `1.3`. The default `:half_up` rounding wasn't affected. Inexact
+  roots now signal `:inexact` as well as `:rounded`.
 
-* Make `Decimal.to_integer/1` raise `ArgumentError` for NaN and ±Infinity,
-  like `Decimal.to_float/1`, instead of `FunctionClauseError`.
+* Fix `Decimal.rem/2` and `Decimal.div_rem/2` computing the remainder from a
+  product rounded to the context precision, which could cancel it out:
+  `Decimal.rem("9999999999999999999999999999999999", "2.000000000000000000000000000000001")`
+  returned `0` instead of `3E-33`.
 
-* Make `Decimal.compare/3` exact. It computed `num1 ± threshold` through the
-  context, so the bounds were rounded to the context precision and numbers
-  near the threshold compared wrong: `Decimal.compare(1,
-  "1.000000000000000000000000000000002", "1.5e-33")` returned `:eq` although
-  the numbers differ by `2e-33`. It no longer sets `:inexact`/`:rounded`
-  flags, accepts `-0` as a threshold, and raises `Decimal.Error` instead of
-  `CondClauseError` for a NaN when `:invalid_operation` is not trapped.
+* Fix `Decimal.to_float/1` returning the next float up for odd integers
+  between 2^52 and 2^53, which doubles represent exactly:
+  `Decimal.to_float(Decimal.new(4_503_599_627_370_497))` returned
+  `4503599627370498.0`.
 
-* Make `Decimal.compare/2` raise `Decimal.Error` for a NaN operand even when
-  `:invalid_operation` is not trapped, instead of returning the NaN, which is
-  not a `t:compare_result/0`. Comparing a NaN with ±Infinity now raises too,
-  instead of returning `:lt` or `:gt`.
-
-* Keep subnormal results instead of flushing them to zero. Since v3.0.0
-  made `emin` default to -6 143, every result whose adjusted exponent fell
-  below it became 0 with `:underflow`, even an exact one:
+* Keep subnormal results instead of flushing them to zero. Since v3.0.0 set
+  the default `emin` to -6143, every result with an adjusted exponent below
+  it became 0 with `:underflow`, even an exact one:
   `Decimal.div("1e-6140", 10000)` returned `0` instead of `1E-6144`. Such
-  results are now rounded at the exponent `emin - precision + 1` (-6 176 by
+  results are now rounded at the exponent `emin - precision + 1` (-6176 by
   default) with the context's rounding, as IEEE 754 and the General Decimal
   Arithmetic spec specify, and signal `:subnormal`, plus `:underflow` when
   that rounding is inexact. A result that rounds to zero keeps that exponent
   (`0E-6176`). `Decimal.round/3` no longer flushes an input below `emin` to
-  zero before rounding it: the input is rounded once, with the given mode,
-  and only the result is subject to the context.
+  zero before rounding it.
+
+* Fix `Decimal.round/3` rounding an input with more digits than the
+  precision twice, first with the context's rounding instead of `mode`: at
+  precision 3, `Decimal.round(Decimal.new("0.4995"), 1, :down)` returned
+  `0.5` instead of `0.4`.
 
 * Make `Decimal.round/3` signal `:rounded` when it discards digits of a
   nonzero coefficient, and `:inexact` when any of them is nonzero, as the
-  quantize operation of the General Decimal Arithmetic spec does. It
-  signalled nothing for the digits it discarded itself:
+  quantize operation of the General Decimal Arithmetic spec does.
   `Decimal.round("1.25", 1)` returned `1.3` with no flags.
 
-* Make `Decimal.round/3` signal `:invalid_operation` and return NaN where the
-  quantize operation of the General Decimal Arithmetic spec does: for
-  ±Infinity, for `places` that put the exponent outside the context's range
-  of `emin - precision + 1` to `emax`, and for a result that would need more
+* Make `Decimal.round/3` signal `:invalid_operation` and return NaN where
+  quantize does: for ±Infinity, when `-places` is outside
+  `emin - precision + 1` to `emax`, and when the result would need more
   digits than the precision or an adjusted exponent above `emax`. The signal
-  is trapped by default, so these calls now raise `Decimal.Error`. Such
-  results were rounded by the context to an exponent other than `-places`:
+  is trapped by default, so these calls now raise `Decimal.Error`. Before,
+  the context rounded such results to an exponent other than `-places`:
   `Decimal.round(Decimal.new("1e40"), 2)` returned
   `1.000000000000000000000000000000000E+40`, and `Decimal.round("1.5", 7000)`
   returned `1.500000000000000000000000000000000`. ±Infinity was returned
   unchanged.
+
+* Make `Decimal.compare/3` exact. It rounded `num1 ± threshold` to the
+  context precision, so numbers near the threshold compared wrong:
+  `Decimal.compare(1, "1.000000000000000000000000000000002", "1.5e-33")`
+  returned `:eq` although they differ by `2e-33`. It no longer sets
+  `:inexact` or `:rounded`, accepts `-0` as a threshold, and raises
+  `Decimal.Error` instead of `CondClauseError` for a NaN when
+  `:invalid_operation` isn't trapped.
+
+* Make `Decimal.compare/2` raise `Decimal.Error` for a NaN operand even when
+  `:invalid_operation` isn't trapped, instead of returning the NaN. Comparing
+  a NaN with ±Infinity now raises too, instead of returning `:lt` or `:gt`.
+
+* Make `Decimal.Context.set/1`, `Decimal.Context.with/2` and
+  `Decimal.Context.update/1` raise `ArgumentError` for an invalid context: a
+  precision that isn't a positive integer, an unknown rounding mode, an
+  `emax` or `emin` that is neither an integer nor `:infinity`, or an `emin`
+  above `emax`. A precision of 0 silently gave wrong results
+  (`Decimal.add(1, 1)` returned `0E+1`), and the other cases failed with
+  `FunctionClauseError` in the next operation.
+
+* Make `Decimal.to_integer/1` raise `ArgumentError` for NaN and ±Infinity,
+  like `Decimal.to_float/1`, instead of `FunctionClauseError`.
 
 ## v3.1.2 (2026-10-10)
 
