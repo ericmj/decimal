@@ -1506,16 +1506,9 @@ defmodule Decimal do
         # trailing zeros are stripped.
         rounded? = coef != 0 and exp < -n
         {coef, exp} = strip_trailing_zeros(coef, exp)
-        {value, inexact?} = do_round(sign, coef, exp, -n, mode)
-
-        round_signals =
-          cond do
-            inexact? -> [:inexact, :rounded]
-            rounded? -> [:rounded]
-            true -> []
-          end
-
-        context(value, put_uniq(signals, round_signals), false, ctx)
+        {value, round_signals, digits} = do_round(sign, coef, exp, -n, mode, ctx.precision)
+        round_signals = if rounded?, do: put_uniq(round_signals, :rounded), else: round_signals
+        context(value, put_uniq(signals, round_signals), false, ctx, digits)
     end
   end
 
@@ -2241,6 +2234,11 @@ defmodule Decimal do
 
   """
   @spec to_integer(t) :: integer
+  # A zero is 0 whatever its exponent, which `new/3`, or `round/3` under a
+  # context without exponent limits, can make arbitrarily large, so it must not
+  # reach `pow10(exp)`.
+  def to_integer(%Decimal{coef: 0}), do: 0
+
   def to_integer(%Decimal{sign: sign, coef: coef, exp: 0})
       when is_integer(coef),
       do: sign * coef
@@ -2296,10 +2294,14 @@ defmodule Decimal do
 
   """
   @spec to_float(t) :: float
+  # A zero converts to 0.0 whatever its exponent, without the `ratio/2` power
+  # of ten, since `new/3`, or `round/3` under a context without exponent
+  # limits, can make that exponent arbitrarily large.
+  def to_float(%Decimal{coef: 0}), do: 0.0
+
   # A coefficient of at most 2^53 and a power of ten of at most 10^22 are both
   # exact doubles, so a single IEEE multiplication or division rounds the exact
   # value once, to nearest with ties to even, as the conversion below does.
-  # Zero is left to that conversion, which returns 0.0 for either sign.
   def to_float(%Decimal{sign: sign, coef: coef, exp: exp})
       when is_integer(coef) and coef > 0 and coef <= @power_of_2_to_53 and exp >= -22 and
              exp <= 22 do
@@ -2805,25 +2807,63 @@ defmodule Decimal do
 
   ## ROUNDING ##
 
-  # Returns whether any discarded digit was nonzero along with the result.
-  defp do_round(sign, coef, exp, target_exp, rounding) do
+  # The context keeps at most `precision` digits of the result, so neither
+  # branch does work proportional to how far `target_exp` is from `exp`, which
+  # comes from the caller's `places` and can be arbitrarily large. Returns the
+  # signals for the context to merge, `:inexact` and `:rounded` when a
+  # discarded digit is nonzero, and the result's digit count when it is known.
+  defp do_round(sign, coef, exp, target_exp, rounding, precision) do
     cond do
       exp == target_exp ->
-        {%Decimal{sign: sign, coef: coef, exp: exp}, false}
+        {%Decimal{sign: sign, coef: coef, exp: exp}, [], nil}
+
+      coef == 0 ->
+        {%Decimal{sign: sign, coef: 0, exp: target_exp}, [], nil}
 
       exp > target_exp ->
-        {%Decimal{sign: sign, coef: coef * pow10(exp - target_exp), exp: target_exp}, false}
+        pad_coef(sign, coef, exp, exp - target_exp, precision)
 
       true ->
-        {signif, guard, rest?} = split_digits(coef, target_exp - exp, false)
+        {signif, guard, rest?} = drop_digits(coef, target_exp - exp)
 
         signif =
           if increment?(rounding, sign, signif, guard, rest?),
             do: signif + 1,
             else: signif
 
-        {%Decimal{sign: sign, coef: signif, exp: target_exp}, guard != 0 or rest?}
+        signals = if guard != 0 or rest?, do: [:inexact, :rounded], else: []
+        {%Decimal{sign: sign, coef: signif, exp: target_exp}, signals, nil}
     end
+  end
+
+  # Zeros padded past `precision` digits would only be dropped again by the
+  # context, so pad to at most `precision` digits and signal the `:rounded`
+  # dropping them would have signalled. A coefficient already wider than the
+  # precision is left for the context to round, which drops the same digits
+  # the padded one would have lost.
+  defp pad_coef(sign, coef, exp, shift, precision) do
+    digits = coef_length(coef)
+
+    cond do
+      digits + shift <= precision ->
+        {%Decimal{sign: sign, coef: coef * pow10(shift), exp: exp - shift}, [], digits + shift}
+
+      digits <= precision ->
+        shift = precision - digits
+        {%Decimal{sign: sign, coef: coef * pow10(shift), exp: exp - shift}, [:rounded], precision}
+
+      true ->
+        {%Decimal{sign: sign, coef: coef, exp: exp}, [], digits}
+    end
+  end
+
+  # Dropping more digits than the nonzero `coef` has leaves no significant
+  # digits and a zero guard digit, with all of `coef` in the rest, so it needs
+  # no power of ten the size of `drop`.
+  defp drop_digits(coef, drop) do
+    if drop > coef_length(coef),
+      do: {0, 0, true},
+      else: split_digits(coef, drop, false)
   end
 
   # The result's digit count comes back too, since the caller needs it for the
@@ -3006,16 +3046,14 @@ defmodule Decimal do
   # The exponent half of `context/5` without the precision half, for the input
   # of `round/3`. The precision half must not run, because the caller's `mode`
   # is the only rounding `round/3` was asked to perform. An adjusted exponent
-  # past `emax` overflows as in every other operation, before `do_round/5`
-  # aligns the coefficient with `target_exp`, which is otherwise unbounded for
-  # an exponent built through `new/3`.
+  # past `emax` overflows as in every other operation.
   #
   # An input below etiny is not rounded here, since rounding it at etiny and
   # then at `target_exp` would round twice. The result is rounded once at
   # `target_exp`, and the context rounds it again only if it is subnormal, at
   # etiny. Below the guard digit of the lower of those two positions, neither
   # rounding needs more than whether any digit is nonzero, so those digits are
-  # folded into one sticky digit, which bounds the alignment the same way.
+  # folded into one sticky digit.
   #
   # The signals are returned with the value as well as recorded, because the
   # final context call starts from the context read before they were recorded.

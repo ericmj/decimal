@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Security
+
+* Fix `Decimal.round/3` building its result at the full requested scale
+  before applying the context precision, so its time and memory grew with
+  the `places` argument instead of with the result, which never has more
+  digits than the precision. A caller controlling `places` could exhaust
+  memory with one call: `Decimal.round(Decimal.new("1.5"), -50_000_000)`
+  allocated about 5.5 GB, and positive `places` above about 1.26 million
+  built the padding and then raised `SystemLimitError`. The coefficient is
+  now padded to at most the context precision, and dropping more digits than
+  the coefficient has no longer builds a power of ten of that size. Results
+  and flags are unchanged, except that those calls now return a value. This
+  is a fix for **CVE-2026-97853** (GitHub advisory
+  [GHSA-6c27-994x-c52f](https://github.com/ericmj/decimal/security/advisories/GHSA-6c27-994x-c52f)).
+
+* Make `Decimal.to_integer/1` and `Decimal.to_float/1` return `0` and `0.0`
+  for a zero coefficient without computing a power of ten the size of its
+  exponent. Under a context whose `emin` or `emax` is `:infinity`,
+  `Decimal.round/3` returns zeros such as `0E+1000000000` for large
+  `places`, and converting one spent about 110 ms before raising
+  `SystemLimitError`. This is part of the fix for **CVE-2026-97853** (GitHub
+  advisory
+  [GHSA-6c27-994x-c52f](https://github.com/ericmj/decimal/security/advisories/GHSA-6c27-994x-c52f)).
+
 ### Enhancements
 
 * Reduce the cost of every operation that goes through the context: results
@@ -129,6 +153,31 @@
   signalled nothing for the digits it discarded itself:
   `Decimal.round("1.25", 1)` returned `1.3` with no flags.
 
+## v3.1.2 (2026-10-10)
+
+### Security
+
+* Fix `Decimal.round/3` building its result at the full requested scale
+  before applying the context precision, so its time and memory grew with
+  the `places` argument instead of with the precision. A caller controlling
+  `places` could exhaust memory with one call:
+  `Decimal.round(Decimal.new("1.5"), -50_000_000)` allocated about 5.5 GB,
+  and positive `places` above about 1.26 million built the padding and then
+  raised `SystemLimitError`. The coefficient is now padded to at most one
+  digit past the context precision, and dropping more digits than the
+  coefficient has no longer builds a list of zeros of that length. Results
+  and flags are unchanged, except that those calls now return a value. This
+  is a fix for **CVE-2026-97853** (GitHub advisory
+  [GHSA-6c27-994x-c52f](https://github.com/ericmj/decimal/security/advisories/GHSA-6c27-994x-c52f)).
+
+* Make `Decimal.to_integer/1` and `Decimal.to_float/1` return `0` and `0.0`
+  for a zero coefficient without computing a power of ten the size of its
+  exponent. Zeros are exempt from the exponent limits, so `Decimal.round/3`
+  returns zeros such as `0E+1000000000` for large `places`, and converting
+  one spent about 1.8 seconds before raising `SystemLimitError`. This is part
+  of the fix for **CVE-2026-97853** (GitHub advisory
+  [GHSA-6c27-994x-c52f](https://github.com/ericmj/decimal/security/advisories/GHSA-6c27-994x-c52f)).
+
 ## v3.1.1 (2026-05-27)
 
 ### Bug fixes
@@ -166,10 +215,12 @@ no code changes.
 
 ### Security
 
-* Make the v2.4.0 mitigations for CVE-2026-32686 the default. The
+* Make the v2.4.0 exponent amplification mitigations the default. The
   default `Decimal.Context` and the public parse, cast, and to_string
   functions now follow IEEE 754 decimal128 limits, rejecting inputs
-  such as `1e1000000000` without materializing them.
+  such as `1e1000000000` without materializing them. This is a fix for
+  **CVE-2026-32686** (GitHub advisory
+  [GHSA-rhv4-8758-jx7v](https://github.com/ericmj/decimal/security/advisories/GHSA-rhv4-8758-jx7v)).
 
 ### Breaking changes
 
@@ -195,11 +246,13 @@ no code changes.
 
 ### Security
 
-* Mitigate exponent amplification (CVE-2026-32686).
-  Compact inputs such as `1e1000000` could force multi-second expansions
-  during arithmetic, parsing, normalization, comparison, or formatting.
-  `Decimal.add/2` and `Decimal.sub/2` now scale operands to `precision + 2`
-  digits with a sticky bit instead of materializing the full coefficient.
+* Mitigate exponent amplification. Compact inputs such as `1e1000000`
+  could force multi-second expansions during arithmetic, parsing,
+  normalization, comparison, or formatting. `Decimal.add/2` and
+  `Decimal.sub/2` now scale operands to `precision + 2` digits with a
+  sticky bit instead of materializing the full coefficient. This mitigates
+  **CVE-2026-32686** (GitHub advisory
+  [GHSA-rhv4-8758-jx7v](https://github.com/ericmj/decimal/security/advisories/GHSA-rhv4-8758-jx7v)).
 
 ### Enhancements
 
