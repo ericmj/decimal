@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## Unreleased
+
+### Security
+
+* Fix `Decimal.round/3` building its result at the full requested scale
+  before applying the context precision, so its time and memory grew with
+  the `places` argument instead of with the precision. A caller controlling
+  `places` could exhaust memory with one call:
+  `Decimal.round(Decimal.new("1.5"), -50_000_000)` allocated about 5.5 GB,
+  and positive `places` above about 1.26 million built the padding and then
+  raised `SystemLimitError`. The coefficient is now padded to at most one
+  digit past the context precision, and dropping more digits than the
+  coefficient has no longer builds a list of zeros of that length. Results
+  and flags are unchanged, except that those calls now return a value. This
+  is a fix for **CVE-2026-97853** (GitHub advisory
+  [GHSA-6c27-994x-c52f](https://github.com/ericmj/decimal/security/advisories/GHSA-6c27-994x-c52f)).
+
 ## v3.1.1 (2026-05-27)
 
 ### Bug fixes

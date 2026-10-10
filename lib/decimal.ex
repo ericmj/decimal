@@ -1311,7 +1311,7 @@ defmodule Decimal do
     %Decimal{sign: sign, coef: coef, exp: exp} = normalize(num)
     digits = :erlang.integer_to_list(coef)
     target_exp = -n
-    value = do_round(sign, digits, exp, target_exp, mode)
+    value = do_round(sign, digits, exp, target_exp, mode, Context.get().precision)
     context(value, [])
   end
 
@@ -2373,7 +2373,10 @@ defmodule Decimal do
 
   ## ROUNDING ##
 
-  defp do_round(sign, digits, exp, target_exp, rounding) do
+  # `target_exp` comes from the caller's `places` and can be arbitrarily far from
+  # `exp`, so no branch builds a list as long as that distance. The context
+  # rounds the result at `context_precision` digits.
+  defp do_round(sign, digits, exp, target_exp, rounding, context_precision) do
     num_digits = length(digits)
     precision = num_digits - (target_exp - exp)
 
@@ -2382,16 +2385,10 @@ defmodule Decimal do
         %Decimal{sign: sign, coef: digits_to_integer(digits), exp: exp}
 
       exp < target_exp and precision < 0 ->
-        zeros = :lists.duplicate(target_exp - exp, ?0)
-        digits = zeros ++ digits
-        {signif, remain} = :lists.split(1, digits)
-
-        signif =
-          if increment?(rounding, sign, signif, remain),
-            do: digits_increment(signif),
-            else: signif
-
-        coef = digits_to_integer(signif)
+        # Every digit is dropped behind at least one leading zero. The increment
+        # only looks at the first dropped digit and at whether any of them is
+        # nonzero, so one zero stands in for all of them.
+        coef = if increment?(rounding, sign, [?0], [?0 | digits]), do: 1, else: 0
         %Decimal{sign: sign, coef: coef, exp: target_exp}
 
       exp < target_exp and precision >= 0 ->
@@ -2405,10 +2402,19 @@ defmodule Decimal do
         coef = digits_to_integer(signif)
         %Decimal{sign: sign, coef: coef, exp: target_exp}
 
+      exp > target_exp and digits == ~c"0" ->
+        %Decimal{sign: sign, coef: 0, exp: target_exp}
+
       exp > target_exp ->
-        digits = digits ++ Enum.map(1..(exp - target_exp), fn _ -> ?0 end)
+        # The context rounds a coefficient longer than its precision at its
+        # last precision digit, and every digit past that one is zero. Padding
+        # to one digit past the precision leaves it a zero to drop, which gives
+        # the same coefficient, exponent and flags as padding all the way to
+        # `target_exp`.
+        shift = Kernel.min(exp - target_exp, Kernel.max(context_precision + 1 - num_digits, 1))
+        digits = digits ++ :lists.duplicate(shift, ?0)
         coef = digits_to_integer(digits)
-        %Decimal{sign: sign, coef: coef, exp: target_exp}
+        %Decimal{sign: sign, coef: coef, exp: exp - shift}
     end
   end
 

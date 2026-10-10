@@ -1068,6 +1068,71 @@ defmodule DecimalTest do
     assert roundneg.(~d"1099") == d(1, 11, 2)
   end
 
+  test "round/3 pads past the precision like the context rounds" do
+    Context.with(%Context{precision: 5}, fn ->
+      assert Decimal.round(~d"1.5", 10) == d(1, 15000, -4)
+      assert Context.get().flags == [:rounded]
+    end)
+  end
+
+  @tag timeout: @bounded_smoke_timeout
+  test "round/3 does work bounded by the precision, not by places" do
+    one_and_a_half = 15 * Integer.pow(10, 32)
+
+    assert_runs_quickly("round/3 huge positive places", fn ->
+      assert Decimal.round(~d"1.5", 1_000_000_000) == d(1, one_and_a_half, -33)
+      assert Decimal.round(~d"1.5", Integer.pow(10, 100)) == d(1, one_and_a_half, -33)
+      assert Decimal.round(~d"0", 1_000_000_000) == d(1, 0, -1_000_000_000)
+    end)
+
+    assert_runs_quickly("round/3 huge negative places", fn ->
+      assert Decimal.round(~d"1.5", -1_000_000_000) == d(1, 0, 1_000_000_000)
+      assert Decimal.round(~d"1.5", -Integer.pow(10, 100)) == d(1, 0, Integer.pow(10, 100))
+      assert Decimal.round(~d"0", -1_000_000_000) == d(1, 0, 1_000_000_000)
+      assert Decimal.round(~d"-1.5", -1_000_000_000, :floor) == d(-1, :inf, 0)
+    end)
+  end
+
+  property "round/3 matches exact padding or division followed by the context" do
+    modes = [:down, :up, :ceiling, :floor, :half_up, :half_even, :half_down]
+
+    # The exponents and digit counts stay inside the default emin/emax, so the
+    # exponent limits never apply.
+    check all(
+            sign <- member_of([1, -1]),
+            coef <- bind(integer(1..45), &integer(0..(Integer.pow(10, &1) - 1))),
+            exp <- integer(-40..40),
+            places <- integer(-90..90),
+            precision <- integer(1..40),
+            mode <- member_of(modes),
+            rounding <- member_of(modes),
+            max_runs: 1_000
+          ) do
+      num = %Decimal{sign: sign, coef: coef, exp: exp}
+      context = %Context{precision: precision, rounding: rounding, traps: []}
+
+      actual =
+        Context.with(context, fn ->
+          {Decimal.round(num, places, mode), Context.get().flags}
+        end)
+
+      expected =
+        Context.with(context, fn ->
+          {reference_round(num, places, mode), Context.get().flags}
+        end)
+
+      assert actual == expected, """
+      round/3 diverged from the exact reference
+        num:       #{inspect(num)}
+        places:    #{places}
+        mode:      #{mode}
+        context:   #{inspect(context)}
+        actual:    #{inspect(actual)}
+        expected:  #{inspect(expected)}
+      """
+    end
+  end
+
   test "sqrt/1" do
     Context.with(%Context{precision: 9, rounding: :half_even}, fn ->
       assert Decimal.sqrt(~d"0") == d(1, 0, 0)
@@ -1374,6 +1439,41 @@ defmodule DecimalTest do
 
       assert JSON.encode!(%{x: Decimal.new("1.0")}, encoder) == "{\"x\":1.0}"
     end
+  end
+
+  # Rounds `num` to `-places` with exact integer arithmetic after normalizing it
+  # through the context: pads the coefficient with zeros, or divides it by the
+  # dropped power of ten and decides the increment from the remainder against
+  # half that power. Then applies the context. Like `increment?/5`, `:up`
+  # increments whenever digits are dropped, even zeros.
+  defp reference_round(num, places, mode) do
+    %Decimal{sign: sign, coef: coef, exp: exp} = Decimal.normalize(num)
+    target_exp = -places
+
+    rounded =
+      if exp >= target_exp do
+        %Decimal{sign: sign, coef: coef * Integer.pow(10, exp - target_exp), exp: target_exp}
+      else
+        pow = Integer.pow(10, target_exp - exp)
+        quotient = div(coef, pow)
+        remainder = rem(coef, pow)
+
+        increment? =
+          case mode do
+            :down -> false
+            :up -> true
+            :ceiling -> sign == 1 and remainder != 0
+            :floor -> sign == -1 and remainder != 0
+            :half_up -> 2 * remainder >= pow
+            :half_down -> 2 * remainder > pow
+            :half_even -> 2 * remainder > pow or (2 * remainder == pow and rem(quotient, 2) == 1)
+          end
+
+        coef = if increment?, do: quotient + 1, else: quotient
+        %Decimal{sign: sign, coef: coef, exp: target_exp}
+      end
+
+    Decimal.apply_context(rounded)
   end
 
   defp assert_runs_quickly(name, fun) do
