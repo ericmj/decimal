@@ -62,10 +62,12 @@ no code changes.
 
 ### Security
 
-* Make the v2.4.0 mitigations for CVE-2026-32686 the default. The
+* Make the v2.4.0 exponent amplification mitigations the default. The
   default `Decimal.Context` and the public parse, cast, and to_string
   functions now follow IEEE 754 decimal128 limits, rejecting inputs
-  such as `1e1000000000` without materializing them.
+  such as `1e1000000000` without materializing them. This is a fix for
+  **CVE-2026-32686** (GitHub advisory
+  [GHSA-rhv4-8758-jx7v](https://github.com/ericmj/decimal/security/advisories/GHSA-rhv4-8758-jx7v)).
 
 ### Breaking changes
 
@@ -91,11 +93,13 @@ no code changes.
 
 ### Security
 
-* Mitigate exponent amplification (CVE-2026-32686).
-  Compact inputs such as `1e1000000` could force multi-second expansions
-  during arithmetic, parsing, normalization, comparison, or formatting.
-  `Decimal.add/2` and `Decimal.sub/2` now scale operands to `precision + 2`
-  digits with a sticky bit instead of materializing the full coefficient.
+* Mitigate exponent amplification. Compact inputs such as `1e1000000`
+  could force multi-second expansions during arithmetic, parsing,
+  normalization, comparison, or formatting. `Decimal.add/2` and
+  `Decimal.sub/2` now scale operands to `precision + 2` digits with a
+  sticky bit instead of materializing the full coefficient. This mitigates
+  **CVE-2026-32686** (GitHub advisory
+  [GHSA-rhv4-8758-jx7v](https://github.com/ericmj/decimal/security/advisories/GHSA-rhv4-8758-jx7v)).
 
 ### Enhancements
 
