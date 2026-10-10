@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## Unreleased
+## v3.1.2 (2026-10-10)
 
 ### Security
 
