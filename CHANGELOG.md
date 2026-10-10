@@ -17,6 +17,14 @@
   is a fix for **CVE-2026-97853** (GitHub advisory
   [GHSA-6c27-994x-c52f](https://github.com/ericmj/decimal/security/advisories/GHSA-6c27-994x-c52f)).
 
+* Make `Decimal.to_integer/1` and `Decimal.to_float/1` return `0` and `0.0`
+  for a zero coefficient without computing a power of ten the size of its
+  exponent. Zeros are exempt from the exponent limits, so `Decimal.round/3`
+  returns zeros such as `0E+1000000000` for large `places`, and converting
+  one spent about 1.8 seconds before raising `SystemLimitError`. This is part
+  of the fix for **CVE-2026-97853** (GitHub advisory
+  [GHSA-6c27-994x-c52f](https://github.com/ericmj/decimal/security/advisories/GHSA-6c27-994x-c52f)).
+
 ## v3.1.1 (2026-05-27)
 
 ### Bug fixes

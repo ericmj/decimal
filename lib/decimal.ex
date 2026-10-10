@@ -1962,6 +1962,10 @@ defmodule Decimal do
 
   """
   @spec to_integer(t) :: integer
+  # A zero is 0 whatever its exponent, which `new/3` or `round/3` can make
+  # arbitrarily large, so it must not reach `pow10(exp)`.
+  def to_integer(%Decimal{coef: 0}), do: 0
+
   def to_integer(%Decimal{sign: sign, coef: coef, exp: 0})
       when is_integer(coef),
       do: sign * coef
@@ -2013,6 +2017,10 @@ defmodule Decimal do
 
   """
   @spec to_float(t) :: float
+  # A zero converts to 0.0 whatever its exponent, without the `ratio/2` power
+  # of ten, since `new/3` or `round/3` can make that exponent arbitrarily large.
+  def to_float(%Decimal{coef: 0}), do: 0.0
+
   def to_float(%Decimal{coef: coef} = decimal) when is_integer(coef) do
     %Decimal{sign: sign, coef: coef, exp: exp} = check_dbl_min_max(decimal)
     # Convert back to float without loss

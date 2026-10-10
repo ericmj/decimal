@@ -1093,6 +1093,22 @@ defmodule DecimalTest do
     end)
   end
 
+  @tag timeout: @bounded_smoke_timeout
+  test "zeros with extreme exponents convert in constant time" do
+    # `new/3` builds such zeros, and so does `round/3` for huge `places`.
+    huge = Integer.pow(10, 100)
+
+    assert_runs_quickly("to_integer/1 and to_float/1 on extreme zeros", fn ->
+      assert ~d"1.5" |> Decimal.round(-1_000_000_000) |> Decimal.to_integer() == 0
+      assert Decimal.to_integer(d(-1, 0, huge)) == 0
+      assert Decimal.to_integer(d(1, 0, -huge)) == 0
+
+      assert ~d"0" |> Decimal.round(1_000_000_000) |> Decimal.to_float() === 0.0
+      assert Decimal.to_float(d(1, 0, huge)) === 0.0
+      assert Decimal.to_float(d(-1, 0, -huge)) === 0.0
+    end)
+  end
+
   property "round/3 matches exact padding or division followed by the context" do
     modes = [:down, :up, :ceiling, :floor, :half_up, :half_even, :half_down]
 
