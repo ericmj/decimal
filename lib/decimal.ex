@@ -2120,13 +2120,11 @@ defmodule Decimal do
   # Index of the most significant set bit of a positive integer. The VM has no
   # BIF for it, so go through the integer's shortest big-endian encoding.
   defp bit_length(int) do
-    int |> :binary.encode_unsigned() |> binary_bit_length()
+    <<byte, rest::bits>> = :binary.encode_unsigned(int)
+    bit_size(rest) + byte_bit_length(byte)
   end
 
-  defp binary_bit_length(<<byte, rest::binary>>) do
-    byte_size(rest) * 8 + byte_bit_length(byte)
-  end
-
+  @compile {:inline, byte_bit_length: 1}
   defp byte_bit_length(byte) when byte >= 128, do: 8
   defp byte_bit_length(byte) when byte >= 64, do: 7
   defp byte_bit_length(byte) when byte >= 32, do: 6
