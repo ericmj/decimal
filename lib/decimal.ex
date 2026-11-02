@@ -1463,7 +1463,8 @@ defmodule Decimal do
         context(num)
 
       true ->
-        %{do_normalize(coef, exp) | sign: sign} |> context
+        {coef, exp} = strip_trailing_zeros(coef, exp)
+        %Decimal{sign: sign, coef: coef, exp: exp} |> context()
     end
   end
 
@@ -2163,13 +2164,13 @@ defmodule Decimal do
     decimal
   end
 
-  defp canonical_xsd(%Decimal{coef: coef, exp: exp} = decimal) do
-    %Decimal{coef: coef, exp: exp} = do_normalize(coef, exp)
+  defp canonical_xsd(%Decimal{sign: sign, coef: coef, exp: exp}) do
+    {coef, exp} = strip_trailing_zeros(coef, exp)
 
     if exp >= 0 do
-      %{decimal | coef: coef * pow10(exp + 1), exp: -1}
+      %Decimal{sign: sign, coef: coef * pow10(exp + 1), exp: -1}
     else
-      %{decimal | coef: coef, exp: exp}
+      %Decimal{sign: sign, coef: coef, exp: exp}
     end
   end
 
@@ -2226,7 +2227,7 @@ defmodule Decimal do
   defp xsd_digit_count(0, _exp), do: 2
 
   defp xsd_digit_count(coef, exp) do
-    %Decimal{coef: coef, exp: exp} = do_normalize(coef, exp)
+    {coef, exp} = strip_trailing_zeros(coef, exp)
     digits = coef_length(coef)
 
     if exp >= 0 do
@@ -2764,26 +2765,6 @@ defmodule Decimal do
       ctx
     )
   end
-
-  defp do_normalize(coef, exp) when coef >= @normalize_chunk_pow do
-    case Kernel.rem(coef, @normalize_chunk_pow) do
-      0 ->
-        do_normalize(Kernel.div(coef, @normalize_chunk_pow), exp + @normalize_chunk)
-
-      _ ->
-        do_normalize_one(coef, exp)
-    end
-  end
-
-  defp do_normalize(coef, exp), do: do_normalize_one(coef, exp)
-
-  defp do_normalize_one(0, _exp), do: %Decimal{coef: 0, exp: 0}
-
-  defp do_normalize_one(coef, exp) when Kernel.rem(coef, 10) == 0 do
-    do_normalize_one(Kernel.div(coef, 10), exp + 1)
-  end
-
-  defp do_normalize_one(coef, exp), do: %Decimal{coef: coef, exp: exp}
 
   defp strip_trailing_zeros(coef, exp) when coef >= @normalize_chunk_pow do
     case Kernel.rem(coef, @normalize_chunk_pow) do
