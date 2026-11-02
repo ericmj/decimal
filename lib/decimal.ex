@@ -2420,7 +2420,7 @@ defmodule Decimal do
 
   defp decimal_to_float(sign, num, den, exp) do
     quo = Kernel.div(num, den)
-    rem = num - quo * den
+    rem = Kernel.rem(num, den)
 
     # Compare the doubled remainder so halving `den` cannot floor: with an
     # exact division (`rem` 0) against `den` of 1, `den >>> 1` would be 0 and
@@ -2648,7 +2648,7 @@ defmodule Decimal do
   defp div_calc(coef1, coef2, adjust, precision) do
     scaled = coef1 * pow10(precision)
     coef = Kernel.div(scaled, coef2)
-    rem = scaled - coef * coef2
+    rem = Kernel.rem(scaled, coef2)
 
     cond do
       rem != 0 ->
@@ -2939,8 +2939,10 @@ defmodule Decimal do
     guard_pow = pow10(drop - 1)
     divisor = guard_pow * 10
     signif = Kernel.div(coef, divisor)
-    remain = coef - signif * divisor
-    {signif, Kernel.div(remain, guard_pow), sticky? or Kernel.rem(remain, guard_pow) != 0}
+    remain = Kernel.rem(coef, divisor)
+    guard = Kernel.div(remain, guard_pow)
+    rest = Kernel.rem(remain, guard_pow)
+    {signif, guard, sticky? or rest != 0}
   end
 
   # `guard` is the first dropped digit; `rest?` is whether any dropped digit
